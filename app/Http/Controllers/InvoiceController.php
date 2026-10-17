@@ -1,0 +1,202 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Concerns\ListsRecords;
+use App\Models\Company;
+use App\Models\Contract;
+use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Models\PaymentAllocation;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class InvoiceController extends Controller
+{
+    use ListsRecords;
+
+    /**
+     * List the company's invoices, newest first.
+     */
+    public function index(Request $request): Response
+    {
+        $company = Company::find($request->user()->company_id);
+
+        if (! $company) {
+            return Inertia::render('Invoices/Index', ['company' => null]);
+        }
+
+        $filters = $this->listFilters($request, ['status' => Invoice::STATUSES, 'due' => ['overdue']]);
+
+        return Inertia::render('Invoices/Index', [
+            'company' => ['currency' => $company->default_currency],
+            'filters' => $filters,
+            'facets' => [
+                'status' => $this->facetOptions(Invoice::STATUSES, $this->countBy($this->filteredQuery($company, $filters, except: 'status'), 'status')),
+                'due' => [['value' => 'overdue', 'count' => $this->overdue($this->filteredQuery($company, $filters, except: 'due'))->count()]],
+            ],
+            'summary' => $this->summary($company),
+            'invoices' => $this->filteredQuery($company, $filters)
+                ->with(['client:id,name', 'contract:id,contract_number'])
+                ->orderByDesc('issue_date')
+                ->orderByDesc('id')
+                ->paginate($filters['perPage'])
+                ->withQueryString()
+                ->through(fn (Invoice $invoice) => self::listDetails($invoice)),
+        ]);
+    }
+
+    /**
+     * Bill a contract's next period.
+     */
+    public function store(Request $request, Contract $contract): RedirectResponse
+    {
+        $this->ensureSameCompany($request, $contract);
+
+        $invoice = $contract->generateNextInvoice();
+
+        if ($invoice === null) {
+            return back()->with('success', "Every billing period of {$contract->contract_number} is already invoiced.");
+        }
+
+        return to_route('invoices.show', $invoice)->with('success', "Invoice {$invoice->invoice_number} was issued for {$contract->contract_number}.");
+    }
+
+    /**
+     * Show an invoice with its items and the payments allocated to it.
+     */
+    public function show(Request $request, Invoice $invoice): Response
+    {
+        $this->ensureSameCompany($request, $invoice);
+
+        $invoice->load([
+            'client:id,name,client_type,email,phone,address,tax_registration_number',
+            'contract:id,contract_number,billing_cycle',
+            'items' => fn (HasMany $items) => $items->orderBy('id'),
+            'allocations.payment:id,payment_number,received_on,method,status',
+        ]);
+
+        return Inertia::render('Invoices/Show', [
+            'currency' => $invoice->company->default_currency,
+            'company' => $invoice->company->only(['name', 'legal_name', 'tax_registration_number', 'address_line_1', 'address_line_2', 'city', 'phone', 'email', 'logo_url']),
+            'invoice' => [
+                ...self::listDetails($invoice),
+                'subtotal' => (float) $invoice->subtotal,
+                'vatAmount' => (float) $invoice->vat_amount,
+                'notes' => $invoice->notes,
+                'client' => $invoice->client->only(['id', 'name', 'client_type', 'email', 'phone', 'address', 'tax_registration_number']),
+                'canVoid' => $invoice->status !== 'void' && $invoice->allocations->isEmpty(),
+            ],
+            'items' => $invoice->items->map(fn (InvoiceItem $item) => [
+                'id' => $item->id,
+                'type' => $item->item_type,
+                'description' => $item->description,
+                'quantity' => (float) $item->quantity,
+                'unitPrice' => (float) $item->unit_price,
+                'vatRate' => (float) $item->vat_rate,
+                'amount' => (float) $item->amount,
+                'vatAmount' => (float) $item->vat_amount,
+            ]),
+            'allocations' => $invoice->allocations->map(fn (PaymentAllocation $allocation) => [
+                'id' => $allocation->id,
+                'amount' => (float) $allocation->amount,
+                'payment' => [
+                    'id' => $allocation->payment->id,
+                    'number' => $allocation->payment->payment_number,
+                    'receivedOn' => $allocation->payment->received_on->toDateString(),
+                    'method' => $allocation->payment->method,
+                    'status' => $allocation->payment->status,
+                ],
+            ]),
+        ]);
+    }
+
+    /**
+     * Cancel an invoice issued by mistake; its period can then be invoiced again.
+     */
+    public function void(Request $request, Invoice $invoice): RedirectResponse
+    {
+        $this->ensureSameCompany($request, $invoice);
+
+        $invoice->void();
+
+        return back()->with('success', "Invoice {$invoice->invoice_number} was voided.");
+    }
+
+    /**
+     * An invoice as the lists show it.
+     *
+     * @return array<string, mixed>
+     */
+    public static function listDetails(Invoice $invoice): array
+    {
+        return [
+            'id' => $invoice->id,
+            'number' => $invoice->invoice_number,
+            'status' => $invoice->status,
+            'isOverdue' => $invoice->isOverdue(),
+            'client' => $invoice->relationLoaded('client') ? $invoice->client?->only(['id', 'name']) : null,
+            'contract' => $invoice->relationLoaded('contract') ? ['id' => $invoice->contract->id, 'number' => $invoice->contract->contract_number] : null,
+            'issueDate' => $invoice->issue_date->toDateString(),
+            'dueDate' => $invoice->due_date->toDateString(),
+            'periodStart' => $invoice->period_start->toDateString(),
+            'periodEnd' => $invoice->period_end->toDateString(),
+            'total' => (float) $invoice->total,
+            'amountPaid' => (float) $invoice->amount_paid,
+            'balance' => $invoice->balance(),
+        ];
+    }
+
+    /**
+     * Unpaid invoices whose due date has passed.
+     *
+     * @param  HasMany<Invoice, Company>  $query
+     * @return HasMany<Invoice, Company>
+     */
+    private function overdue(HasMany $query): HasMany
+    {
+        return $query->whereIn('status', ['issued', 'partially_paid'])->whereDate('due_date', '<', today());
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return HasMany<Invoice, Company>
+     */
+    private function filteredQuery(Company $company, array $filters, ?string $except = null): HasMany
+    {
+        $search = $filters['search'];
+
+        $query = $company->invoices()
+            ->when($search !== '', fn (Builder $query) => $query->where(fn (Builder $query) => $query
+                ->whereLike('invoice_number', "%{$search}%")
+                ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%"))
+                ->orWhereHas('contract', fn (Builder $contracts) => $contracts->whereLike('contract_number', "%{$search}%"))))
+            ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('status', $filters['status']));
+
+        return $except !== 'due' && $filters['due'] !== [] ? $this->overdue($query) : $query;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function summary(Company $company): array
+    {
+        $open = fn () => $company->invoices()->whereIn('status', ['issued', 'partially_paid']);
+        $month = [today()->startOfMonth(), today()->endOfMonth()];
+
+        return [
+            'outstanding' => round((float) $open()->sum(DB::raw('total - amount_paid')), 2),
+            'overdue' => [
+                'count' => $this->overdue($open())->count(),
+                'amount' => round((float) $this->overdue($open())->sum(DB::raw('total - amount_paid')), 2),
+            ],
+            'invoicedThisMonth' => round((float) $company->invoices()->whereNot('status', 'void')->whereBetween('issue_date', $month)->sum('total'), 2),
+            'collectedThisMonth' => round((float) $company->payments()->where('status', 'cleared')->whereBetween('received_on', $month)->sum('amount'), 2),
+        ];
+    }
+}

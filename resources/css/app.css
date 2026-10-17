@@ -1,0 +1,312 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@plugin "@tailwindcss/forms";
+
+@source "../views";
+@source "../js";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-display: 'Plus Jakarta Sans', 'Geist Variable', 'IBM Plex Sans Arabic', sans-serif;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+
+  --color-brand-cyan: #1cb5e0;
+  --color-brand-navy: #000851;
+  /* Warm accent for highlighted copy; pairs with the navy as its complement. */
+  --color-brand-sun: #f8e1a0;
+
+  --animate-twinkle: brand-twinkle 4s ease-in-out infinite;
+  --animate-ping-soft: brand-ping 2.8s ease-out infinite;
+  --animate-drift: brand-drift 28s ease-in-out infinite alternate;
+  --animate-shooting-star: brand-shooting-star 11s ease-in infinite;
+  /* Duration is set inline so it always matches the slideshow interval. */
+  --animate-slide-progress: brand-slide-progress linear forwards;
+  --animate-mark-rise: brand-mark-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-mark-pop: brand-mark-pop 0.6s 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  /* App-wide motion: content settles in with a short rise; kept subtle and gated by motion-safe. */
+  --animate-enter: app-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  --animate-fade: app-fade 0.25s ease-out backwards;
+
+  @keyframes app-enter {
+    from {
+      opacity: 0;
+      translate: 0 6px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  @keyframes app-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes brand-twinkle {
+    0%,
+    100% {
+      opacity: 0.3;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes brand-ping {
+    0% {
+      transform: scale(0.6);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+
+  @keyframes brand-drift {
+    from {
+      translate: -28px 0;
+    }
+    to {
+      translate: 28px 0;
+    }
+  }
+
+  @keyframes brand-shooting-star {
+    0% {
+      translate: 0 0;
+      opacity: 0;
+    }
+    2% {
+      opacity: 1;
+    }
+    8%,
+    100% {
+      translate: 260px 130px;
+      opacity: 0;
+    }
+  }
+
+  @keyframes brand-slide-progress {
+    from {
+      scale: 0 1;
+    }
+    to {
+      scale: 1 1;
+    }
+  }
+
+  @keyframes brand-mark-rise {
+    from {
+      transform: translateY(4px) scaleY(0.4);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @keyframes brand-mark-pop {
+    from {
+      transform: scale(0);
+    }
+    to {
+      transform: scale(1);
+    }
+  }
+}
+
+@utility bg-brand-gradient {
+  background-image: linear-gradient(90deg, var(--color-brand-cyan) 0%, var(--color-brand-navy) 100%);
+}
+
+/* Fine film grain: adds texture to the illustrations and hides gradient banding. */
+@utility bg-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+@theme inline {
+  --font-heading: 'Geist Variable', 'IBM Plex Sans Arabic', sans-serif;
+  --font-sans: 'Geist Variable', 'IBM Plex Sans Arabic', sans-serif;
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-highlight: var(--highlight);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-surface: var(--surface);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  :root {
+    /* The page canvas sits one step off white so white cards and controls lift off it. */
+    --background: #f8f9fc;
+    --foreground: #0b1238;
+    --surface: #ffffff;
+    --card: #ffffff;
+    --card-foreground: #0b1238;
+    --popover: #ffffff;
+    --popover-foreground: #0b1238;
+    --primary: #000851;
+    --primary-foreground: #ffffff;
+    --secondary: #eef1f7;
+    --secondary-foreground: #0b1238;
+    --muted: #f1f3f8;
+    --muted-foreground: #5b6482;
+    --accent: #eef1f8;
+    --accent-foreground: #0b1238;
+    --destructive: #d03b3b;
+    --success: #15803d;
+    --warning: #b45309;
+    --highlight: #f8e1a0;
+    --border: #e4e7ef;
+    --input: #d8dde8;
+    --ring: #1cb5e0;
+    /* Validated with the dataviz palette check: 1 occupied, 2 available (same-hue track), 3 out of service. */
+    --chart-1: #0e7fb8;
+    --chart-2: #a5dcf2;
+    --chart-3: #8e95a8;
+    --chart-4: #0b4f8a;
+    --chart-5: #1cb5e0;
+    --radius: 0.625rem;
+    /* A light frame around the content panel; the active link is raised in white. */
+    --sidebar: #f0f2f7;
+    --sidebar-foreground: #4b5373;
+    --sidebar-primary: #000851;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: rgb(11 18 56 / 0.055);
+    --sidebar-accent-foreground: #0b1238;
+    --sidebar-active: #ffffff;
+    --sidebar-border: rgb(11 18 56 / 0.08);
+    --sidebar-ring: #1cb5e0;
+    --card-shadow: 0 1px 2px 0 rgb(11 18 56 / 0.04), 0 1px 3px 0 rgb(11 18 56 / 0.025);
+    --raised-shadow: 0 1px 2px 0 rgb(11 18 56 / 0.07), 0 0 0 1px rgb(11 18 56 / 0.06);
+    --overlay-shadow: 0 16px 36px -12px rgb(11 18 56 / 0.2), 0 4px 12px -4px rgb(11 18 56 / 0.08);
+  }
+  .dark {
+    --background: #070b24;
+    --foreground: #e8ecf8;
+    --surface: #0b1130;
+    --card: #0b1130;
+    --card-foreground: #e8ecf8;
+    --popover: #0e1436;
+    --popover-foreground: #e8ecf8;
+    --primary: #1cb5e0;
+    --primary-foreground: #00062e;
+    --secondary: #151c40;
+    --secondary-foreground: #e8ecf8;
+    --muted: #121939;
+    --muted-foreground: #98a2c4;
+    --accent: #172045;
+    --accent-foreground: #e8ecf8;
+    --destructive: #f07070;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --highlight: rgb(248 225 160 / 0.22);
+    --border: rgb(255 255 255 / 0.08);
+    --input: rgb(255 255 255 / 0.14);
+    --ring: #1cb5e0;
+    --chart-1: #2897cb;
+    --chart-2: #1d4a7a;
+    --chart-3: #6b7390;
+    --chart-4: #5cc2ec;
+    --chart-5: #1cb5e0;
+    --sidebar: #03061c;
+    --sidebar-foreground: rgb(232 236 248 / 0.7);
+    --sidebar-primary: #1cb5e0;
+    --sidebar-primary-foreground: #00062e;
+    --sidebar-accent: rgb(255 255 255 / 0.06);
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-active: rgb(255 255 255 / 0.09);
+    --sidebar-border: rgb(255 255 255 / 0.08);
+    --sidebar-ring: #1cb5e0;
+    --card-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.25);
+    --raised-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.06);
+    --overlay-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.06);
+  }
+  /* Scoped to the auth screens: navy ink and actions, cyan focus rings. */
+  .auth-theme {
+    --background: #ffffff;
+    --foreground: #0b1238;
+    --card-foreground: #0b1238;
+    --muted-foreground: #5b6482;
+    --primary: #000851;
+    --primary-foreground: #ffffff;
+    --border: #e4e8f0;
+    --input: #d3d9e5;
+    --ring: #1cb5e0;
+  }
+  .auth-theme .dark {
+    --ring: #1cb5e0;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    text-rendering: optimizeLegibility;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-brand-cyan) 28%, transparent);
+  }
+  /* Thin, quiet scrollbars that pick up the theme. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 18%, transparent) transparent;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+}
