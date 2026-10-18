@@ -84,7 +84,7 @@ function PropertyCell({ property }) {
             </div>
             <div className="flex min-w-0 flex-col items-start gap-1">
                 <Link
-                    href={route('properties.edit', property.id)}
+                    href={route('properties.show', property.id)}
                     dir="auto"
                     className="max-w-full truncate font-semibold outline-none hover:text-brand-ink focus-visible:underline"
                     title={property.name}

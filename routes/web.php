@@ -25,7 +25,7 @@ Route::get('/', function (Request $request) {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
-    Route::resource('properties', PropertyController::class)->except(['show', 'destroy']);
+    Route::resource('properties', PropertyController::class)->except(['destroy'])->whereNumber('property');
     Route::resource('rooms', RoomController::class)->except(['show', 'destroy']);
     Route::resource('apartments', ApartmentController::class)->except(['destroy']);
     Route::resource('shops', ShopController::class)->except(['destroy']);
@@ -61,6 +61,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         'configuration/property-types' => 'configuration.property-types',
         'configuration/room-types' => 'configuration.room-types',
         'maintenance' => 'maintenance.index',
+        'amcs/fire-safety' => 'amcs.fire-safety',
+        'amcs/lifts' => 'amcs.lifts',
+        'amcs/garbage' => 'amcs.garbage',
+        'amcs/grease-traps' => 'amcs.grease-traps',
+        'amcs/drainage' => 'amcs.drainage',
+        'amcs/pest-control' => 'amcs.pest-control',
+        'amcs/air-conditioning' => 'amcs.air-conditioning',
+        'amcs/water-tanks' => 'amcs.water-tanks',
         'help' => 'help',
     ];
 

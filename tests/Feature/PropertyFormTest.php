@@ -44,6 +44,8 @@ function validPropertyInput(array $overrides = []): array
         'landlord_id' => Landlord::where('name', 'Al Marsa Properties L.L.C.')->value('id'),
         'lease_start_date' => '2026-01-01',
         'lease_end_date' => '2027-12-31',
+        'annual_rent' => 240000,
+        'payments_per_year' => 4,
         'documents' => requiredPropertyDocuments(),
         ...$overrides,
     ];
@@ -174,6 +176,7 @@ describe('for the seeded demo company', function () {
 
     test('counts the property\'s saved units against its number of units', function () {
         $property = Property::where('code', 'HFM-JBA-01')->sole();
+        $originalTotal = $property->total_units;
 
         $this->actingAs($this->superAdmin)
             ->put(route('properties.update', $property), validPropertyInput([
@@ -183,7 +186,7 @@ describe('for the seeded demo company', function () {
             ]))
             ->assertSessionHasErrors('total_units');
 
-        expect($property->refresh()->total_units)->toBeNull();
+        expect($property->refresh()->total_units)->toBe($originalTotal);
     });
 
     test('rejects unit numbers already used in the property', function () {
@@ -208,7 +211,43 @@ describe('for the seeded demo company', function () {
 
         expect($property->landlord_id)->toBeNull()
             ->and($property->lease_end_date)->toBeNull()
+            ->and($property->headLeases()->exists())->toBeFalse()
             ->and(Landlord::count())->toBe(1);
+    });
+
+    test('sets up the head lease of a leased property and files its documents under it', function () {
+        $this->travelTo('2026-10-17');
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('properties.store'), validPropertyInput(['ejari_number' => 'EJ-2026-555', 'security_deposit' => 20000]))
+            ->assertRedirect(route('properties.index'));
+
+        $property = Property::where('code', 'HFM-SNP-01')->sole();
+        $lease = $property->headLeases()->sole();
+
+        expect($lease->landlord_id)->toBe($property->landlord_id)
+            ->and($lease->start_date->toDateString())->toBe('2026-01-01')
+            ->and($lease->end_date->toDateString())->toBe('2027-12-31')
+            ->and((float) $lease->annual_rent)->toBe(240000.0)
+            ->and($lease->ejari_number)->toBe('EJ-2026-555')
+            ->and($lease->status)->toBe('active')
+            ->and($lease->payments()->count())->toBe(8)
+            ->and($property->documents()->where('head_lease_id', $lease->id)->count())->toBe(4);
+    });
+
+    test('updates the terms of the property\'s current lease and rebuilds its schedule', function () {
+        $this->travelTo('2026-10-17');
+        $this->actingAs($this->superAdmin)->post(route('properties.store'), validPropertyInput());
+        $property = Property::where('code', 'HFM-SNP-01')->sole();
+
+        $this->actingAs($this->superAdmin)
+            ->put(route('properties.update', $property), validPropertyInput(['annual_rent' => 300000, 'payments_per_year' => 2]))
+            ->assertRedirect(route('properties.index'));
+
+        $lease = $property->headLeases()->sole();
+
+        expect((float) $lease->annual_rent)->toBe(300000.0)
+            ->and($lease->payments()->count())->toBe(4);
     });
 
     test('rejects invalid input', function (array $overrides, string $field) {
@@ -229,6 +268,7 @@ describe('for the seeded demo company', function () {
         'unit number without a digit' => [['units' => ['shops' => [['count' => 1, 'first_number' => 'Kiosk']]]], 'units.shops.0.first_number'],
         'apartment batch without bedrooms' => [['units' => ['apartments' => [['count' => 1, 'first_number' => 'A-1', 'bathrooms' => 1]]]], 'units.apartments.0.bedrooms'],
         'document without a file' => [['documents' => [['document_type' => 'insurance_policy']]], 'documents.0.file'],
+        'leased without an annual rent' => [['annual_rent' => null], 'annual_rent'],
         'missing the required documents' => [['documents' => []], 'documents'],
         'more units than the property holds' => [['total_units' => 2, 'units' => ['shops' => [['count' => 3, 'first_number' => 'S-01']]]], 'total_units'],
     ]);

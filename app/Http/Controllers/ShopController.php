@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\FiltersByClient;
 use App\Http\Requests\ShopRequest;
 use App\Models\Company;
 use App\Models\Property;
@@ -17,6 +18,8 @@ use Inertia\Response;
 
 class ShopController extends Controller
 {
+    use FiltersByClient;
+
     public const SORTS = ['shop', 'rent', 'area', 'floor', 'created'];
 
     public const PER_PAGE_OPTIONS = [10, 25, 50];
@@ -166,7 +169,7 @@ class ShopController extends Controller
      * The list options from the query string. Unknown values fall back to the
      * defaults rather than failing, so a stale or hand-edited link still opens.
      *
-     * @return array{search: string, properties: list<string>, status: list<string>, types: list<string>, sort: string, direction: string, perPage: int}
+     * @return array{search: string, properties: list<string>, clients: list<string>, status: list<string>, types: list<string>, sort: string, direction: string, perPage: int}
      */
     private function filters(Request $request): array
     {
@@ -176,6 +179,7 @@ class ShopController extends Controller
         return [
             'search' => $request->string('search')->trim()->limit(100, '')->toString(),
             'properties' => $this->listParameter($request, 'properties'),
+            'clients' => array_values(array_filter($this->listParameter($request, 'clients'), 'ctype_digit')),
             'status' => array_values(array_intersect($this->listParameter($request, 'status'), Shop::STATUSES)),
             'types' => $this->listParameter($request, 'types'),
             'sort' => in_array($sort, self::SORTS, true) ? $sort : 'shop',
@@ -215,6 +219,8 @@ class ShopController extends Controller
                 ->orWhereHas('property', fn (Builder $properties) => $properties->whereLike('name', "%{$search}%"))))
             ->when($except !== 'properties' && $filters['properties'] !== [], fn (Builder $query) => $query
                 ->whereHas('property', fn (Builder $properties) => $properties->whereIn('code', $filters['properties'])))
+            ->when($except !== 'clients' && $filters['clients'] !== [], fn (Builder $query) => $query
+                ->heldByClients($filters['clients']))
             ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query
                 ->whereIn('status', $filters['status']))
             ->when($except !== 'types' && $filters['types'] !== [], fn (Builder $query) => $query
@@ -265,6 +271,7 @@ class ShopController extends Controller
         $typeCounts = $count('types', 'shop_type');
 
         return [
+            'clients' => $this->clientFacet($company, fn () => $this->filteredQuery($company, $filters, except: 'clients'), $filters['clients']),
             'properties' => $company->properties()->orderBy('name')->get(['id', 'name', 'code'])
                 ->map(fn (Property $property) => [
                     'value' => $property->code,

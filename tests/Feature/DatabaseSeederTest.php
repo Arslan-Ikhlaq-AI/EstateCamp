@@ -116,9 +116,12 @@ it('fills every column except those that do not apply', function () {
         ->toEqualCanonicalizing(['landlord_id', 'lease_start_date', 'lease_end_date'])
         ->and(blankColumns(Property::where('code', PropertySeeder::JEBEL_ALI)->sole()))->toBe([]);
 
-    // A title deed does not expire.
-    PropertyDocument::all()->each(fn (PropertyDocument $document) => expect(blankColumns($document))
-        ->toBe($document->document_type === 'title_deed' ? ['expires_on'] : []));
+    // A title deed does not expire, and an owned property's documents are not filed under a lease.
+    PropertyDocument::with('property')->get()->each(fn (PropertyDocument $document) => expect(blankColumns($document))
+        ->toEqualCanonicalizing([
+            ...($document->document_type === 'title_deed' ? ['expires_on'] : []),
+            ...($document->property->ownership_type === 'owned' ? ['head_lease_id'] : []),
+        ]));
 });
 
 it('seeds data that satisfies the database check constraints SQLite does not enforce', function () {

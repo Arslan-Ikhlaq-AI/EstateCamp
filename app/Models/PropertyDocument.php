@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
+    'head_lease_id',
     'document_type',
     'title',
     'document_number',
@@ -68,5 +69,13 @@ class PropertyDocument extends Model
     public function property(): BelongsTo
     {
         return $this->belongsTo(Property::class);
+    }
+
+    /**
+     * @return BelongsTo<HeadLease, $this>
+     */
+    public function headLease(): BelongsTo
+    {
+        return $this->belongsTo(HeadLease::class);
     }
 }

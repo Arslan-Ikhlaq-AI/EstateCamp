@@ -3,24 +3,29 @@ import { DetailList, SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
 import { ClientStatusBadge, ContractStatusBadge, InvoiceStatusBadge, PartyTypeBadge, PaymentStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
+import PropertyHoldings, { holdingTotals, useHoldingSummary } from '@/Components/PropertyHoldings';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, FileSignatureIcon, PencilIcon, ReceiptIcon, UserPlusIcon, UsersIcon } from 'lucide-react';
+import { BanknoteIcon, BedDoubleIcon, Building2Icon, FileSignatureIcon, PencilIcon, ReceiptIcon, UserPlusIcon } from 'lucide-react';
+import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 
 function EmptyLine({ children }) {
     return <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{children}</p>;
 }
 
-export default function Show({ client, contracts, stays, invoices, payments, currency }) {
+export default function Show({ client, contracts, stays, invoices, payments, holdings, documents, currency }) {
     const { t, formatMoney, formatCurrency, formatDate, formatNumber } = useTranslation();
     const { period, unitsSummary } = useLeasingFormat();
     const isCompany = client.client_type === 'company';
     const activeContracts = contracts.filter((contract) => contract.status === 'active').length;
+    const totals = holdingTotals(holdings);
+    const holdingSummary = useHoldingSummary();
 
     return (
         <DashboardLayout>
@@ -69,12 +74,28 @@ export default function Show({ client, contracts, stays, invoices, payments, cur
                     detail={client.balance > 0 ? t('leasing.clients.show.balanceDetail') : t('leasing.clients.show.settled')}
                 />
                 <StatCard icon={FileSignatureIcon} label={t('leasing.clients.stats.contracts')} value={formatNumber(activeContracts)} detail={t('leasing.clients.show.contractsDetail', { count: contracts.length })} />
-                <StatCard icon={BedDoubleIcon} label={t('leasing.clients.stats.staying')} value={formatNumber(stays.length)} detail={t('leasing.clients.stats.stayingDetail')} />
-                <StatCard icon={UsersIcon} label={t('leasing.clients.show.occupants')} value={formatNumber(client.occupants)} detail={t('leasing.clients.show.occupantsDetail')} />
+                <StatCard
+                    icon={Building2Icon}
+                    tone="gold"
+                    label={t('leasing.holdings.properties')}
+                    value={formatNumber(totals.properties)}
+                    detail={holdingSummary(totals) || t('leasing.holdings.empty')}
+                />
+                <StatCard
+                    icon={BedDoubleIcon}
+                    tone="success"
+                    label={t('leasing.clients.stats.staying')}
+                    value={formatNumber(stays.length)}
+                    detail={t('leasing.holdings.stayingOf', { count: client.occupants })}
+                />
             </section>
 
             <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
                 <div className="flex min-w-0 flex-col gap-6">
+                    <SectionCard title={t('leasing.holdings.clientTitle')} description={t('leasing.holdings.clientDescription')}>
+                        <PropertyHoldings lines={holdings} currency={currency} showContract />
+                    </SectionCard>
+
                     <SectionCard title={t('leasing.contracts.title')} flush>
                         {contracts.length === 0 ? (
                             <EmptyLine>{t('leasing.clients.show.noContracts')}</EmptyLine>
@@ -179,6 +200,21 @@ export default function Show({ client, contracts, stays, invoices, payments, cur
                                     },
                                 ]}
                             />
+                        )}
+                    </SectionCard>
+
+                    <SectionCard title={t('leasing.contracts.form.documents.title')} description={t('leasing.clients.show.documentsDescription')}>
+                        {documents.length > 0 ? (
+                            <DocumentsOnFile
+                                documents={documents}
+                                renderTag={(document) => (
+                                    <Badge variant="secondary" render={<Link href={route('contracts.show', document.contract.id)} />}>
+                                        {document.contract.number}
+                                    </Badge>
+                                )}
+                            />
+                        ) : (
+                            <p className="text-sm text-muted-foreground">{t('leasing.clients.show.noDocuments')}</p>
                         )}
                     </SectionCard>
                 </div>

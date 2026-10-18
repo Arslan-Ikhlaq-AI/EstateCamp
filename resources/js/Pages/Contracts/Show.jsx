@@ -6,6 +6,7 @@ import { TextareaField, TextField } from '@/Components/FormFields';
 import { ContractStatusBadge, InvoiceStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import PostButton from '@/Components/PostButton';
+import PropertyHoldings from '@/Components/PropertyHoldings';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,7 @@ import {
     XCircleIcon,
 } from 'lucide-react';
 import { useState } from 'react';
+import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 import CheckOutDialog from '../Occupants/Partials/CheckOutDialog';
 
 function TerminateDialog({ contract, open, onOpenChange }) {
@@ -75,7 +77,7 @@ function TerminateDialog({ contract, open, onOpenChange }) {
     );
 }
 
-export default function Show({ contract, lines, stays, invoices, totals, nextPeriod, can, currency }) {
+export default function Show({ contract, lines, stays, invoices, documents, totals, nextPeriod, can, currency }) {
     const { t, formatCurrency, formatMoney, formatDate, formatNumber } = useTranslation();
     const { period, lineLabel } = useLeasingFormat();
     const [isTerminating, setIsTerminating] = useState(false);
@@ -205,6 +207,10 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
 
             <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
                 <div className="flex min-w-0 flex-col gap-6">
+                    <SectionCard title={t('leasing.holdings.title')} description={t('leasing.holdings.contractDescription')}>
+                        <PropertyHoldings lines={lines} currency={currency} />
+                    </SectionCard>
+
                     <SectionCard title={t('leasing.contracts.form.lines.title')} description={t('leasing.contracts.show.linesDescription')} flush>
                         <DataTable
                             rows={lines}
@@ -328,6 +334,14 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
                                     { id: 'status', header: t('leasing.common.status'), cell: (invoice) => <InvoiceStatusBadge status={invoice.status} isOverdue={invoice.isOverdue} /> },
                                 ]}
                             />
+                        )}
+                    </SectionCard>
+
+                    <SectionCard title={t('leasing.contracts.form.documents.title')} description={t('leasing.contracts.show.documentsDescription')}>
+                        {documents.length > 0 ? (
+                            <DocumentsOnFile documents={documents} />
+                        ) : (
+                            <p className="text-sm text-muted-foreground">{t('leasing.contracts.form.documents.empty')}</p>
                         )}
                     </SectionCard>
                 </div>

@@ -4,6 +4,7 @@ import RadialGauge from '@/Components/RadialGauge';
 import { Badge } from '@/components/ui/badge';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
+import { Link } from '@inertiajs/react';
 import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, MapPinIcon } from 'lucide-react';
 import { ComplianceBadge, LeaseNote, OwnershipBadge, StatusBadge } from './PropertyBadges';
 import PropertyActions from './PropertyActions';
@@ -52,7 +53,9 @@ function PropertyGridCard({ property, currency }) {
                     <div className="flex min-w-0 flex-col gap-0.5">
                         <span className="w-fit rounded bg-white/15 px-1.5 py-0.5 font-mono text-[0.6875rem] tracking-tight backdrop-blur">{property.code}</span>
                         <h3 dir="auto" className="truncate font-heading text-lg font-bold" title={property.name}>
-                            {property.name}
+                            <Link href={route('properties.show', property.id)} className="outline-none after:absolute after:inset-0 focus-visible:underline">
+                                {property.name}
+                            </Link>
                         </h3>
                         <p className="flex items-center gap-1.5 text-[0.8125rem] text-white/80">
                             <MapPinIcon className="size-3.5 shrink-0" />

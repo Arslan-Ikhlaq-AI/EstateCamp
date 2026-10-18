@@ -3,6 +3,7 @@
 use App\Models\Apartment;
 use App\Models\Client;
 use App\Models\Contract;
+use App\Models\ContractDocument;
 use App\Models\ContractLine;
 use App\Models\Property;
 use App\Models\Shop;
@@ -10,6 +11,8 @@ use App\Models\User;
 use Database\Seeders\ClientSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\PropertySeeder;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -325,4 +328,111 @@ describe('contracts', function () {
             ->post(route('contracts.store'), apartmentContractInput($otherClient, $apartment))
             ->assertSessionHasErrors('client_id');
     });
+});
+
+test('adds a contract for a client created on the contract form, with its documents', function () {
+    Storage::fake('public');
+    $apartment = $this->alQuoz->apartments()->where('apartment_number', 'C-102')->sole();
+
+    $this->actingAs($this->superAdmin)
+        ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $apartment, [
+            'client_mode' => 'new',
+            'new_client' => ['client_type' => 'company', 'name' => 'Falcon Logistics L.L.C.', 'trade_license_number' => 'TL-889922', 'id_type' => 'emirates_id'],
+            'documents' => [['document_type' => 'trade_license', 'file' => UploadedFile::fake()->create('licence.pdf', 100, 'application/pdf')]],
+        ]))
+        ->assertSessionHasNoErrors();
+
+    $contract = Contract::where('contract_number', 'CTR-2026-0012')->sole();
+    $document = $contract->documents()->sole();
+
+    expect($contract->client->name)->toBe('Falcon Logistics L.L.C.')
+        ->and($contract->client->id_type)->toBeNull()
+        ->and($contract->client->company_id)->toBe($this->superAdmin->company_id)
+        ->and($contract->client->status)->toBe('active')
+        ->and($document->document_type)->toBe('trade_license');
+    Storage::disk('public')->assertExists(str_replace('/storage/', '', $document->file_url));
+});
+
+test('requires an ID for a person added as a client on the contract form', function () {
+    $this->actingAs($this->superAdmin)
+        ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $this->alQuoz->apartments()->first(), [
+            'client_mode' => 'new',
+            'new_client' => ['client_type' => 'individual', 'name' => 'Omar Haddad'],
+        ]))
+        ->assertSessionHasErrors(['new_client.id_type', 'new_client.id_number']);
+
+    expect(Client::where('name', 'Omar Haddad')->exists())->toBeFalse();
+});
+
+test('shows which clients rent which units of a property', function () {
+    $this->actingAs($this->superAdmin)
+        ->get(route('properties.show', $this->alQuoz))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Properties/Show')
+            ->where('property.code', PropertySeeder::AL_QUOZ)
+            ->has('clients', 5)
+            ->where('clients.0.name', ClientSeeder::GULF_BUILDERS)
+            ->where('clients.0.rooms', 2)
+            ->where('clients.0.beds', 16)
+            ->where('clients.0.apartments', 1)
+            ->where('clients.0.monthly', 14700)
+            ->where('clients.1.name', ClientSeeder::AL_NOOR)
+            ->where('clients.1.beds', 8)
+            ->where('clients.2.name', ClientSeeder::MINI_MART)
+            ->where('clients.2.shops', 1)
+        );
+});
+
+test('lists only the rooms a client holds when filtered by client', function () {
+    $this->actingAs($this->superAdmin)
+        ->get(route('rooms.index', ['clients' => [$this->gulfBuilders->id]]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rooms.total', 2)
+            ->where('filters.clients', [(string) $this->gulfBuilders->id])
+        );
+});
+
+test('shows a client\'s contract documents on the client page', function () {
+    $contract = Contract::where('contract_number', 'CTR-2026-0001')->sole();
+    ContractDocument::factory()->for($contract)->create(['document_type' => 'signed_contract']);
+
+    $this->actingAs($this->superAdmin)
+        ->get(route('clients.show', $this->gulfBuilders))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('documents', 1)
+            ->where('documents.0.document_type', 'signed_contract')
+            ->where('documents.0.contract.number', 'CTR-2026-0001')
+        );
+});
+
+test('shows the contract\'s client, lines and documents on its edit page', function () {
+    $contract = Contract::where('contract_number', 'CTR-2026-0001')->sole();
+    ContractDocument::factory()->for($contract)->create(['document_type' => 'signed_contract']);
+
+    $this->actingAs($this->superAdmin)
+        ->get(route('contracts.edit', $contract))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Contracts/Form')
+            ->where('contract.client.name', ClientSeeder::GULF_BUILDERS)
+            ->has('contract.lines', 3)
+            ->has('contract.documents', 1)
+            ->where('contract.staying', $contract->occupancies()->whereNull('check_out_date')->count())
+            ->has('contract.balance')
+        );
+});
+
+test('shows what a client rents across their live contracts', function () {
+    $this->actingAs($this->superAdmin)
+        ->get(route('clients.show', $this->gulfBuilders))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('holdings', 3)
+            ->where('holdings.0.property.code', PropertySeeder::AL_QUOZ)
+            ->where('holdings.0.capacity', 8)
+            ->where('holdings.0.contract.number', 'CTR-2026-0001')
+        );
 });

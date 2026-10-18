@@ -120,6 +120,14 @@ class HeadLease extends Model
     }
 
     /**
+     * @return HasMany<PropertyDocument, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(PropertyDocument::class);
+    }
+
+    /**
      * @return BelongsTo<Company, $this>
      */
     public function company(): BelongsTo

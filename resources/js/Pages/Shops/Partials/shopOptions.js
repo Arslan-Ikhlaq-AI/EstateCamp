@@ -2,6 +2,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import {
     AirVentIcon,
     BookmarkIcon,
+    BriefcaseBusinessIcon,
     Building2Icon,
     CctvIcon,
     CirclePauseIcon,
@@ -29,7 +30,7 @@ import {
 /**
  * The shop filters in toolbar order, keyed as in the query string.
  */
-export const SHOP_FACET_KEYS = ['properties', 'status', 'types'];
+export const SHOP_FACET_KEYS = ['properties', 'clients', 'status', 'types'];
 
 export const AMENITY_ICONS = {
     air_conditioning: AirVentIcon,
@@ -82,6 +83,7 @@ export function useShopFacetOptions(facets) {
 
     return {
         properties: facets.properties.map((option) => ({ ...option, icon: Building2Icon })),
+        clients: facets.clients.map((option) => ({ ...option, icon: BriefcaseBusinessIcon })),
         status: facets.status.map((option) => ({
             ...option,
             label: t(`shopStatus.${option.value}`),

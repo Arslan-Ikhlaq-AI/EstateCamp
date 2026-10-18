@@ -373,6 +373,14 @@ class Contract extends Model
     }
 
     /**
+     * @return HasMany<ContractDocument, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ContractDocument::class);
+    }
+
+    /**
      * @return HasMany<ContractLine, $this>
      */
     public function lines(): HasMany

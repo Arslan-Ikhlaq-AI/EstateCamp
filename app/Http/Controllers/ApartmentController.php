@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\FiltersByClient;
 use App\Http\Requests\ApartmentRequest;
 use App\Models\Apartment;
 use App\Models\Company;
@@ -17,6 +18,8 @@ use Inertia\Response;
 
 class ApartmentController extends Controller
 {
+    use FiltersByClient;
+
     public const SORTS = ['apartment', 'rent', 'area', 'bedrooms', 'floor', 'created'];
 
     public const PER_PAGE_OPTIONS = [10, 25, 50];
@@ -167,7 +170,7 @@ class ApartmentController extends Controller
      * The list options from the query string. Unknown values fall back to the
      * defaults rather than failing, so a stale or hand-edited link still opens.
      *
-     * @return array{search: string, properties: list<string>, status: list<string>, furnishing: list<string>, bedrooms: list<string>, sort: string, direction: string, perPage: int}
+     * @return array{search: string, properties: list<string>, clients: list<string>, status: list<string>, furnishing: list<string>, bedrooms: list<string>, sort: string, direction: string, perPage: int}
      */
     private function filters(Request $request): array
     {
@@ -177,6 +180,7 @@ class ApartmentController extends Controller
         return [
             'search' => $request->string('search')->trim()->limit(100, '')->toString(),
             'properties' => $this->listParameter($request, 'properties'),
+            'clients' => array_values(array_filter($this->listParameter($request, 'clients'), 'ctype_digit')),
             'status' => array_values(array_intersect($this->listParameter($request, 'status'), Apartment::STATUSES)),
             'furnishing' => array_values(array_intersect($this->listParameter($request, 'furnishing'), Apartment::FURNISHING_STATUSES)),
             'bedrooms' => array_values(array_filter($this->listParameter($request, 'bedrooms'), fn (string $value) => ctype_digit($value) && strlen($value) <= 2)),
@@ -217,6 +221,8 @@ class ApartmentController extends Controller
                 ->orWhereHas('property', fn (Builder $properties) => $properties->whereLike('name', "%{$search}%"))))
             ->when($except !== 'properties' && $filters['properties'] !== [], fn (Builder $query) => $query
                 ->whereHas('property', fn (Builder $properties) => $properties->whereIn('code', $filters['properties'])))
+            ->when($except !== 'clients' && $filters['clients'] !== [], fn (Builder $query) => $query
+                ->heldByClients($filters['clients']))
             ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query
                 ->whereIn('status', $filters['status']))
             ->when($except !== 'furnishing' && $filters['furnishing'] !== [], fn (Builder $query) => $query
@@ -270,6 +276,7 @@ class ApartmentController extends Controller
         $bedroomCounts = $count('bedrooms', 'bedrooms');
 
         return [
+            'clients' => $this->clientFacet($company, fn () => $this->filteredQuery($company, $filters, except: 'clients'), $filters['clients']),
             'properties' => $company->properties()->orderBy('name')->get(['id', 'name', 'code'])
                 ->map(fn (Property $property) => [
                     'value' => $property->code,

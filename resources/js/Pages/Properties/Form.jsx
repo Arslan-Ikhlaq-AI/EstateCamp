@@ -1,4 +1,4 @@
-import { TextareaField, TextField } from '@/Components/FormFields';
+import { ChoiceField, MoneyField, TextareaField, TextField } from '@/Components/FormFields';
 import { FormActions } from '@/Components/FormShell';
 import PageHeader from '@/Components/PageHeader';
 import DashboardLayout from '@/Layouts/DashboardLayout';
@@ -9,6 +9,7 @@ import {
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { FieldGroup } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
@@ -29,6 +30,7 @@ import {
     LayoutGridIcon,
     MapPinIcon,
     PhoneIcon,
+    ScrollTextIcon,
     WrenchIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -39,6 +41,7 @@ import { ChoiceCards, StepBar, StepSection, useCurrentStep } from './Partials/Fo
 import LandlordPicker, { emptyLandlord } from './Partials/LandlordPicker';
 import PropertyPreview from './Partials/PropertyPreview';
 import RequiredDocuments, { hasFile } from './Partials/RequiredDocuments';
+import SchedulePreview, { useSchedule } from '../HeadLeases/Partials/SchedulePreview';
 import UnitBatches, { emptyUnits, unitCount, unitNumbers } from './Partials/UnitBatches';
 
 const PROPERTY_FIELDS = {
@@ -67,6 +70,11 @@ const PROPERTY_FIELDS = {
     notes: '',
     total_floors: '',
     total_units: '',
+    ejari_number: '',
+    annual_rent: '',
+    payments_per_year: 4,
+    security_deposit: '',
+    notice_period_days: 90,
 };
 
 const emptyDocument = () => ({
@@ -124,8 +132,8 @@ function initialData(property, landlords, requiredTypes) {
 }
 
 /**
- * The form's steps, in order, with each one's accent. Units and contact
- * details are optional.
+ * The form's steps, in order, with each one's accent. Units are optional;
+ * lease details only apply to leased properties.
  */
 const STEPS = [
     { key: 'basics', icon: Building2Icon, tone: 'brand' },
@@ -133,7 +141,7 @@ const STEPS = [
     { key: 'ownership', icon: KeyRoundIcon, tone: 'gold' },
     { key: 'units', icon: LayoutGridIcon, tone: 'navy', optional: true },
     { key: 'documents', icon: FileTextIcon, tone: 'orange' },
-    { key: 'contact', icon: PhoneIcon, tone: 'brand', optional: true },
+    { key: 'lease', icon: ScrollTextIcon, tone: 'brand' },
 ];
 
 /**
@@ -141,11 +149,14 @@ const STEPS = [
  */
 const STEP_FIELDS = {
     basics: ['name', 'code', 'property_type_id', 'status', 'cover_image'],
-    location: ['country_code', 'city', 'area', 'street', 'building_name', 'plot_number', 'makani_number', 'po_box', 'address', 'latitude', 'longitude', 'map_url'],
-    ownership: ['ownership_type', 'landlord_mode', 'landlord_id', 'new_landlord', 'lease_start_date', 'lease_end_date'],
+    location: [
+        'country_code', 'city', 'area', 'street', 'building_name', 'plot_number', 'makani_number', 'po_box', 'address', 'latitude', 'longitude', 'map_url',
+        'contact_person_name', 'contact_person_phone', 'notes',
+    ],
+    ownership: ['ownership_type', 'landlord_mode', 'landlord_id', 'new_landlord'],
     units: ['units', 'total_floors', 'total_units'],
     documents: ['documents'],
-    contact: ['contact_person_name', 'contact_person_phone', 'notes'],
+    lease: ['lease_start_date', 'lease_end_date', 'ejari_number', 'annual_rent', 'payments_per_year', 'security_deposit', 'notice_period_days'],
 };
 
 const EXTRA_LOCATION_FIELDS = ['plot_number', 'makani_number', 'po_box', 'map_url', 'latitude', 'longitude'];
@@ -159,16 +170,17 @@ const stepOf = (field) => STEPS.find(({ key }) => STEP_FIELDS[key].some((name) =
  */
 function stepStates(data, errors, requiredTypes) {
     const withErrors = new Set(Object.keys(errors).map(stepOf));
+    const isLeased = data.ownership_type === 'leased';
     const hasLandlord = data.landlord_mode === 'new' ? Boolean(data.new_landlord.name) : Boolean(data.landlord_id);
     const isDone = {
         basics: Boolean(data.name && data.code && data.property_type_id),
         location: Boolean(data.country_code && (data.area || data.street || data.building_name || data.address)),
-        ownership: data.ownership_type !== 'leased' || Boolean(hasLandlord && data.lease_start_date && data.lease_end_date),
+        ownership: !isLeased || hasLandlord,
         units:
             Boolean(data.total_floors || data.total_units) ||
             Object.values(data.units).some((batches) => batches.some((batch) => unitNumbers(batch.first_number, batch.count).length > 0)),
         documents: requiredTypes.every((type) => data.documents.some((document) => document.document_type === type && hasFile(document))),
-        contact: Boolean(data.contact_person_name || data.contact_person_phone || data.notes),
+        lease: !isLeased || Boolean(data.lease_start_date && data.lease_end_date && data.annual_rent !== '' && data.payments_per_year),
     };
 
     return Object.fromEntries(STEPS.map(({ key }) => [key, withErrors.has(key) ? 'error' : isDone[key] ? 'done' : 'todo']));
@@ -215,6 +227,7 @@ export default function Form({
     genderPolicies,
     shopTypes,
     furnishingStatuses,
+    paymentsPerYear,
     currency,
     unitSummary,
 }) {
@@ -228,6 +241,13 @@ export default function Form({
 
     const title = isEditing ? t('propertyForm.editTitle') : t('propertyForm.addTitle');
     const months = leaseMonths(data.lease_start_date, data.lease_end_date);
+    const isLeased = data.ownership_type === 'leased';
+    const schedule = useSchedule({
+        start_date: data.lease_start_date,
+        end_date: data.lease_end_date,
+        annual_rent: data.annual_rent,
+        payments_per_year: data.payments_per_year,
+    });
 
     const slots = requiredDocumentTypes.map((type) => {
         const index = data.documents.findIndex((document) => document.document_type === type);
@@ -387,6 +407,30 @@ export default function Form({
                                 </div>
                                 <TextareaField {...bind('address')} label={t('propertyForm.fields.address')} rows={2} optional />
 
+                                <div className="flex flex-col gap-4 rounded-xl bg-muted/50 p-4 ring-1 ring-foreground/[0.06]">
+                                    <div className="flex items-start gap-3">
+                                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface text-brand-ink shadow-sm ring-1 ring-foreground/[0.06]">
+                                            <PhoneIcon className="size-4" />
+                                        </span>
+                                        <div className="flex flex-col gap-0.5">
+                                            <h3 className="text-sm font-bold">{t('propertyForm.contact.title')}</h3>
+                                            <p className="text-[0.8125rem] text-muted-foreground">{t('propertyForm.contact.description')}</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <TextField {...bind('contact_person_name')} label={t('propertyForm.fields.contactName')} inputClassName="bg-surface" optional />
+                                        <TextField
+                                            {...bind('contact_person_phone')}
+                                            type="tel"
+                                            label={t('propertyForm.fields.contactPhone')}
+                                            placeholder="+971 50 123 4567"
+                                            inputClassName="bg-surface"
+                                            optional
+                                        />
+                                    </div>
+                                    <TextareaField {...bind('notes')} label={t('propertyForm.fields.notes')} rows={3} className="[&_textarea]:bg-surface" optional />
+                                </div>
+
                                 <Collapsible open={showMoreLocation} onOpenChange={setShowMoreLocation}>
                                     <CollapsibleTrigger
                                         render={<Button type="button" variant="ghost" size="sm" className="group/more -ms-2 text-brand-ink" />}
@@ -430,16 +474,7 @@ export default function Form({
                                         ]}
                                     />
                                 </div>
-                                {data.ownership_type === 'leased' && (
-                                    <>
-                                        <LandlordPicker landlords={landlords} data={data} setData={setData} errors={errors} />
-                                        <TextField {...bind('lease_start_date')} type="date" label={t('propertyForm.fields.leaseStart')} required />
-                                        <TextField {...bind('lease_end_date')} type="date" label={t('propertyForm.fields.leaseEnd')} required />
-                                        {months !== null && (
-                                            <p className="-mt-2 text-[0.8125rem] text-muted-foreground sm:col-span-2">{t('propertyForm.leaseLength', { count: months })}</p>
-                                        )}
-                                    </>
-                                )}
+                                {isLeased && <LandlordPicker landlords={landlords} data={data} setData={setData} errors={errors} />}
                             </FieldGroup>
                         </StepSection>
 
@@ -502,25 +537,75 @@ export default function Form({
                             </div>
                         </StepSection>
 
-                        <StepSection {...section('contact')}>
-                            <FieldGroup className="gap-5">
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    <TextField {...bind('contact_person_name')} label={t('propertyForm.fields.contactName')} optional />
+                        <StepSection
+                            {...section('lease')}
+                            action={
+                                property?.lease && (
+                                    <Badge variant="info" render={<Link href={route('head-leases.show', property.lease.id)} />}>
+                                        {property.lease.number}
+                                    </Badge>
+                                )
+                            }
+                        >
+                            {isLeased ? (
+                                <FieldGroup className="grid gap-5 sm:grid-cols-2">
+                                    <TextField {...bind('lease_start_date')} type="date" label={t('propertyForm.fields.leaseStart')} required />
+                                    <TextField {...bind('lease_end_date')} type="date" label={t('propertyForm.fields.leaseEnd')} required />
+                                    {months !== null && (
+                                        <p className="-mt-2 text-[0.8125rem] text-muted-foreground sm:col-span-2">{t('propertyForm.leaseLength', { count: months })}</p>
+                                    )}
+                                    <MoneyField
+                                        {...bind('annual_rent')}
+                                        label={t('leasing.headLeases.form.fields.annualRent')}
+                                        currency={currency}
+                                        suffix={t('leasing.common.perYear')}
+                                        placeholder="780000"
+                                    />
+                                    <MoneyField {...bind('security_deposit')} label={t('leasing.common.securityDeposit')} currency={currency} optional />
+                                    <ChoiceField
+                                        id="payments_per_year"
+                                        label={t('leasing.headLeases.form.fields.paymentsPerYear')}
+                                        value={data.payments_per_year}
+                                        onChange={(value) => setData('payments_per_year', Number(value))}
+                                        options={paymentsPerYear.map((count) => ({ value: count, label: t('leasing.headLeases.form.cheques', { count }) }))}
+                                        error={errors.payments_per_year}
+                                        className="sm:col-span-2"
+                                    />
                                     <TextField
-                                        {...bind('contact_person_phone')}
-                                        type="tel"
-                                        label={t('propertyForm.fields.contactPhone')}
-                                        placeholder="+971 50 123 4567"
+                                        {...bind('notice_period_days')}
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={0}
+                                        label={t('leasing.headLeases.form.fields.noticeDays')}
                                         optional
                                     />
+                                    <TextField {...bind('ejari_number')} label={t('leasing.common.ejariNumber')} optional />
+                                    <Alert className="sm:col-span-2">
+                                        <ScrollTextIcon />
+                                        <AlertDescription>{t(property?.lease ? 'propertyForm.lease.updates' : 'propertyForm.lease.creates')}</AlertDescription>
+                                    </Alert>
+                                </FieldGroup>
+                            ) : (
+                                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-8 text-center">
+                                    <span className="flex size-11 items-center justify-center rounded-xl bg-brand-cyan/10 text-brand-ink">
+                                        <KeyRoundIcon className="size-5" />
+                                    </span>
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-sm font-semibold">{t('propertyForm.lease.owned.title')}</p>
+                                        <p className="max-w-md text-[0.8125rem] text-muted-foreground">{t('propertyForm.lease.owned.description')}</p>
+                                    </div>
+                                    <Button type="button" variant="outline" onClick={() => setData('ownership_type', 'leased')}>
+                                        <HandshakeIcon data-icon="inline-start" />
+                                        {t('propertyForm.lease.owned.action')}
+                                    </Button>
                                 </div>
-                                <TextareaField {...bind('notes')} label={t('propertyForm.fields.notes')} rows={4} optional />
-                            </FieldGroup>
+                            )}
                         </StepSection>
                     </div>
 
                     <aside className="hidden flex-col gap-6 xl:sticky xl:top-40 xl:flex xl:max-h-[calc(100svh-11rem)] xl:overflow-y-auto xl:pb-1 [&>*]:shrink-0">
                         <PropertyPreview data={data} coverUrl={coverUrl} propertyTypes={propertyTypes} landlords={landlords} savedUnits={savedUnits} />
+                        {isLeased && <SchedulePreview schedule={schedule} currency={currency} />}
                     </aside>
                 </div>
 

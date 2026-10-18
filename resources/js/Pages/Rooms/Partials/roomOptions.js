@@ -4,6 +4,7 @@ import {
     BanIcon,
     BathIcon,
     BedDoubleIcon,
+    BriefcaseBusinessIcon,
     Building2Icon,
     CircleCheckIcon,
     CirclePauseIcon,
@@ -26,7 +27,7 @@ import {
 /**
  * The room filters in toolbar order, keyed as in the query string.
  */
-export const ROOM_FACET_KEYS = ['properties', 'types', 'status', 'gender', 'availability'];
+export const ROOM_FACET_KEYS = ['properties', 'clients', 'types', 'status', 'gender', 'availability'];
 
 export const AMENITY_ICONS = {
     air_conditioning: AirVentIcon,
@@ -68,6 +69,7 @@ export function useRoomFacetOptions(facets) {
 
     return {
         properties: facets.properties.map((option) => ({ ...option, icon: Building2Icon })),
+        clients: facets.clients.map((option) => ({ ...option, icon: BriefcaseBusinessIcon })),
         types: facets.types.map((option) => ({
             ...option,
             label: tOr(`roomTypes.${option.value}`, option.label),

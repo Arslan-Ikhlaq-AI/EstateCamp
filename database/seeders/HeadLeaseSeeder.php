@@ -45,6 +45,9 @@ class HeadLeaseSeeder extends Seeder
 
             $previous = $lease;
         }
+
+        // The residence's documents are filed under the lease it runs on today.
+        $property->documents()->update(['head_lease_id' => $previous->id]);
     }
 
     /**

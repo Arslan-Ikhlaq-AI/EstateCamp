@@ -1,12 +1,19 @@
 import {
+    AirVentIcon,
+    ArrowUpDownIcon,
     BanknoteIcon,
     BedDoubleIcon,
     BriefcaseBusinessIcon,
+    BugIcon,
     Building2Icon,
     DoorOpenIcon,
+    DropletsIcon,
     FileKeyIcon,
     FileSignatureIcon,
+    FileStackIcon,
     FileTextIcon,
+    FilterIcon,
+    FlameIcon,
     HandCoinsIcon,
     HandshakeIcon,
     HouseIcon,
@@ -21,10 +28,12 @@ import {
     SlidersHorizontalIcon,
     StoreIcon,
     TagsIcon,
+    Trash2Icon,
     UserCogIcon,
     UserPlusIcon,
     UsersIcon,
     WalletIcon,
+    WavesIcon,
     WrenchIcon,
 } from 'lucide-react';
 
@@ -32,7 +41,8 @@ import {
  * The app's sections, shared by the sidebar, the command menu and page
  * headers (which show the current page's icon). A link is current on its own
  * route or on any route in `activeFor` (such as its add and edit pages);
- * `adminOnly` links show only to admins.
+ * `adminOnly` links show only to admins. Links sharing a `heading` are
+ * grouped under it in the sidebar.
  */
 export const navigation = [
     {
@@ -52,7 +62,7 @@ export const navigation = [
                 title: 'nav.properties',
                 icon: Building2Icon,
                 children: [
-                    { title: 'nav.allProperties', icon: Building2Icon, routeName: 'properties.index', activeFor: ['properties.index', 'properties.create', 'properties.edit'] },
+                    { title: 'nav.allProperties', icon: Building2Icon, routeName: 'properties.index', activeFor: ['properties.index', 'properties.show', 'properties.create', 'properties.edit'] },
                     { title: 'nav.rooms', icon: DoorOpenIcon, routeName: 'rooms.index', activeFor: ['rooms.*'] },
                     { title: 'nav.shops', icon: StoreIcon, routeName: 'shops.index', activeFor: ['shops.*'] },
                     { title: 'nav.apartments', icon: HouseIcon, routeName: 'apartments.index', activeFor: ['apartments.*'] },
@@ -63,11 +73,25 @@ export const navigation = [
                 title: 'nav.agreements',
                 icon: HandshakeIcon,
                 children: [
-                    { title: 'nav.contracts', icon: FileSignatureIcon, routeName: 'contracts.index', activeFor: ['contracts.*'] },
+                    { title: 'nav.landlords', icon: LandmarkIcon, routeName: 'landlords.index', activeFor: ['landlords.*'] },
                     { title: 'nav.clients', icon: UsersIcon, routeName: 'clients.index', activeFor: ['clients.*'] },
                     { title: 'nav.occupants', icon: IdCardIcon, routeName: 'occupants.index', activeFor: ['occupants.*', 'occupancies.*'] },
-                    { title: 'nav.landlords', icon: LandmarkIcon, routeName: 'landlords.index', activeFor: ['landlords.*'] },
+                ],
+            },
+            {
+                title: 'nav.contractsMenu',
+                icon: FileStackIcon,
+                children: [
+                    { title: 'nav.contracts', icon: FileSignatureIcon, routeName: 'contracts.index', activeFor: ['contracts.*'] },
                     { title: 'nav.headLeases', icon: FileKeyIcon, routeName: 'head-leases.index', activeFor: ['head-leases.*'] },
+                    { title: 'nav.amcFireSafety', icon: FlameIcon, routeName: 'amcs.fire-safety', heading: 'nav.amcs' },
+                    { title: 'nav.amcLifts', icon: ArrowUpDownIcon, routeName: 'amcs.lifts', heading: 'nav.amcs' },
+                    { title: 'nav.amcGarbage', icon: Trash2Icon, routeName: 'amcs.garbage', heading: 'nav.amcs' },
+                    { title: 'nav.amcGreaseTraps', icon: FilterIcon, routeName: 'amcs.grease-traps', heading: 'nav.amcs' },
+                    { title: 'nav.amcDrainage', icon: WavesIcon, routeName: 'amcs.drainage', heading: 'nav.amcs' },
+                    { title: 'nav.amcPestControl', icon: BugIcon, routeName: 'amcs.pest-control', heading: 'nav.amcs' },
+                    { title: 'nav.amcAirConditioning', icon: AirVentIcon, routeName: 'amcs.air-conditioning', heading: 'nav.amcs' },
+                    { title: 'nav.amcWaterTanks', icon: DropletsIcon, routeName: 'amcs.water-tanks', heading: 'nav.amcs' },
                 ],
             },
             {
@@ -112,12 +136,12 @@ export const createActions = [
     { title: 'roomList.add', icon: DoorOpenIcon, routeName: 'rooms.create', group: 'nav.properties' },
     { title: 'apartmentList.add', icon: HouseIcon, routeName: 'apartments.create', group: 'nav.properties' },
     { title: 'shopList.add', icon: StoreIcon, routeName: 'shops.create', group: 'nav.properties' },
-    { title: 'leasing.contracts.add', icon: FileSignatureIcon, routeName: 'contracts.create', group: 'nav.agreements' },
+    { title: 'leasing.landlords.add', icon: LandmarkIcon, routeName: 'landlords.create', group: 'nav.agreements' },
     { title: 'leasing.clients.add', icon: UsersIcon, routeName: 'clients.create', group: 'nav.agreements' },
     { title: 'leasing.occupants.add', icon: UserPlusIcon, routeName: 'occupants.create', group: 'nav.agreements' },
     { title: 'leasing.checkIn.button', icon: LogInIcon, routeName: 'occupancies.create', group: 'nav.agreements' },
-    { title: 'leasing.landlords.add', icon: LandmarkIcon, routeName: 'landlords.create', group: 'nav.agreements' },
-    { title: 'leasing.headLeases.add', icon: FileKeyIcon, routeName: 'head-leases.create', group: 'nav.agreements' },
+    { title: 'leasing.contracts.add', icon: FileSignatureIcon, routeName: 'contracts.create', group: 'nav.contractsMenu' },
+    { title: 'leasing.headLeases.add', icon: FileKeyIcon, routeName: 'head-leases.create', group: 'nav.contractsMenu' },
     { title: 'leasing.payments.add', icon: ReceiptIcon, routeName: 'payments.create', group: 'nav.payments' },
 ];
 

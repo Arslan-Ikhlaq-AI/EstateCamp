@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\Apartment;
+use App\Models\Client;
 use App\Models\Contract;
+use App\Models\ContractDocument;
 use App\Models\ContractLine;
 use App\Models\Room;
 use App\Models\Shop;
@@ -29,7 +31,9 @@ class ContractRequest extends CompanyScopedRequest
     public function rules(): array
     {
         return [
-            'client_id' => ['required', 'integer', $this->existsInCompany('clients')],
+            'client_mode' => ['required', Rule::in(['existing', 'new'])],
+            'client_id' => ['nullable', 'required_if:client_mode,existing', 'integer', $this->existsInCompany('clients')],
+            ...$this->newClientRules(),
             'ejari_number' => ['nullable', 'string', 'max:50'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after:start_date'],
@@ -52,15 +56,72 @@ class ContractRequest extends CompanyScopedRequest
             'lines.*.start_date' => ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:end_date'],
             'lines.*.end_date' => ['required', 'date', 'after_or_equal:lines.*.start_date', 'before_or_equal:end_date'],
             'lines.*.description' => ['nullable', 'string', 'max:255'],
+            'documents' => ['array', 'max:20'],
+            'documents.*.id' => ['nullable', 'integer'],
+            'documents.*.document_type' => ['required', Rule::in(ContractDocument::TYPES)],
+            'documents.*.title' => ['nullable', 'string', 'max:255'],
+            'documents.*.document_number' => ['nullable', 'string', 'max:100'],
+            'documents.*.file' => ['nullable', 'required_without:documents.*.id', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'documents.*.issued_on' => ['nullable', 'date'],
+            'documents.*.expires_on' => ['nullable', 'date', 'after_or_equal:documents.*.issued_on'],
+            'documents.*.notes' => ['nullable', 'string', 'max:2000'],
         ];
     }
 
     /**
-     * Only bed lines rent several units or bill on actual use, and each line
-     * keeps only the unit column its type uses.
+     * A client added from the contract form: a company with its trade
+     * licence, or a person with their ID, as on the client form.
+     *
+     * @return array<string, array<mixed>>
+     */
+    private function newClientRules(): array
+    {
+        $isNew = $this->input('client_mode') === 'new';
+        $isIndividual = $isNew && $this->input('new_client.client_type') === 'individual';
+
+        return [
+            'new_client' => ['nullable', 'array'],
+            'new_client.client_type' => [Rule::requiredIf($isNew), 'nullable', Rule::in(Client::TYPES)],
+            'new_client.name' => [Rule::requiredIf($isNew), 'nullable', 'string', 'max:255'],
+            'new_client.contact_person_name' => ['nullable', 'string', 'max:255'],
+            'new_client.phone' => ['nullable', 'string', 'max:40'],
+            'new_client.email' => ['nullable', 'email', 'max:255'],
+            'new_client.trade_license_number' => ['nullable', 'string', 'max:255'],
+            'new_client.id_type' => [Rule::requiredIf($isIndividual), 'nullable', Rule::in(Client::ID_TYPES)],
+            'new_client.id_number' => [
+                Rule::requiredIf($isIndividual), 'nullable', 'string', 'max:50',
+                Rule::unique('clients', 'id_number')
+                    ->where('company_id', $this->companyId())
+                    ->where('id_type', $this->input('new_client.id_type'))
+                    ->whereNull('deleted_at'),
+            ],
+        ];
+    }
+
+    /**
+     * The contract either picks one of the company's clients (`existing`, the
+     * default) or brings the details of a new one (`new`). Only bed lines
+     * rent several units or bill on actual use, and each line keeps only the
+     * unit column its type uses.
      */
     protected function prepareForValidation(): void
     {
+        if ($this->input('client_mode') === 'new') {
+            $client = (array) $this->input('new_client', []);
+            $isCompany = ($client['client_type'] ?? null) === 'company';
+
+            // A company has no personal ID and a person no trade licence, so the form's leftovers for the other type are dropped.
+            $this->merge([
+                'client_id' => null,
+                'new_client' => [
+                    ...$client,
+                    ...($isCompany ? ['id_type' => null, 'id_number' => null] : ['trade_license_number' => null]),
+                ],
+            ]);
+        } else {
+            $this->merge(['client_mode' => 'existing', 'new_client' => null]);
+        }
+
         $lines = collect($this->input('lines', []))->map(function (mixed $line) {
             if (! is_array($line)) {
                 return $line;
@@ -217,6 +278,14 @@ class ContractRequest extends CompanyScopedRequest
     {
         return [
             'client_id' => 'client',
+            'new_client.client_type' => 'client type',
+            'new_client.name' => 'client name',
+            'new_client.email' => 'client email',
+            'new_client.id_type' => 'ID type',
+            'new_client.id_number' => 'ID number',
+            'documents.*.document_type' => 'document type',
+            'documents.*.file' => 'file',
+            'documents.*.expires_on' => 'expiry date',
             'billing_cycle' => 'billing cycle',
             'payment_terms_days' => 'payment terms',
             'lines.*.unit_type' => 'unit type',
@@ -237,6 +306,7 @@ class ContractRequest extends CompanyScopedRequest
     public function messages(): array
     {
         return [
+            'documents.*.file.required_without' => 'Upload the file.',
             'lines.required' => 'Add at least one line saying what the client rents.',
             'lines.*.start_date.after_or_equal' => 'A line cannot start before the contract.',
             'lines.*.end_date.before_or_equal' => 'A line cannot run past the end of the contract.',

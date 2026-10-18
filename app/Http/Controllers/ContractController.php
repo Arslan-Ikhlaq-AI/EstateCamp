@@ -9,6 +9,7 @@ use App\Models\Apartment;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\Contract;
+use App\Models\ContractDocument;
 use App\Models\ContractLine;
 use App\Models\Invoice;
 use App\Models\Occupancy;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -27,6 +29,11 @@ use Inertia\Response;
 class ContractController extends Controller
 {
     use ListsRecords;
+
+    /**
+     * Request fields saved by hand rather than mass assigned.
+     */
+    private const RELATION_FIELDS = ['client_mode', 'client_id', 'new_client', 'lines', 'documents'];
 
     /**
      * List the company's contracts with their value, what they rent and who is staying.
@@ -90,16 +97,17 @@ class ContractController extends Controller
         $company = $this->currentCompany($request);
 
         $contract = DB::transaction(function () use ($request, $company) {
-            $contract = new Contract($request->safe()->except(['client_id', 'lines']));
+            $contract = new Contract($request->safe()->except(self::RELATION_FIELDS));
             $contract->forceFill([
                 'company_id' => $company->id,
-                'client_id' => $request->validated('client_id'),
+                'client_id' => $this->clientId($request, $company),
                 'contract_number' => Contract::nextNumber($company->id, $request->date('start_date')),
                 'status' => 'draft',
             ])->save();
 
             $this->syncLines($contract, $request->validated('lines'));
             $contract->syncUnitStatuses();
+            $this->syncDocuments($contract, $request);
 
             return $contract;
         });
@@ -123,6 +131,7 @@ class ContractController extends Controller
             'lines.shop:id,shop_number',
             'renewedFrom:id,contract_number',
             'renewal:id,renewed_from_id,contract_number',
+            'documents' => fn (HasMany $documents) => $documents->orderBy('id'),
         ]);
         $stays = $contract->occupancies()
             ->with(['occupant:id,full_name,gender,employee_number', 'bed.room:id,room_number,property_id', 'bed.room.property:id,name'])
@@ -147,6 +156,7 @@ class ContractController extends Controller
                 'renewedFrom' => $contract->renewedFrom ? ['id' => $contract->renewedFrom->id, 'number' => $contract->renewedFrom->contract_number] : null,
                 'renewal' => $contract->renewal ? ['id' => $contract->renewal->id, 'number' => $contract->renewal->contract_number] : null,
             ],
+            'documents' => $contract->documents->map(fn (ContractDocument $document) => self::documentDetails($document)),
             'lines' => $contract->lines->map(fn (ContractLine $line) => [
                 ...self::lineDetails($line),
                 'staying' => $current->where('contract_line_id', $line->id)->count(),
@@ -195,7 +205,11 @@ class ContractController extends Controller
             return to_route('contracts.show', $contract);
         }
 
-        $contract->load(['lines' => fn (HasMany $lines) => $lines->withCount('occupancies')->orderBy('id')]);
+        $contract->load([
+            'client',
+            'lines' => fn (HasMany $lines) => $lines->withCount('occupancies')->orderBy('id'),
+            'documents' => fn (HasMany $documents) => $documents->orderBy('id'),
+        ]);
 
         return Inertia::render('Contracts/Form', [
             'contract' => [
@@ -213,9 +227,15 @@ class ContractController extends Controller
                     'end_date' => $line->end_date->toDateString(),
                     'hasStays' => $line->occupancies_count > 0,
                 ]),
+                'documents' => $contract->documents->map(fn (ContractDocument $document) => self::documentDetails($document)),
+                'client' => $contract->client->only([
+                    'id', 'name', 'client_type', 'contact_person_name', 'phone', 'email', 'trade_license_number', 'id_type', 'id_number',
+                ]),
+                'staying' => $contract->occupancies()->whereNull('check_out_date')->count(),
+                'balance' => (float) $contract->invoices()->whereNot('status', 'void')->sum(DB::raw('total - amount_paid')),
             ],
             'clientId' => null,
-            ...$this->formOptions($contract->company),
+            ...$this->formOptions($contract->company, $contract),
         ]);
     }
 
@@ -231,11 +251,12 @@ class ContractController extends Controller
         }
 
         DB::transaction(function () use ($request, $contract) {
-            $contract->fill($request->safe()->except(['client_id', 'lines']));
-            $contract->forceFill(['client_id' => $request->validated('client_id')])->save();
+            $contract->fill($request->safe()->except(self::RELATION_FIELDS));
+            $contract->forceFill(['client_id' => $this->clientId($request, $contract->company)])->save();
 
             $this->syncLines($contract, $request->validated('lines'));
             $contract->syncUnitStatuses();
+            $this->syncDocuments($contract, $request);
         });
 
         return to_route('contracts.show', $contract)->with('success', "Contract {$contract->contract_number} was updated.");
@@ -369,6 +390,63 @@ class ContractController extends Controller
     }
 
     /**
+     * The chosen client, or a new active client created from the details entered.
+     */
+    private function clientId(ContractRequest $request, Company $company): int
+    {
+        if ($request->validated('client_mode') !== 'new') {
+            return $request->integer('client_id');
+        }
+
+        return $company->clients()->create([...array_filter($request->validated('new_client')), 'status' => 'active'])->id;
+    }
+
+    /**
+     * Make the contract's documents match the submitted list: listed ones
+     * are updated (keeping their file unless a new one is uploaded), new ones
+     * are created and any left out are removed.
+     */
+    private function syncDocuments(Contract $contract, ContractRequest $request): void
+    {
+        $submitted = collect($request->validated('documents', []));
+        $existing = $contract->documents()->get()->keyBy('id');
+
+        $contract->documents()->whereNotIn('id', $submitted->pluck('id')->filter()->all())->delete();
+
+        foreach ($submitted as $index => $input) {
+            $attributes = Arr::only($input, ['document_type', 'title', 'document_number', 'issued_on', 'expires_on', 'notes']);
+            $file = $request->file("documents.{$index}.file");
+
+            if ($file) {
+                $attributes['file_url'] = '/storage/'.$file->store("contracts/{$contract->id}", 'public');
+            }
+
+            $document = isset($input['id']) ? $existing->get($input['id']) : null;
+
+            if ($document) {
+                $document->update($attributes);
+            } elseif ($file) {
+                $contract->documents()->create($attributes);
+            }
+        }
+    }
+
+    /**
+     * A contract document as the pages show it.
+     *
+     * @return array<string, mixed>
+     */
+    public static function documentDetails(ContractDocument $document): array
+    {
+        return [
+            'id' => $document->id,
+            ...$document->only(['document_type', 'title', 'document_number', 'notes', 'file_url']),
+            'issued_on' => $document->issued_on?->toDateString(),
+            'expires_on' => $document->expires_on?->toDateString(),
+        ];
+    }
+
+    /**
      * An apartment or shop taken off a contract becomes vacant again, unless
      * another live contract still holds it.
      */
@@ -382,18 +460,34 @@ class ContractController extends Controller
     }
 
     /**
-     * Clients, and each property's rentable units with their list prices, for the form.
+     * Clients, and each property's rentable units with their list prices and
+     * how much of each other live contracts already hold, for the form.
      *
      * @return array<string, mixed>
      */
-    private function formOptions(Company $company): array
+    private function formOptions(Company $company, ?Contract $contract = null): array
     {
+        $held = ContractLine::query()
+            ->where('company_id', $company->id)
+            ->whereDate('end_date', '>=', today())
+            ->whereHas('contract', fn (Builder $contracts) => $contracts->whereIn('status', ['draft', 'active']))
+            ->when($contract, fn (Builder $query) => $query->whereNot('contract_id', $contract->id))
+            ->get(['unit_type', 'room_id', 'apartment_id', 'shop_id', 'quantity']);
+        $heldBeds = $held->where('unit_type', 'bed')->whereNotNull('room_id')->groupBy('room_id')->map->sum('quantity');
+        $heldRooms = $held->where('unit_type', 'room')->pluck('room_id')->flip();
+        $heldApartments = $held->whereNotNull('apartment_id')->pluck('apartment_id')->flip();
+        $heldShops = $held->whereNotNull('shop_id')->pluck('shop_id')->flip();
+
         return [
+            'clientTypes' => Client::TYPES,
+            'idTypes' => Client::ID_TYPES,
+            'documentTypes' => ContractDocument::TYPES,
             'currency' => $company->default_currency,
             'clients' => $company->clients()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'client_type']),
             'properties' => $company->properties()
                 ->with([
                     'rooms' => fn (HasMany $rooms) => $rooms->orderBy('room_number'),
+                    'rooms.roomType:id,name,slug',
                     'apartments' => fn (HasMany $apartments) => $apartments->orderBy('apartment_number'),
                     'shops' => fn (HasMany $shops) => $shops->orderBy('shop_number'),
                 ])
@@ -411,18 +505,23 @@ class ContractController extends Controller
                         'rate' => $room->rent_per_bed === null ? null : (float) $room->rent_per_bed,
                         'genderPolicy' => $room->gender_policy,
                         'status' => $room->status,
+                        'type' => $room->roomType?->only(['name', 'slug']),
+                        'contracted' => $heldRooms->has($room->id) ? $room->capacity : min($room->capacity, (int) $heldBeds->get($room->id, 0)),
                     ]),
                     'apartments' => $property->apartments->map(fn (Apartment $apartment) => [
                         'id' => $apartment->id,
                         'number' => $apartment->apartment_number,
                         'rate' => $apartment->monthly_rent === null ? null : (float) $apartment->monthly_rent,
                         'status' => $apartment->status,
+                        'bedrooms' => $apartment->bedrooms,
+                        'held' => $heldApartments->has($apartment->id),
                     ]),
                     'shops' => $property->shops->map(fn (Shop $shop) => [
                         'id' => $shop->id,
                         'number' => $shop->shop_number,
                         'rate' => $shop->monthly_rent === null ? null : (float) $shop->monthly_rent,
                         'status' => $shop->status,
+                        'held' => $heldShops->has($shop->id),
                     ]),
                 ]),
             'billingCycles' => array_keys(Contract::BILLING_CYCLES),

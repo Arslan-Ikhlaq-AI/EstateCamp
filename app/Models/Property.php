@@ -264,6 +264,55 @@ class Property extends Model
     }
 
     /**
+     * The lease the property form edits: the active one, or else the latest
+     * that has not been terminated.
+     */
+    public function currentLease(): ?HeadLease
+    {
+        return $this->headLeases()
+            ->whereNot('status', 'terminated')
+            ->orderByRaw("case when status = 'active' then 0 else 1 end")
+            ->latest('start_date')
+            ->first();
+    }
+
+    /**
+     * Create or update the head lease behind a leased property from its
+     * landlord, lease dates and the lease terms entered with it. A new lease
+     * is active unless it has already ended; its payment schedule is built,
+     * and rebuilt when the dates or rent change (unless cheques are recorded).
+     *
+     * @param  array{ejari_number?: ?string, annual_rent: numeric, payments_per_year: int, security_deposit?: ?numeric, notice_period_days?: ?int}  $terms
+     */
+    public function syncHeadLease(array $terms): HeadLease
+    {
+        $lease = $this->currentLease() ?? new HeadLease;
+
+        $lease->fill([
+            ...$terms,
+            'start_date' => $this->lease_start_date,
+            'end_date' => $this->lease_end_date,
+        ]);
+        $lease->forceFill(['property_id' => $this->id, 'landlord_id' => $this->landlord_id]);
+
+        if (! $lease->exists) {
+            $lease->forceFill([
+                'company_id' => $this->company_id,
+                'lease_number' => HeadLease::nextNumber($this->company_id, $this->lease_start_date),
+                'status' => $this->lease_end_date->lt(today()) ? 'expired' : 'active',
+            ]);
+        }
+
+        $lease->save();
+
+        if ($lease->wasRecentlyCreated || $lease->wasChanged(['start_date', 'end_date', 'annual_rent', 'payments_per_year'])) {
+            $lease->rebuildSchedule();
+        }
+
+        return $lease;
+    }
+
+    /**
      * @return HasMany<HeadLease, $this>
      */
     public function headLeases(): HasMany

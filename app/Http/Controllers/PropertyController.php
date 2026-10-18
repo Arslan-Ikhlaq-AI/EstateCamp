@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Http\Requests\PropertyRequest;
 use App\Models\Apartment;
 use App\Models\Company;
+use App\Models\Contract;
+use App\Models\ContractLine;
+use App\Models\HeadLease;
 use App\Models\Landlord;
 use App\Models\Property;
 use App\Models\PropertyDocument;
@@ -57,19 +60,11 @@ class PropertyController extends Controller
         }
 
         $filters = $this->filters($request);
-        $today = today();
 
         $query = $this->filteredQuery($company, $filters)
             ->with(['propertyType:id,name,slug', 'landlord:id,name'])
             ->withOccupancy()
-            ->withCount([
-                'documents',
-                'documents as expired_documents_count' => fn (Builder $documents) => $documents
-                    ->whereDate('expires_on', '<', $today),
-                'documents as expiring_documents_count' => fn (Builder $documents) => $documents
-                    ->whereDate('expires_on', '>=', $today)
-                    ->whereDate('expires_on', '<=', $today->copy()->addDays(DashboardController::EXPIRY_WARNING_DAYS)),
-            ]);
+            ->withCount($this->documentCounts());
 
         $this->applySort($query, $filters);
 
@@ -108,12 +103,55 @@ class PropertyController extends Controller
 
         [$property, $added] = DB::transaction(function () use ($request, $company) {
             $property = $company->properties()->create($this->propertyAttributes($request, $company));
-            $this->syncDocuments($property, $request);
+            $this->syncDocuments($property, $request, $this->syncLease($property, $request));
 
             return [$property, $property->addUnits($request->validated('units', []))];
         });
 
         return to_route('properties.index')->with('success', trim("{$property->name} was added. {$this->unitsAddedMessage($added)}"));
+    }
+
+    /**
+     * Show a property: its details and occupancy, which clients rent which
+     * of its units, and its documents.
+     */
+    public function show(Request $request, Property $property): Response
+    {
+        abort_unless($property->company_id === $request->user()->company_id, 404);
+
+        $property = Property::query()
+            ->whereKey($property->id)
+            ->with([
+                'propertyType:id,name,slug',
+                'landlord:id,name',
+                'company:id,default_currency',
+                'documents' => fn ($query) => $query->orderBy('id'),
+                'documents.headLease:id,lease_number',
+            ])
+            ->withOccupancy()
+            ->withCount([...$this->documentCounts(), 'shops', 'apartments'])
+            ->firstOrFail();
+        $lease = $property->currentLease();
+
+        return Inertia::render('Properties/Show', [
+            'currency' => $property->company->default_currency,
+            'property' => [
+                ...$this->propertyDetails($property),
+                'shops' => $property->shops_count,
+                'apartments' => $property->apartments_count,
+                'totalFloors' => $property->total_floors,
+                'totalUnits' => $property->total_units,
+                'notes' => $property->notes,
+                'lease' => $lease ? ['id' => $lease->id, 'number' => $lease->lease_number] : null,
+            ],
+            'clients' => $this->clientShares($property),
+            'documents' => $property->documents->map(fn (PropertyDocument $document) => [
+                'id' => $document->id,
+                ...$document->only(['document_type', 'title', 'document_number', 'file_url', 'head_lease_id']),
+                'expires_on' => $document->expires_on?->toDateString(),
+                'lease_number' => $document->headLease?->lease_number,
+            ]),
+        ]);
     }
 
     /**
@@ -124,6 +162,7 @@ class PropertyController extends Controller
         abort_unless($property->company_id === $request->user()->company_id, 404);
 
         $property->load(['documents' => fn ($query) => $query->orderBy('id')]);
+        $lease = $property->currentLease();
 
         return Inertia::render('Properties/Form', [
             'unitSummary' => $this->unitSummary($property),
@@ -140,6 +179,8 @@ class PropertyController extends Controller
                 'longitude' => $property->longitude,
                 'lease_start_date' => $property->lease_start_date?->toDateString(),
                 'lease_end_date' => $property->lease_end_date?->toDateString(),
+                ...($lease?->only(PropertyRequest::LEASE_TERMS) ?? []),
+                'lease' => $lease ? ['id' => $lease->id, 'number' => $lease->lease_number] : null,
                 'documents' => $property->documents->map(fn (PropertyDocument $document) => [
                     'id' => $document->id,
                     'document_type' => $document->document_type,
@@ -162,7 +203,7 @@ class PropertyController extends Controller
     {
         $added = DB::transaction(function () use ($request, $property) {
             $property->update($this->propertyAttributes($request, $property->company));
-            $this->syncDocuments($property, $request);
+            $this->syncDocuments($property, $request, $this->syncLease($property, $request));
 
             return $property->addUnits($request->validated('units', []));
         });
@@ -229,7 +270,66 @@ class PropertyController extends Controller
             'genderPolicies' => Room::GENDER_POLICIES,
             'shopTypes' => Shop::TYPES,
             'furnishingStatuses' => Apartment::FURNISHING_STATUSES,
+            'paymentsPerYear' => HeadLease::PAYMENTS_PER_YEAR,
         ];
+    }
+
+    /**
+     * How many documents a property has, and how many have expired or expire soon.
+     *
+     * @return array<int|string, mixed>
+     */
+    private function documentCounts(): array
+    {
+        $today = today();
+
+        return [
+            'documents',
+            'documents as expired_documents_count' => fn (Builder $documents) => $documents
+                ->whereDate('expires_on', '<', $today),
+            'documents as expiring_documents_count' => fn (Builder $documents) => $documents
+                ->whereDate('expires_on', '>=', $today)
+                ->whereDate('expires_on', '<=', $today->copy()->addDays(DashboardController::EXPIRY_WARNING_DAYS)),
+        ];
+    }
+
+    /**
+     * Who rents what in the property: for each client with a live contract
+     * line here, the rooms and beds, shops and apartments they hold, their
+     * contracts and the monthly value, the biggest first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function clientShares(Property $property): array
+    {
+        return $property->contractLines()
+            ->whereDate('end_date', '>=', today())
+            ->whereHas('contract', fn (Builder $contracts) => $contracts->whereIn('status', ['draft', 'active']))
+            ->with(['contract:id,client_id,contract_number,status', 'contract.client:id,name,client_type', 'room:id,capacity'])
+            ->get()
+            ->groupBy(fn (ContractLine $line) => $line->contract->client_id)
+            ->map(function (Collection $lines) {
+                $client = $lines->first()->contract->client;
+                $roomLines = $lines->whereIn('unit_type', ['bed', 'room']);
+
+                return [
+                    'id' => $client->id,
+                    'name' => $client->name,
+                    'type' => $client->client_type,
+                    'rooms' => $roomLines->pluck('room_id')->filter()->unique()->count(),
+                    'beds' => (int) $roomLines->sum(fn (ContractLine $line) => $line->unit_type === 'room' ? $line->room->capacity : $line->quantity),
+                    'shops' => $lines->where('unit_type', 'shop')->count(),
+                    'apartments' => $lines->where('unit_type', 'apartment')->count(),
+                    'monthly' => round($lines->sum(fn (ContractLine $line) => (float) $line->monthly_rate * $line->quantity), 2),
+                    'contracts' => $lines->pluck('contract')->unique('id')
+                        ->map(fn (Contract $contract) => ['id' => $contract->id, 'number' => $contract->contract_number, 'status' => $contract->status])
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->sortBy([['beds', 'desc'], ['monthly', 'desc']])
+            ->values()
+            ->all();
     }
 
     /**
@@ -240,7 +340,7 @@ class PropertyController extends Controller
      */
     private function propertyAttributes(PropertyRequest $request, Company $company): array
     {
-        $attributes = Arr::except($request->validated(), ['cover_image', 'documents', 'landlord_mode', 'new_landlord', 'units']);
+        $attributes = Arr::except($request->validated(), ['cover_image', 'documents', 'landlord_mode', 'new_landlord', 'units', ...PropertyRequest::LEASE_TERMS]);
 
         if ($request->validated('landlord_mode') === 'new') {
             $attributes['landlord_id'] = $company->landlords()->create($request->validated('new_landlord'))->id;
@@ -254,11 +354,23 @@ class PropertyController extends Controller
     }
 
     /**
+     * Create or update the head lease of a leased property from the terms
+     * entered with it.
+     */
+    private function syncLease(Property $property, PropertyRequest $request): ?HeadLease
+    {
+        return $property->ownership_type === 'leased'
+            ? $property->syncHeadLease($request->safe()->only(PropertyRequest::LEASE_TERMS))
+            : null;
+    }
+
+    /**
      * Make the property's documents match the submitted list: listed ones
      * are updated (keeping their file unless a new one is uploaded), new ones
-     * are created and any left out are removed.
+     * are created (filed under the property's lease, if any) and any left
+     * out are removed.
      */
-    private function syncDocuments(Property $property, PropertyRequest $request): void
+    private function syncDocuments(Property $property, PropertyRequest $request, ?HeadLease $lease): void
     {
         $submitted = collect($request->validated('documents', []));
         $existing = $property->documents()->get()->keyBy('id');
@@ -280,7 +392,7 @@ class PropertyController extends Controller
             if ($document) {
                 $document->update($attributes);
             } elseif ($file) {
-                $property->documents()->create($attributes);
+                $property->documents()->create([...$attributes, 'head_lease_id' => $lease?->id]);
             }
         }
     }

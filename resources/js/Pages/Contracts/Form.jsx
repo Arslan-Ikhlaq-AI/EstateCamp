@@ -1,4 +1,4 @@
-import { ChoiceField, FormSection, MoneyField, SelectField, TextareaField, TextField } from '@/Components/FormFields';
+import { ChoiceField, FormSection, MoneyField, TextareaField, TextField } from '@/Components/FormFields';
 import FormShell from '@/Components/FormShell';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -7,37 +7,58 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FieldGroup } from '@/components/ui/field';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { BedDoubleIcon, CircleAlertIcon, DoorOpenIcon, HouseIcon, PlusIcon, StoreIcon, Trash2Icon } from 'lucide-react';
+import { DetailList } from '@/Components/DetailCards';
+import { ContractStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
+import { Building2Icon, CircleAlertIcon, FilePlusIcon, Trash2Icon } from 'lucide-react';
+import DocumentFields from '../Properties/Partials/DocumentFields';
+import ClientPicker, { emptyClient } from './Partials/ClientPicker';
+import RentedSummary, { groupByProperty, UNIT_ICONS, useDescribeLine } from './Partials/RentedSummary';
+import UnitPicker from './Partials/UnitPicker';
 
 const CYCLE_MONTHS = { monthly: 1, quarterly: 3, semi_annual: 6, annual: 12 };
-const UNIT_ICONS = { bed: BedDoubleIcon, room: DoorOpenIcon, apartment: HouseIcon, shop: StoreIcon };
 
-function blankLine(type = 'bed') {
+/**
+ * A new line for a unit chosen in the picker; shops carry 5% VAT.
+ */
+function newLine(unit) {
     return {
         id: null,
-        unit_type: type,
-        property_id: null,
-        room_id: null,
-        apartment_id: null,
-        shop_id: null,
         quantity: 1,
-        monthly_rate: '',
         billing_basis: 'contracted',
-        vat_rate: type === 'shop' ? 5 : 0,
+        vat_rate: unit.unit_type === 'shop' ? 5 : 0,
         start_date: '',
         end_date: '',
         description: '',
         hasStays: false,
+        ...unit,
     };
 }
+
+const emptyDocument = () => ({
+    id: null,
+    document_type: 'signed_contract',
+    title: '',
+    document_number: '',
+    issued_on: '',
+    expires_on: '',
+    notes: '',
+    file: null,
+    file_url: null,
+});
 
 /**
  * Line dates equal to the contract's are left blank so they keep following
  * the contract when its dates change; they are filled back in on save.
  */
-function initialData(contract, clientId) {
+function initialData(contract, clientId, clients) {
+    const client = {
+        client_mode: contract || clientId || clients.length > 0 ? 'existing' : 'new',
+        new_client: emptyClient(),
+    };
+
     if (!contract) {
         return {
+            ...client,
             client_id: clientId,
             ejari_number: '',
             start_date: '',
@@ -47,11 +68,13 @@ function initialData(contract, clientId) {
             security_deposit: '',
             signed_on: '',
             notes: '',
-            lines: [blankLine()],
+            lines: [],
+            documents: [],
         };
     }
 
     return {
+        ...client,
         client_id: contract.client_id,
         ejari_number: contract.ejari_number ?? '',
         start_date: contract.start_date,
@@ -67,63 +90,41 @@ function initialData(contract, clientId) {
             end_date: line.end_date === contract.end_date ? '' : line.end_date,
             description: line.description ?? '',
         })),
+        documents: contract.documents.map((document) => ({
+            ...emptyDocument(),
+            ...Object.fromEntries(Object.entries(document).map(([key, value]) => [key, value ?? ''])),
+            id: document.id,
+            file_url: document.file_url,
+        })),
     };
 }
 
+/**
+ * One rented unit on the contract: what it is and where, then its rate,
+ * VAT, billing basis (for beds), description and dates.
+ */
 function LineEditor({ index, line, onPatch, onRemove, canRemove, properties, billingBases, errors, currency }) {
     const { t, formatMoney } = useTranslation();
-    const property = properties.find((item) => item.id === line.property_id);
-    const room = property?.rooms.find((item) => item.id === line.room_id);
+    const { room, label, detail } = useDescribeLine(properties)(line);
     const error = (field) => errors[`lines.${index}.${field}`];
     const monthly = (Number(line.monthly_rate) || 0) * (Number(line.quantity) || 0);
-
-    const unitStatus = (status) => (status && !['active', 'vacant'].includes(status) ? ` · ${t(`leasing.unitStatus.${status}`)}` : '');
-
-    const unitItems = {
-        bed: [
-            { value: 'any', label: t('leasing.contracts.form.anyRoom') },
-            ...(property?.rooms ?? []).map((item) => ({
-                value: item.id,
-                label: `${t('leasing.lines.roomName', { room: item.number })} · ${t('leasing.units.beds', { count: item.capacity })}${unitStatus(item.status)}`,
-            })),
-        ],
-        room: (property?.rooms ?? []).map((item) => ({
-            value: item.id,
-            label: `${t('leasing.lines.roomName', { room: item.number })} · ${t('leasing.units.beds', { count: item.capacity })}${unitStatus(item.status)}`,
-        })),
-        apartment: (property?.apartments ?? []).map((item) => ({ value: item.id, label: `${t('leasing.lines.apartment', { number: item.number })}${unitStatus(item.status)}` })),
-        shop: (property?.shops ?? []).map((item) => ({ value: item.id, label: `${t('leasing.lines.shop', { number: item.number })}${unitStatus(item.status)}` })),
-    }[line.unit_type];
-
-    const unitColumn = { bed: 'room_id', room: 'room_id', apartment: 'apartment_id', shop: 'shop_id' }[line.unit_type];
-
-    // Suggest the unit's list price the first time a unit is chosen.
-    const chooseUnit = (value) => {
-        const id = value === 'any' ? null : value;
-        const patch = { [unitColumn]: id };
-
-        if (line.monthly_rate === '' && id !== null) {
-            const unit = line.unit_type === 'apartment'
-                ? property.apartments.find((item) => item.id === id)
-                : line.unit_type === 'shop'
-                  ? property.shops.find((item) => item.id === id)
-                  : property.rooms.find((item) => item.id === id);
-            const rate = line.unit_type === 'room' && unit?.rate ? unit.rate * unit.capacity : unit?.rate;
-
-            if (rate) {
-                patch.monthly_rate = rate;
-            }
-        }
-
-        onPatch(patch);
-    };
+    const Icon = UNIT_ICONS[line.unit_type];
+    const unitErrors = ['property_id', 'room_id', 'apartment_id', 'shop_id', 'unit_type'].map(error).filter(Boolean);
 
     return (
-        <div className="flex flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
-            <div className="flex items-center justify-between gap-3">
-                <h3 className="font-heading text-sm font-medium">{t('leasing.contracts.form.lineTitle', { number: index + 1 })}</h3>
+        <div className="flex flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10 motion-safe:animate-enter">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-brand-cyan to-brand-navy text-white shadow-sm">
+                        <Icon className="size-4.5" />
+                    </span>
+                    <div className="flex min-w-0 flex-col leading-tight">
+                        <span className="truncate text-sm font-semibold">{label}</span>
+                        <span className="truncate text-xs text-muted-foreground">{detail}</span>
+                    </div>
+                </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-sm text-muted-foreground tabular-nums">{t('leasing.contracts.form.lineMonthly', { amount: formatMoney(monthly, currency) })}</span>
+                    <span className="text-sm font-semibold tabular-nums">{t('leasing.contracts.form.lineMonthly', { amount: formatMoney(monthly, currency) })}</span>
                     <Button
                         type="button"
                         variant="ghost"
@@ -131,59 +132,23 @@ function LineEditor({ index, line, onPatch, onRemove, canRemove, properties, bil
                         onClick={onRemove}
                         disabled={!canRemove}
                         aria-label={t('leasing.contracts.form.removeLine', { number: index + 1 })}
+                        className="text-muted-foreground hover:text-destructive"
                     >
                         <Trash2Icon />
                     </Button>
                 </div>
             </div>
 
-            <ChoiceField
-                id={`lines-${index}-unit_type`}
-                label={t('leasing.contracts.form.fields.unitType')}
-                value={line.unit_type}
-                onChange={(type) =>
-                    onPatch({
-                        unit_type: type,
-                        room_id: null,
-                        apartment_id: null,
-                        shop_id: null,
-                        quantity: 1,
-                        billing_basis: 'contracted',
-                        vat_rate: type === 'shop' ? 5 : 0,
-                    })
-                }
-                options={Object.keys(UNIT_ICONS).map((type) => ({ value: type, label: t(`leasing.unitTypes.${type}`), icon: UNIT_ICONS[type] }))}
-                description={t(`leasing.contracts.form.unitHints.${line.unit_type}`)}
-                error={error('unit_type')}
-            />
+            {unitErrors.length > 0 && <p className="text-[0.8125rem] text-destructive">{unitErrors[0]}</p>}
 
             <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                <SelectField
-                    id={`lines-${index}-property_id`}
-                    label={t('leasing.common.property')}
-                    placeholder={t('leasing.common.chooseProperty')}
-                    value={line.property_id}
-                    onChange={(value) => onPatch({ property_id: value, room_id: null, apartment_id: null, shop_id: null })}
-                    items={properties.map((item) => ({ value: item.id, label: `${item.name} · ${item.code}` }))}
-                    error={error('property_id')}
-                />
-                <SelectField
-                    id={`lines-${index}-${unitColumn}`}
-                    label={t(`leasing.contracts.form.fields.unit.${line.unit_type}`)}
-                    placeholder={t('leasing.contracts.form.fields.chooseUnit')}
-                    value={line.unit_type === 'bed' ? (line.room_id ?? 'any') : line[unitColumn]}
-                    onChange={chooseUnit}
-                    items={unitItems}
-                    disabled={!property}
-                    error={error(unitColumn)}
-                />
                 {line.unit_type === 'bed' && (
                     <TextField
                         id={`lines-${index}-quantity`}
                         type="number"
                         inputMode="numeric"
                         min={1}
-                        max={room?.capacity}
+                        max={room ? room.capacity - room.contracted : undefined}
                         label={t('leasing.contracts.form.fields.beds')}
                         value={line.quantity}
                         onChange={(value) => onPatch({ quantity: value })}
@@ -259,6 +224,53 @@ function LineEditor({ index, line, onPatch, onRemove, canRemove, properties, bil
     );
 }
 
+/**
+ * The contract being edited at a glance: its number and status, the client
+ * with their contact details, who is staying and what is owed.
+ */
+function ContractOverview({ contract, currency }) {
+    const { t, formatMoney } = useTranslation();
+    const { client } = contract;
+
+    return (
+        <Card>
+            <CardHeader className="border-b">
+                <CardTitle className="flex flex-wrap items-center gap-2">
+                    {contract.contract_number}
+                    <ContractStatusBadge status={contract.status} />
+                </CardTitle>
+                <CardDescription>{t('leasing.contracts.form.overview.description')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <DetailList
+                    columns={3}
+                    rows={[
+                        {
+                            label: t('leasing.contracts.form.fields.client'),
+                            value: (
+                                <span className="flex flex-wrap items-center gap-2">
+                                    <Link href={route('clients.show', client.id)} className="text-brand-ink hover:underline" dir="auto">
+                                        {client.name}
+                                    </Link>
+                                    <PartyTypeBadge type={client.client_type} />
+                                </span>
+                            ),
+                        },
+                        { label: t('leasing.clients.form.fields.contactPerson'), value: client.contact_person_name },
+                        { label: t('leasing.clients.form.fields.phone'), value: client.phone },
+                        { label: t('leasing.clients.form.fields.email'), value: client.email },
+                        client.client_type === 'company'
+                            ? { label: t('leasing.clients.form.fields.tradeLicense'), value: client.trade_license_number }
+                            : { label: t(`leasing.idTypes.${client.id_type ?? 'passport'}`), value: client.id_number },
+                        { label: t('leasing.contracts.form.overview.staying'), value: t('leasing.contracts.form.overview.people', { count: contract.staying }) },
+                        { label: t('leasing.contracts.form.overview.balance'), value: formatMoney(contract.balance, currency) },
+                    ]}
+                />
+            </CardContent>
+        </Card>
+    );
+}
+
 function Summary({ data, currency }) {
     const { t, formatMoney } = useTranslation();
     const monthly = data.lines.reduce((sum, line) => sum + (Number(line.monthly_rate) || 0) * (Number(line.quantity) || 0), 0);
@@ -292,16 +304,32 @@ function Summary({ data, currency }) {
     );
 }
 
-export default function Form({ contract, clientId, currency, clients, properties, billingCycles, billingBases }) {
+export default function Form({ contract, clientId, currency, clients, clientTypes, idTypes, documentTypes, properties, billingCycles, billingBases }) {
     const { t } = useTranslation();
     const isEditing = contract !== null;
-    const form = useForm(initialData(contract, clientId));
+    const form = useForm(initialData(contract, clientId, clients));
     const { data, setData, errors, processing } = form;
     const title = isEditing ? t('leasing.contracts.form.editTitle', { number: contract.contract_number }) : t('leasing.contracts.form.addTitle');
 
     const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
 
     const patchLine = (index, patch) => setData('lines', data.lines.map((line, position) => (position === index ? { ...line, ...patch } : line)));
+
+    // Another bed in a room already on the contract adds to that line rather than starting a new one.
+    const addUnit = (unit) => {
+        const sameRoomBeds = unit.unit_type === 'bed' && unit.room_id !== null
+            ? data.lines.findIndex((line) => line.unit_type === 'bed' && line.room_id === unit.room_id && !line.hasStays)
+            : -1;
+
+        if (sameRoomBeds >= 0) {
+            patchLine(sameRoomBeds, { quantity: (Number(data.lines[sameRoomBeds].quantity) || 0) + 1 });
+        } else {
+            setData('lines', [...data.lines, newLine(unit)]);
+        }
+    };
+
+    const updateDocument = (index, field, value) =>
+        setData('documents', data.documents.map((document, position) => (position === index ? { ...document, [field]: value } : document)));
 
     const submit = () => {
         form.transform((values) => ({
@@ -311,13 +339,10 @@ export default function Form({ contract, clientId, currency, clients, properties
                 start_date: line.start_date || values.start_date,
                 end_date: line.end_date || values.end_date,
             })),
+            ...(isEditing ? { _method: 'put' } : {}),
         }));
 
-        if (isEditing) {
-            form.put(route('contracts.update', contract.id), { preserveScroll: true });
-        } else {
-            form.post(route('contracts.store'), { preserveScroll: true });
-        }
+        form.post(isEditing ? route('contracts.update', contract.id) : route('contracts.store'), { preserveScroll: true, forceFormData: true });
     };
 
     return (
@@ -332,8 +357,20 @@ export default function Form({ contract, clientId, currency, clients, properties
                 submitLabel={isEditing ? t('leasing.common.saveChanges') : t('leasing.contracts.form.save')}
                 processing={processing}
                 onSubmit={submit}
-                aside={<Summary data={data} currency={currency} />}
+                aside={
+                    <>
+                        <RentedSummary
+                            lines={data.lines}
+                            properties={properties}
+                            clientName={data.client_mode === 'new' ? data.new_client.name : clients.find((client) => client.id === data.client_id)?.name}
+                            currency={currency}
+                        />
+                        <Summary data={data} currency={currency} />
+                    </>
+                }
             >
+                {isEditing && <ContractOverview contract={contract} currency={currency} />}
+
                 {(errors.lines || errors.status) && (
                     <Alert variant="destructive">
                         <CircleAlertIcon />
@@ -343,18 +380,7 @@ export default function Form({ contract, clientId, currency, clients, properties
 
                 <FormSection title={t('leasing.contracts.form.client.title')} description={t('leasing.contracts.form.client.description')}>
                     <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                        <SelectField
-                            {...bind('client_id')}
-                            label={t('leasing.contracts.form.fields.client')}
-                            placeholder={t('leasing.contracts.form.fields.chooseClient')}
-                            items={clients.map((client) => ({ value: client.id, label: client.name }))}
-                            description={
-                                <Link href={route('clients.create')} className="underline underline-offset-3 hover:text-foreground">
-                                    {t('leasing.contracts.form.fields.newClient')}
-                                </Link>
-                            }
-                            className="sm:col-span-2"
-                        />
+                        <ClientPicker clients={clients} clientTypes={clientTypes} idTypes={idTypes} data={data} setData={setData} errors={errors} />
                         <TextField {...bind('ejari_number')} label={t('leasing.common.ejariNumber')} optional />
                         <TextField {...bind('signed_on')} type="date" label={t('leasing.contracts.form.fields.signedOn')} optional />
                     </FieldGroup>
@@ -385,32 +411,81 @@ export default function Form({ contract, clientId, currency, clients, properties
                     </FieldGroup>
                 </FormSection>
 
+                <FormSection title={t('leasing.contracts.form.picker.title')} description={t('leasing.contracts.form.picker.description')}>
+                    <UnitPicker properties={properties} lines={data.lines} onAdd={addUnit} currency={currency} />
+                </FormSection>
+
+                <FormSection title={t('leasing.contracts.form.lines.title')} description={t('leasing.contracts.form.lines.description')}>
+                    <div className="flex flex-col gap-4">
+                        {data.lines.length === 0 && (
+                            <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">{t('leasing.contracts.form.picker.nothingYet')}</p>
+                        )}
+                        {groupByProperty(data.lines).map((group) => {
+                            const property = properties.find((item) => item.id === group.propertyId);
+
+                            return (
+                                <section key={group.propertyId} className="flex flex-col gap-3">
+                                    <h3 className="flex items-center gap-2 text-sm font-bold">
+                                        <span className="flex size-7 items-center justify-center rounded-lg bg-brand-cyan/12 text-brand-ink">
+                                            <Building2Icon className="size-4" />
+                                        </span>
+                                        <span dir="auto">{property?.name}</span>
+                                        <span className="font-mono text-xs font-normal text-muted-foreground">{property?.code}</span>
+                                        <span className="ms-auto text-xs font-medium text-muted-foreground">
+                                            {t('leasing.contracts.form.rented.units', { count: group.indexes.length })}
+                                        </span>
+                                    </h3>
+                                    {group.indexes.map((index) => {
+                                        const line = data.lines[index];
+
+                                        return (
+                                            <LineEditor
+                                                key={line.id ?? `new-${index}`}
+                                                index={index}
+                                                line={line}
+                                                onPatch={(patch) => patchLine(index, patch)}
+                                                onRemove={() => setData('lines', data.lines.filter((_, position) => position !== index))}
+                                                canRemove={!line.hasStays}
+                                                properties={properties}
+                                                billingBases={billingBases}
+                                                errors={errors}
+                                                currency={currency}
+                                            />
+                                        );
+                                    })}
+                                </section>
+                            );
+                        })}
+                    </div>
+                </FormSection>
+
                 <FormSection
-                    title={t('leasing.contracts.form.lines.title')}
-                    description={t('leasing.contracts.form.lines.description')}
+                    title={t('leasing.contracts.form.documents.title')}
+                    description={t('leasing.contracts.form.documents.description')}
                     action={
-                        <Button type="button" variant="outline" size="sm" onClick={() => setData('lines', [...data.lines, blankLine()])}>
-                            <PlusIcon data-icon="inline-start" />
-                            {t('leasing.contracts.form.addLine')}
+                        <Button type="button" variant="outline" size="sm" onClick={() => setData('documents', [...data.documents, emptyDocument()])}>
+                            <FilePlusIcon data-icon="inline-start" />
+                            {t('propertyForm.documents.add')}
                         </Button>
                     }
                 >
-                    <div className="flex flex-col gap-4">
-                        {data.lines.map((line, index) => (
-                            <LineEditor
-                                key={line.id ?? `new-${index}`}
-                                index={index}
-                                line={line}
-                                onPatch={(patch) => patchLine(index, patch)}
-                                onRemove={() => setData('lines', data.lines.filter((_, position) => position !== index))}
-                                canRemove={data.lines.length > 1 && !line.hasStays}
-                                properties={properties}
-                                billingBases={billingBases}
-                                errors={errors}
-                                currency={currency}
-                            />
-                        ))}
-                    </div>
+                    {data.documents.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">{t('leasing.contracts.form.documents.empty')}</p>
+                    ) : (
+                        <div className="flex flex-col gap-4">
+                            {data.documents.map((document, index) => (
+                                <DocumentFields
+                                    key={document.id ?? `new-${index}`}
+                                    index={index}
+                                    document={document}
+                                    documentTypes={documentTypes}
+                                    errors={errors}
+                                    onChange={(field, value) => updateDocument(index, field, value)}
+                                    onRemove={() => setData('documents', data.documents.filter((_, position) => position !== index))}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </FormSection>
 
                 <FormSection title={t('leasing.common.notes')} description={t('leasing.common.notesDescription')}>

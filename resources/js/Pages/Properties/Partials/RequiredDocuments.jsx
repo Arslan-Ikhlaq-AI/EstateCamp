@@ -118,9 +118,10 @@ function RequiredDocumentCard({ type, index, document, errors, onChange }) {
 /**
  * The documents every property must have, as a grid of upload cards with a
  * tally of how many are in. `slots` are `{ type, index, document }`, where
- * `index` is the document's place in the form's list.
+ * `index` is the document's place in the form's list. `title` and
+ * `description` replace the default heading.
  */
-export default function RequiredDocuments({ slots, errors, onChange }) {
+export default function RequiredDocuments({ slots, errors, onChange, title, description }) {
     const { t } = useTranslation();
     const uploaded = slots.filter((slot) => hasFile(slot.document)).length;
 
@@ -128,8 +129,8 @@ export default function RequiredDocuments({ slots, errors, onChange }) {
         <section className="flex flex-col gap-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
                 <div className="flex flex-col gap-0.5">
-                    <h3 className="text-sm font-bold">{t('propertyForm.documents.required.title')}</h3>
-                    <p className="text-[0.8125rem] text-muted-foreground">{t('propertyForm.documents.required.description')}</p>
+                    <h3 className="text-sm font-bold">{title ?? t('propertyForm.documents.required.title')}</h3>
+                    <p className="text-[0.8125rem] text-muted-foreground">{description ?? t('propertyForm.documents.required.description')}</p>
                 </div>
                 <div className="flex items-center gap-2.5">
                     <span className="text-xs font-semibold tabular-nums">

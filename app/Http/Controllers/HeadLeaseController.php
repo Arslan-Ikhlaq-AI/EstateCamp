@@ -8,10 +8,12 @@ use App\Models\Company;
 use App\Models\HeadLease;
 use App\Models\HeadLeasePayment;
 use App\Models\Property;
+use App\Models\PropertyDocument;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,6 +21,11 @@ use Inertia\Response;
 class HeadLeaseController extends Controller
 {
     use ListsRecords;
+
+    /**
+     * Lease fields set by hand rather than mass assigned.
+     */
+    private const RELATION_FIELDS = ['property_id', 'landlord_id', 'renewed_from_id', 'landlord_mode', 'new_landlord', 'documents'];
 
     /**
      * List the company's head leases with what has been paid and what is due next.
@@ -101,15 +108,17 @@ class HeadLeaseController extends Controller
         $company = $this->currentCompany($request);
 
         $lease = DB::transaction(function () use ($request, $company) {
-            $lease = new HeadLease($request->safe()->except(['property_id', 'landlord_id', 'renewed_from_id']));
+            $lease = new HeadLease($request->safe()->except(self::RELATION_FIELDS));
             $lease->forceFill([
-                ...$request->safe()->only(['property_id', 'landlord_id', 'renewed_from_id']),
+                ...$request->safe()->only(['property_id', 'renewed_from_id']),
+                'landlord_id' => $this->landlordId($request, $company),
                 'company_id' => $company->id,
                 'lease_number' => HeadLease::nextNumber($company->id, $request->date('start_date')),
             ])->save();
 
             $lease->rebuildSchedule();
             $lease->syncPropertyLease();
+            $this->addDocuments($lease, $request);
 
             return $lease;
         });
@@ -193,14 +202,18 @@ class HeadLeaseController extends Controller
     public function update(HeadLeaseRequest $request, HeadLease $headLease): RedirectResponse
     {
         $rebuilt = DB::transaction(function () use ($request, $headLease) {
-            $headLease->fill($request->safe()->except(['property_id', 'landlord_id', 'renewed_from_id']));
-            $headLease->forceFill($request->safe()->only(['property_id', 'landlord_id', 'renewed_from_id']))->save();
+            $headLease->fill($request->safe()->except(self::RELATION_FIELDS));
+            $headLease->forceFill([
+                ...$request->safe()->only(['property_id', 'renewed_from_id']),
+                'landlord_id' => $this->landlordId($request, $headLease->company),
+            ])->save();
 
             $rebuilt = $headLease->wasChanged(['start_date', 'end_date', 'annual_rent', 'payments_per_year'])
                 ? $headLease->rebuildSchedule()
                 : null;
 
             $headLease->syncPropertyLease();
+            $this->addDocuments($headLease, $request);
 
             return $rebuilt;
         });
@@ -215,13 +228,66 @@ class HeadLeaseController extends Controller
     }
 
     /**
+     * The chosen landlord, or a new one created from the details entered.
+     */
+    private function landlordId(HeadLeaseRequest $request, Company $company): int
+    {
+        return $request->validated('landlord_mode') === 'new'
+            ? $company->landlords()->create($request->validated('new_landlord'))->id
+            : $request->integer('landlord_id');
+    }
+
+    /**
+     * File the uploaded documents under the lease and its property. Places
+     * left without a file (optional on the lease form) are skipped.
+     */
+    private function addDocuments(HeadLease $lease, HeadLeaseRequest $request): void
+    {
+        foreach ($request->validated('documents', []) as $index => $input) {
+            $file = $request->file("documents.{$index}.file");
+
+            if (! $file) {
+                continue;
+            }
+
+            $path = $file->store("properties/{$lease->property_id}/documents", 'public');
+
+            $lease->property->documents()->create([
+                ...Arr::only($input, ['document_type', 'title', 'document_number', 'issued_on', 'expires_on', 'notes']),
+                'head_lease_id' => $lease->id,
+                'file_url' => '/storage/'.$path,
+            ]);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function formOptions(Company $company): array
     {
+        $properties = $company->properties()->orderBy('name')->get(['id', 'name', 'code', 'ownership_type']);
+
         return [
+            'documentTypes' => PropertyDocument::TYPES,
+            'requiredDocumentTypes' => PropertyDocument::REQUIRED_TYPES,
+            'propertyDocuments' => PropertyDocument::query()
+                ->whereIn('property_id', $properties->modelKeys())
+                ->with('headLease:id,lease_number')
+                ->orderBy('id')
+                ->get()
+                ->groupBy('property_id')
+                ->map(fn ($documents) => $documents->map(fn (PropertyDocument $document) => [
+                    'id' => $document->id,
+                    'document_type' => $document->document_type,
+                    'title' => $document->title,
+                    'document_number' => $document->document_number,
+                    'expires_on' => $document->expires_on?->toDateString(),
+                    'file_url' => $document->file_url,
+                    'head_lease_id' => $document->head_lease_id,
+                    'lease_number' => $document->headLease?->lease_number,
+                ])->values()),
             'currency' => $company->default_currency,
-            'properties' => $company->properties()->orderBy('name')->get(['id', 'name', 'code', 'ownership_type']),
+            'properties' => $properties,
             'landlords' => $company->landlords()->orderBy('name')->get(['id', 'name']),
             'statuses' => HeadLease::STATUSES,
             'paymentsPerYear' => HeadLease::PAYMENTS_PER_YEAR,

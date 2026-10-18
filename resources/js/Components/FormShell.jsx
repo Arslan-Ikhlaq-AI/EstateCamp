@@ -57,7 +57,7 @@ export default function FormShell({ breadcrumbs, title, description, cancelHref,
 
             <div className={aside ? 'grid items-start gap-6 xl:grid-cols-3' : 'flex max-w-4xl flex-col gap-6'}>
                 <div className="flex min-w-0 flex-col gap-6 xl:col-span-2">{children}</div>
-                {aside && <aside className="flex flex-col gap-4 xl:sticky xl:top-20">{aside}</aside>}
+                {aside && <aside className="flex flex-col gap-4 xl:sticky xl:top-20 xl:max-h-[calc(100svh-6rem)] xl:overflow-y-auto xl:pb-1 [&>*]:shrink-0">{aside}</aside>}
             </div>
 
             <FormActions>{buttons}</FormActions>

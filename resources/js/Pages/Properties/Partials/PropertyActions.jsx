@@ -18,6 +18,7 @@ import {
     FileTextIcon,
     MapPinnedIcon,
     MoreHorizontalIcon,
+    EyeIcon,
     PencilIcon,
     PlusIcon,
     PhoneIcon,
@@ -62,6 +63,10 @@ export default function PropertyActions({ property, onImage = false }) {
             <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuGroup>
                     <DropdownMenuLabel className="truncate">{property.name}</DropdownMenuLabel>
+                    <DropdownMenuItem render={<Link href={route('properties.show', property.id)} />}>
+                        <EyeIcon />
+                        {t('properties.actions.view')}
+                    </DropdownMenuItem>
                     <DropdownMenuItem render={<Link href={route('properties.edit', property.id)} />}>
                         <PencilIcon />
                         {t('properties.actions.edit')}

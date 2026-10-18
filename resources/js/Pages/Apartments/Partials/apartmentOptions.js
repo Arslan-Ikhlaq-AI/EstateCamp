@@ -5,6 +5,7 @@ import {
     BedDoubleIcon,
     BedSingleIcon,
     BookmarkIcon,
+    BriefcaseBusinessIcon,
     Building2Icon,
     CarIcon,
     CirclePauseIcon,
@@ -23,7 +24,7 @@ import {
 /**
  * The apartment filters in toolbar order, keyed as in the query string.
  */
-export const APARTMENT_FACET_KEYS = ['properties', 'status', 'furnishing', 'bedrooms'];
+export const APARTMENT_FACET_KEYS = ['properties', 'clients', 'status', 'furnishing', 'bedrooms'];
 
 export const AMENITY_ICONS = {
     air_conditioning: AirVentIcon,
@@ -59,6 +60,7 @@ export function useApartmentFacetOptions(facets) {
 
     return {
         properties: facets.properties.map((option) => ({ ...option, icon: Building2Icon })),
+        clients: facets.clients.map((option) => ({ ...option, icon: BriefcaseBusinessIcon })),
         status: facets.status.map((option) => ({
             ...option,
             label: t(`apartmentStatus.${option.value}`),

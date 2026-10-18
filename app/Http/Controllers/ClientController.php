@@ -7,6 +7,8 @@ use App\Http\Requests\ClientRequest;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\Contract;
+use App\Models\ContractDocument;
+use App\Models\ContractLine;
 use App\Models\Invoice;
 use App\Models\Occupancy;
 use App\Models\Payment;
@@ -110,6 +112,19 @@ class ClientController extends Controller
             ->get();
         $invoices = $client->invoices()->with('contract:id,contract_number')->orderByDesc('issue_date')->orderByDesc('id')->limit(12)->get();
         $payments = $client->payments()->orderByDesc('received_on')->orderByDesc('id')->limit(8)->get();
+        $holdings = ContractLine::query()
+            ->whereDate('end_date', '>=', today())
+            ->whereHas('contract', fn (Builder $contracts) => $contracts->where('client_id', $client->id)->whereIn('status', ['draft', 'active']))
+            ->with(['property:id,name,code', 'room:id,room_number,capacity', 'apartment:id,apartment_number', 'shop:id,shop_number', 'contract:id,contract_number,status'])
+            ->withCount(['occupancies as staying_count' => fn (Builder $stays) => $stays->whereNull('check_out_date')])
+            ->orderBy('property_id')
+            ->orderBy('id')
+            ->get();
+        $documents = ContractDocument::query()
+            ->whereHas('contract', fn (Builder $contracts) => $contracts->where('client_id', $client->id))
+            ->with('contract:id,contract_number')
+            ->orderByDesc('id')
+            ->get();
 
         return Inertia::render('Clients/Show', [
             'currency' => $client->company->default_currency,
@@ -123,6 +138,17 @@ class ClientController extends Controller
                 'occupants' => $client->occupants()->count(),
             ],
             'contracts' => $contracts->map(fn (Contract $contract) => ContractController::listDetails($contract)),
+            'holdings' => $holdings->map(fn (ContractLine $line) => [
+                ...ContractController::lineDetails($line),
+                'capacity' => $line->bedCapacity(),
+                'staying' => $line->staying_count,
+                'housesOccupants' => $line->housesOccupants(),
+                'contract' => ['id' => $line->contract->id, 'number' => $line->contract->contract_number, 'status' => $line->contract->status],
+            ]),
+            'documents' => $documents->map(fn (ContractDocument $document) => [
+                ...ContractController::documentDetails($document),
+                'contract' => ['id' => $document->contract->id, 'number' => $document->contract->contract_number],
+            ]),
             'stays' => $stays->map(fn (Occupancy $stay) => [
                 'id' => $stay->id,
                 'occupant' => ['id' => $stay->occupant->id, 'name' => $stay->occupant->full_name, 'employeeNumber' => $stay->occupant->employee_number],

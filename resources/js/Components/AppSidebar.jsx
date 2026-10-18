@@ -6,6 +6,7 @@ import {
     DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -30,6 +31,7 @@ import { footerNavigation, isCurrentRoute, navigation } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { Link, usePage } from '@inertiajs/react';
 import { Building2Icon, CheckIcon, ChevronRightIcon } from 'lucide-react';
+import { Fragment } from 'react';
 
 function NavLink({ item }) {
     const { t } = useTranslation();
@@ -54,6 +56,11 @@ function NavLink({ item }) {
  * In icon-only mode a nested section opens as a flyout menu, so its pages
  * stay one click away without expanding the sidebar.
  */
+/**
+ * Whether the link at `index` is the first under its heading.
+ */
+const startsHeading = (children, index) => Boolean(children[index].heading) && children[index].heading !== children[index - 1]?.heading;
+
 function NavFlyout({ item, children, isActive }) {
     const { t } = useTranslation();
 
@@ -67,19 +74,23 @@ function NavFlyout({ item, children, isActive }) {
                 <DropdownMenuContent side="inline-end" align="start" sideOffset={12} className="w-60">
                     <DropdownMenuGroup>
                         <DropdownMenuLabel>{t(item.title)}</DropdownMenuLabel>
-                        {children.map((child) => {
+                        {children.map((child, index) => {
                             const isChildActive = isCurrentRoute(child.routeName, child.activeFor);
 
                             return (
-                                <DropdownMenuItem
-                                    key={child.routeName}
-                                    aria-current={isChildActive ? 'page' : undefined}
-                                    render={<Link href={route(child.routeName)} />}
-                                >
-                                    {child.icon && <child.icon className="text-muted-foreground" />}
-                                    {t(child.title)}
-                                    {isChildActive && <CheckIcon className="ms-auto text-brand-ink" />}
-                                </DropdownMenuItem>
+                                <Fragment key={child.routeName}>
+                                    {startsHeading(children, index) && (
+                                        <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuLabel>{t(child.heading)}</DropdownMenuLabel>
+                                        </>
+                                    )}
+                                    <DropdownMenuItem aria-current={isChildActive ? 'page' : undefined} render={<Link href={route(child.routeName)} />}>
+                                        {child.icon && <child.icon className="text-muted-foreground" />}
+                                        {t(child.title)}
+                                        {isChildActive && <CheckIcon className="ms-auto text-brand-ink" />}
+                                    </DropdownMenuItem>
+                                </Fragment>
                             );
                         })}
                     </DropdownMenuGroup>
@@ -116,19 +127,26 @@ function NavSection({ item }) {
             </CollapsibleTrigger>
             <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
                 <SidebarMenuSub className="mt-1 mb-1.5">
-                    {children.map((child) => {
+                    {children.map((child, index) => {
                         const isChildActive = isCurrentRoute(child.routeName, child.activeFor);
 
                         return (
-                            <SidebarMenuSubItem key={child.routeName}>
-                                <SidebarMenuSubButton
-                                    isActive={isChildActive}
-                                    aria-current={isChildActive ? 'page' : undefined}
-                                    render={<Link href={route(child.routeName)} />}
-                                >
-                                    <span>{t(child.title)}</span>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
+                            <Fragment key={child.routeName}>
+                                {startsHeading(children, index) && (
+                                    <li aria-hidden="true" className="px-3 pt-3 pb-1 text-[0.6875rem] font-semibold tracking-wider text-sidebar-foreground/45 uppercase">
+                                        {t(child.heading)}
+                                    </li>
+                                )}
+                                <SidebarMenuSubItem>
+                                    <SidebarMenuSubButton
+                                        isActive={isChildActive}
+                                        aria-current={isChildActive ? 'page' : undefined}
+                                        render={<Link href={route(child.routeName)} />}
+                                    >
+                                        <span>{t(child.title)}</span>
+                                    </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                            </Fragment>
                         );
                     })}
                 </SidebarMenuSub>

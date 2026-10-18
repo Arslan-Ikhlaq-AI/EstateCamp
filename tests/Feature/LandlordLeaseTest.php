@@ -7,6 +7,8 @@ use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\LandlordSeeder;
 use Database\Seeders\PropertySeeder;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -90,6 +92,27 @@ test('adds a head lease, builds its cheque schedule and marks the property as le
 
     expect($this->alQuoz->ownership_type)->toBe('leased')
         ->and($this->alQuoz->landlord->name)->toBe(LandlordSeeder::HAMDAN);
+});
+
+test('adds a head lease with a new landlord and files its documents under it', function () {
+    Storage::fake('public');
+
+    $this->actingAs($this->superAdmin)
+        ->post(route('head-leases.store'), validLeaseInput($this->alQuoz, $this->hamdan, [
+            'landlord_mode' => 'new',
+            'new_landlord' => ['landlord_type' => 'individual', 'name' => 'Saeed Al Mansoori'],
+            'documents' => [['document_type' => 'passport', 'file' => UploadedFile::fake()->create('passport.pdf', 100, 'application/pdf')]],
+        ]))
+        ->assertSessionHasNoErrors();
+
+    $lease = HeadLease::where('property_id', $this->alQuoz->id)->sole();
+    $document = $lease->documents()->sole();
+
+    expect($lease->landlord->name)->toBe('Saeed Al Mansoori')
+        ->and($lease->landlord->company_id)->toBe($this->superAdmin->company_id)
+        ->and($document->property_id)->toBe($this->alQuoz->id)
+        ->and($document->document_type)->toBe('passport');
+    Storage::disk('public')->assertExists(str_replace('/storage/', '', $document->file_url));
 });
 
 test('refuses a lease that overlaps another live lease on the same property', function () {

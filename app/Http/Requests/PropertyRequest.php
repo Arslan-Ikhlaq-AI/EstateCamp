@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Http\Controllers\PropertyController;
 use App\Models\Apartment;
+use App\Models\HeadLease;
 use App\Models\Landlord;
 use App\Models\Property;
 use App\Models\PropertyDocument;
@@ -46,6 +47,11 @@ class PropertyRequest extends FormRequest
     }
 
     /**
+     * The head lease terms entered with a leased property.
+     */
+    public const LEASE_TERMS = ['ejari_number', 'annual_rent', 'payments_per_year', 'security_deposit', 'notice_period_days'];
+
+    /**
      * Landlord and lease details only apply to leased properties. A leased
      * property either picks one of the company's landlords (`existing`) or
      * brings the details of a new one (`new`).
@@ -59,6 +65,7 @@ class PropertyRequest extends FormRequest
                 'new_landlord' => null,
                 'lease_start_date' => null,
                 'lease_end_date' => null,
+                ...array_fill_keys(self::LEASE_TERMS, null),
             ]);
         } elseif ($this->input('landlord_mode') === 'new') {
             $this->merge(['landlord_id' => null]);
@@ -126,7 +133,12 @@ class PropertyRequest extends FormRequest
             'new_landlord.phone' => ['nullable', 'string', 'max:40'],
             'new_landlord.email' => ['nullable', 'email', 'max:255'],
             'lease_start_date' => ['nullable', 'required_if:ownership_type,leased', 'date'],
-            'lease_end_date' => ['nullable', 'required_if:ownership_type,leased', 'date', 'after_or_equal:lease_start_date'],
+            'lease_end_date' => ['nullable', 'required_if:ownership_type,leased', 'date', 'after:lease_start_date'],
+            'ejari_number' => ['nullable', 'string', 'max:50'],
+            'annual_rent' => ['nullable', 'required_if:ownership_type,leased', 'numeric', 'min:0', 'max:100000000'],
+            'payments_per_year' => ['nullable', 'required_if:ownership_type,leased', 'integer', Rule::in(HeadLease::PAYMENTS_PER_YEAR)],
+            'security_deposit' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+            'notice_period_days' => ['nullable', 'integer', 'between:0,730'],
 
             'notes' => ['nullable', 'string', 'max:5000'],
 
@@ -185,8 +197,9 @@ class PropertyRequest extends FormRequest
      * Every required document type must be listed, as a new upload or one of
      * the property's saved documents. Each batch's numbers must be free: not
      * used by a unit of the same kind already in the property, nor by an
-     * earlier batch in this request. And the property's units, saved and
-     * new, must not outnumber its unit total.
+     * earlier batch in this request. The property's units, saved and new,
+     * must not outnumber its unit total. And a leased property's lease must
+     * not overlap another of its leases.
      *
      * @return array<int, Closure>
      */
@@ -209,6 +222,27 @@ class PropertyRequest extends FormRequest
                 if ($missing !== []) {
                     $names = array_map(fn (string $type) => self::DOCUMENT_NAMES[$type], $missing);
                     $validator->errors()->add('documents', 'Add the required documents: '.implode(', ', $names).'.');
+                }
+            },
+            function (Validator $validator) {
+                $property = $this->route('property');
+
+                $isLeased = $this->input('ownership_type') === 'leased';
+
+                if (! $property instanceof Property || ! $isLeased || $validator->errors()->hasAny(['lease_start_date', 'lease_end_date'])) {
+                    return;
+                }
+
+                $current = $property->currentLease();
+                $overlapping = $property->headLeases()
+                    ->when($current, fn ($query) => $query->whereKeyNot($current->id))
+                    ->whereNot('status', 'terminated')
+                    ->whereDate('start_date', '<=', $this->date('lease_end_date'))
+                    ->whereDate('end_date', '>=', $this->date('lease_start_date'))
+                    ->first();
+
+                if ($overlapping) {
+                    $validator->errors()->add('lease_start_date', "These dates overlap lease {$overlapping->lease_number} from {$overlapping->start_date->format('j M Y')} to {$overlapping->end_date->format('j M Y')}.");
                 }
             },
             function (Validator $validator) {
@@ -287,6 +321,9 @@ class PropertyRequest extends FormRequest
             'documents.*.file' => 'file',
             'documents.*.expires_on' => 'expiry date',
             'documents.*.issued_on' => 'issue date',
+            'annual_rent' => 'annual rent',
+            'payments_per_year' => 'payments a year',
+            'notice_period_days' => 'notice period',
             'total_floors' => 'number of floors',
             'total_units' => 'number of units',
             'units.*.*.count' => 'how many',

@@ -195,6 +195,14 @@ test('sidebar sections without a module yet show a coming soon page', function (
     'configuration.property-types',
     'configuration.room-types',
     'maintenance.index',
+    'amcs.fire-safety',
+    'amcs.lifts',
+    'amcs.garbage',
+    'amcs.grease-traps',
+    'amcs.drainage',
+    'amcs.pest-control',
+    'amcs.air-conditioning',
+    'amcs.water-tanks',
     'help',
 ]);
 
