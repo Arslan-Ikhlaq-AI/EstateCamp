@@ -25,7 +25,7 @@ export default function Show({ occupant, stays }) {
             <Head title={occupant.name} />
 
             <PageHeader
-                breadcrumbs={[{ label: t('nav.agreements') }, { label: t('leasing.occupants.title'), href: route('occupants.index') }, { label: occupant.name }]}
+                breadcrumbs={[{ label: t('nav.tenants') }, { label: t('leasing.occupants.title'), href: route('occupants.index') }, { label: occupant.name }]}
                 title={occupant.name}
                 badge={
                     current ? (

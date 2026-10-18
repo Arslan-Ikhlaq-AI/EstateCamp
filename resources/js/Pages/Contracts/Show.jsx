@@ -122,7 +122,7 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
             <Head title={contract.number} />
 
             <PageHeader
-                breadcrumbs={[{ label: t('nav.agreements') }, { label: t('leasing.contracts.title'), href: route('contracts.index') }, { label: contract.number }]}
+                breadcrumbs={[{ label: t('nav.tenants') }, { label: t('leasing.contracts.title'), href: route('contracts.index') }, { label: contract.number }]}
                 title={contract.number}
                 badge={<ContractStatusBadge status={contract.status} />}
                 description={

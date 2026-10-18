@@ -20,7 +20,7 @@ export default function Show({ landlord, leases, upcomingPayments, currency }) {
             <Head title={landlord.name} />
 
             <PageHeader
-                breadcrumbs={[{ label: t('nav.agreements') }, { label: t('leasing.landlords.title'), href: route('landlords.index') }, { label: landlord.name }]}
+                breadcrumbs={[{ label: t('nav.landlordsMenu') }, { label: t('leasing.landlords.title'), href: route('landlords.index') }, { label: landlord.name }]}
                 title={landlord.name}
                 badge={<PartyTypeBadge type={landlord.landlord_type} />}
                 description={landlord.contact_person_name}

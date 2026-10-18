@@ -32,7 +32,7 @@ export default function Show({ client, contracts, stays, invoices, payments, hol
             <Head title={client.name} />
 
             <PageHeader
-                breadcrumbs={[{ label: t('nav.agreements') }, { label: t('leasing.clients.title'), href: route('clients.index') }, { label: client.name }]}
+                breadcrumbs={[{ label: t('nav.tenants') }, { label: t('leasing.clients.title'), href: route('clients.index') }, { label: client.name }]}
                 title={client.name}
                 badge={
                     <>

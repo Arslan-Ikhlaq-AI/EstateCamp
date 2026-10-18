@@ -22,20 +22,12 @@ import {
     FlameIcon,
     Trash2Icon,
     WavesIcon,
-    BedDoubleIcon,
-    FileTextIcon,
-    LandmarkIcon,
     LifeBuoyIcon,
     SparklesIcon,
-    TagsIcon,
     WrenchIcon,
 } from 'lucide-react';
 
 const SECTIONS = {
-    'properties.documents': { icon: FileTextIcon, parent: 'nav.properties' },
-    'configuration.company': { icon: LandmarkIcon, parent: 'nav.configuration' },
-    'configuration.property-types': { icon: TagsIcon, parent: 'nav.configuration' },
-    'configuration.room-types': { icon: BedDoubleIcon, parent: 'nav.configuration' },
     'maintenance.index': { icon: WrenchIcon },
     'amcs.fire-safety': { icon: FlameIcon, parent: 'nav.contractsMenu' },
     'amcs.lifts': { icon: ArrowUpDownIcon, parent: 'nav.contractsMenu' },

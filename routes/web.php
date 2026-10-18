@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HeadLeaseController;
@@ -14,7 +15,9 @@ use App\Http\Controllers\OccupantController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PropertyController;
+use App\Http\Controllers\PropertyTypeController;
 use App\Http\Controllers\RoomController;
+use App\Http\Controllers\RoomTypeController;
 use App\Http\Controllers\ShopController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -50,16 +53,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
     Route::resource('payments', PaymentController::class)->only(['index', 'create', 'store', 'show', 'update']);
 
+    Route::get('configuration/company', [CompanyProfileController::class, 'edit'])->name('configuration.company');
+    Route::put('configuration/company', [CompanyProfileController::class, 'update'])->name('configuration.company.update');
+    Route::get('configuration/property-types', [PropertyTypeController::class, 'index'])->name('configuration.property-types');
+    Route::post('configuration/property-types', [PropertyTypeController::class, 'store'])->name('configuration.property-types.store');
+    Route::put('configuration/property-types/{propertyType}', [PropertyTypeController::class, 'updateType'])->name('configuration.property-types.update');
+    Route::delete('configuration/property-types/{propertyType}', [PropertyTypeController::class, 'destroyType'])->name('configuration.property-types.destroy');
+    Route::get('configuration/room-types', [RoomTypeController::class, 'index'])->name('configuration.room-types');
+    Route::post('configuration/room-types', [RoomTypeController::class, 'store'])->name('configuration.room-types.store');
+    Route::put('configuration/room-types/{roomType}', [RoomTypeController::class, 'updateType'])->name('configuration.room-types.update');
+    Route::delete('configuration/room-types/{roomType}', [RoomTypeController::class, 'destroyType'])->name('configuration.room-types.destroy');
+
     /*
      * Sections from the sidebar that are not built yet. Each renders a
      * "coming soon" page; swap a line for the real controller once the
      * module exists, keeping the route name so links keep working.
      */
     $comingSoon = [
-        'properties/documents' => 'properties.documents',
-        'configuration/company' => 'configuration.company',
-        'configuration/property-types' => 'configuration.property-types',
-        'configuration/room-types' => 'configuration.room-types',
         'maintenance' => 'maintenance.index',
         'amcs/fire-safety' => 'amcs.fire-safety',
         'amcs/lifts' => 'amcs.lifts',

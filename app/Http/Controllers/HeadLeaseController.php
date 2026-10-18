@@ -9,6 +9,7 @@ use App\Models\HeadLease;
 use App\Models\HeadLeasePayment;
 use App\Models\Property;
 use App\Models\PropertyDocument;
+use App\Models\Room;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
@@ -142,6 +143,12 @@ class HeadLeaseController extends Controller
             'renewal:id,renewed_from_id,lease_number',
         ]);
         $payments = $headLease->payments->each(fn (HeadLeasePayment $payment) => $payment->setRelation('headLease', $headLease));
+        $property = Property::query()
+            ->whereKey($headLease->property_id)
+            ->with(['propertyType:id,name,slug', 'documents' => fn (HasMany $documents) => $documents->with('headLease:id,lease_number')->orderBy('id')])
+            ->withOccupancy()
+            ->withCount(['shops', 'apartments'])
+            ->firstOrFail();
         $scheduled = $payments->where('status', 'scheduled');
         $next = $scheduled->sortBy('due_date')->first();
 
@@ -153,8 +160,9 @@ class HeadLeaseController extends Controller
                 'noticePeriodDays' => $headLease->notice_period_days,
                 'notes' => $headLease->notes,
                 'landlord' => [
-                    ...$headLease->landlord->only(['id', 'name', 'phone', 'email', 'bank_name', 'iban']),
+                    ...$headLease->landlord->only(['id', 'name', 'landlord_type', 'contact_person_name', 'phone', 'email', 'bank_name', 'iban']),
                 ],
+                'createdAt' => $headLease->created_at?->toDateString(),
                 'renewedFrom' => $headLease->renewedFrom ? ['id' => $headLease->renewedFrom->id, 'number' => $headLease->renewedFrom->lease_number] : null,
                 'renewal' => $headLease->renewal ? ['id' => $headLease->renewal->id, 'number' => $headLease->renewal->lease_number] : null,
             ],
@@ -164,6 +172,20 @@ class HeadLeaseController extends Controller
                 'overdue' => $scheduled->filter(fn (HeadLeasePayment $payment) => $payment->isOverdue())->count(),
                 'nextPayment' => $next ? ['dueDate' => $next->due_date->toDateString(), 'amount' => (float) $next->amount] : null,
             ],
+            'property' => [
+                ...$property->only(['id', 'name', 'code', 'cover_image_url', 'status', 'area', 'city', 'address', 'total_floors', 'total_units']),
+                'type' => $property->propertyType?->only(['name', 'slug']),
+                'rooms' => $property->rooms_count,
+                'shops' => $property->shops_count,
+                'apartments' => $property->apartments_count,
+                'beds' => Room::bedBreakdown((int) $property->beds_total, (int) $property->beds_occupied, (int) $property->beds_available),
+            ],
+            'documents' => $property->documents->map(fn (PropertyDocument $document) => [
+                'id' => $document->id,
+                ...$document->only(['document_type', 'title', 'document_number', 'file_url', 'head_lease_id']),
+                'expires_on' => $document->expires_on?->toDateString(),
+                'lease_number' => $document->headLease?->lease_number,
+            ]),
             'payments' => $payments->map(fn (HeadLeasePayment $payment) => LandlordPaymentController::paymentDetails($payment)),
             'paymentStatuses' => HeadLeasePayment::STATUSES,
             'paymentMethods' => HeadLeasePayment::METHODS,

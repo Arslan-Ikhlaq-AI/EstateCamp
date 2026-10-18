@@ -489,6 +489,7 @@ class DashboardController extends Controller
             'title' => $document->title,
             'number' => $document->document_number,
             'property' => $document->property->name,
+            'propertyId' => $document->property_id,
             'expiresOn' => $document->expires_on?->toDateString(),
             'daysLeft' => $document->expires_on === null ? null : (int) today()->diffInDays($document->expires_on, false),
             'status' => $this->documentStatus($document),

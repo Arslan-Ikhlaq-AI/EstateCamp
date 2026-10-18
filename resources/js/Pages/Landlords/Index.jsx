@@ -75,7 +75,7 @@ export default function Index({ company, filters, facets, summary, landlords }) 
             <Head title={title} />
 
             <PageHeader
-                breadcrumbs={[{ label: t('nav.agreements') }, { label: title }]}
+                breadcrumbs={[{ label: t('nav.landlordsMenu') }, { label: title }]}
                 title={title}
                 count={summary?.landlords}
                 description={t('leasing.landlords.description')}

@@ -82,7 +82,7 @@ export default function PropertyActions({ property, onImage = false }) {
                         {t('properties.actions.addRoom')}
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                        render={<Link href={route('properties.documents', { property: property.code })} />}
+                        render={<Link href={route('properties.show', property.id)} />}
                     >
                         <FileTextIcon />
                         {t('properties.actions.documents')}

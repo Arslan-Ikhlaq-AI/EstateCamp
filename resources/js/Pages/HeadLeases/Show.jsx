@@ -3,18 +3,66 @@ import { DetailList, SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
 import { InstalmentStatusBadge, LeaseStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
+import PropertyCover from '@/Components/PropertyCover';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
-import { BanknoteIcon, CalendarClockIcon, CircleCheckIcon, PencilIcon, ReceiptIcon, RefreshCwIcon, WalletIcon } from 'lucide-react';
+import {
+    BanknoteIcon,
+    BedDoubleIcon,
+    CalendarClockIcon,
+    CircleCheckIcon,
+    DoorOpenIcon,
+    ExternalLinkIcon,
+    FilePlusIcon,
+    HouseIcon,
+    PencilIcon,
+    ReceiptIcon,
+    RefreshCwIcon,
+    StoreIcon,
+    WalletIcon,
+} from 'lucide-react';
 import { useState } from 'react';
+import DocumentsOnFile from './Partials/DocumentsOnFile';
 import RecordInstalmentDialog from './Partials/RecordInstalmentDialog';
 
-export default function Show({ lease, stats, payments, paymentStatuses, paymentMethods, currency }) {
-    const { t, formatCurrency, formatMoney, formatDate, formatNumber } = useTranslation();
+/**
+ * Whole months a lease covers, counting its last day (1 Jan to 31 Dec is 12).
+ */
+function leaseMonths(start, end) {
+    const from = new Date(`${start}T00:00:00`);
+    const to = new Date(`${end}T00:00:00`);
+    to.setDate(to.getDate() + 1);
+
+    return Math.max((to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) - (to.getDate() < from.getDate() ? 1 : 0), 1);
+}
+
+/**
+ * One count of what the property holds, linking to that list for the property.
+ */
+function UnitTile({ icon: Icon, label, value, detail, href }) {
+    return (
+        <Link
+            href={href}
+            className="group/tile flex flex-col gap-1 rounded-xl bg-muted/50 p-3 ring-1 ring-foreground/[0.06] transition-colors hover:bg-accent hover:ring-brand-cyan/30"
+        >
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Icon className="size-3.5" />
+                {label}
+            </span>
+            <span className="font-heading text-xl font-bold tabular-nums group-hover/tile:text-brand-ink">{value}</span>
+            {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
+        </Link>
+    );
+}
+
+export default function Show({ lease, property, documents, stats, payments, paymentStatuses, paymentMethods, currency }) {
+    const { t, tOr, formatCurrency, formatMoney, formatDate, formatNumber, formatPercent } = useTranslation();
+    const filter = { properties: [property.code] };
+    const place = [property.area, property.city].filter(Boolean).join(', ');
     const { period } = useLeasingFormat();
     const [recording, setRecording] = useState(null);
     const canRenew = ['active', 'expired'].includes(lease.status) && lease.renewal === null;
@@ -24,7 +72,7 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
             <Head title={lease.number} />
 
             <PageHeader
-                breadcrumbs={[{ label: t('nav.agreements') }, { label: t('leasing.headLeases.title'), href: route('head-leases.index') }, { label: lease.number }]}
+                breadcrumbs={[{ label: t('nav.landlordsMenu') }, { label: t('leasing.headLeases.title'), href: route('head-leases.index') }, { label: lease.number }]}
                 title={lease.number}
                 badge={<LeaseStatusBadge status={lease.status} />}
                 description={
@@ -84,6 +132,60 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
 
             <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
                 <div className="flex min-w-0 flex-col gap-6">
+                    <SectionCard
+                        title={t('leasing.headLeases.show.property')}
+                        description={t('leasing.headLeases.show.propertyDescription')}
+                        action={
+                            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('properties.show', property.id)} />}>
+                                <ExternalLinkIcon data-icon="inline-start" />
+                                {t('leasing.headLeases.show.openProperty')}
+                            </Button>
+                        }
+                    >
+                        <div className="flex flex-col gap-5 sm:flex-row">
+                            <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/[0.08] sm:w-56">
+                                <PropertyCover src={property.cover_image_url} />
+                            </div>
+                            <div className="flex min-w-0 flex-1 flex-col gap-4">
+                                <div className="flex flex-col gap-1">
+                                    <Link href={route('properties.show', property.id)} dir="auto" className="font-heading text-lg font-bold hover:text-brand-ink">
+                                        {property.name}
+                                    </Link>
+                                    <span className="text-sm text-muted-foreground">
+                                        {[
+                                            property.code,
+                                            property.type && tOr(`propertyTypes.${property.type.slug}`, property.type.name),
+                                            property.address || place,
+                                            property.total_floors && property.total_units
+                                                ? t('leasing.headLeases.show.size', { floors: property.total_floors, units: property.total_units })
+                                                : null,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' · ')}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                                    <UnitTile
+                                        icon={DoorOpenIcon}
+                                        label={t('nav.rooms')}
+                                        value={formatNumber(property.rooms)}
+                                        detail={t('common.beds', { count: property.beds.total })}
+                                        href={route('rooms.index', filter)}
+                                    />
+                                    <UnitTile
+                                        icon={BedDoubleIcon}
+                                        label={t('properties.stats.occupancy')}
+                                        value={property.beds.occupancyRate === null ? '—' : formatPercent(property.beds.occupancyRate)}
+                                        detail={t('leasing.headLeases.show.bedsOccupied', { occupied: property.beds.occupied, total: property.beds.occupied + property.beds.available })}
+                                        href={route('rooms.index', filter)}
+                                    />
+                                    <UnitTile icon={StoreIcon} label={t('nav.shops')} value={formatNumber(property.shops)} href={route('shops.index', filter)} />
+                                    <UnitTile icon={HouseIcon} label={t('nav.apartments')} value={formatNumber(property.apartments)} href={route('apartments.index', filter)} />
+                                </div>
+                            </div>
+                        </div>
+                    </SectionCard>
+
                     <SectionCard title={t('leasing.headLeases.show.schedule')} description={t('leasing.headLeases.show.scheduleDescription')} flush>
                         <DataTable
                             rows={payments}
@@ -128,6 +230,23 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
                         />
                     </SectionCard>
 
+                    <SectionCard
+                        title={t('leasing.headLeases.show.documents')}
+                        description={t('leasing.headLeases.show.documentsDescription')}
+                        action={
+                            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('head-leases.edit', lease.id)} />}>
+                                <FilePlusIcon data-icon="inline-start" />
+                                {t('leasing.headLeases.show.addDocuments')}
+                            </Button>
+                        }
+                    >
+                        {documents.length > 0 ? (
+                            <DocumentsOnFile documents={documents} leaseId={lease.id} />
+                        ) : (
+                            <p className="text-sm text-muted-foreground">{t('leasing.headLeases.show.noDocuments')}</p>
+                        )}
+                    </SectionCard>
+
                     {lease.notes && (
                         <SectionCard title={t('leasing.common.notes')}>
                             <p dir="auto" className="text-sm leading-relaxed whitespace-pre-line">{lease.notes}</p>
@@ -140,8 +259,31 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
                         <DetailList
                             columns={1}
                             rows={[
-                                { label: t('leasing.common.property'), value: <span dir="auto">{`${lease.property.name} · ${lease.property.code}`}</span> },
-                                { label: t('leasing.headLeases.columns.term'), value: period(lease.startDate, lease.endDate) },
+                                { label: t('leasing.common.status'), value: <LeaseStatusBadge status={lease.status} /> },
+                                {
+                                    label: t('leasing.common.property'),
+                                    value: (
+                                        <Link href={route('properties.show', property.id)} dir="auto" className="underline-offset-4 hover:text-brand-ink hover:underline">
+                                            {`${property.name} · ${property.code}`}
+                                        </Link>
+                                    ),
+                                },
+                                { label: t('leasing.common.startDate'), value: formatDate(lease.startDate) },
+                                { label: t('leasing.common.endDate'), value: formatDate(lease.endDate) },
+                                {
+                                    label: t('leasing.headLeases.show.length'),
+                                    value: [
+                                        t('leasing.headLeases.show.months', { count: leaseMonths(lease.startDate, lease.endDate) }),
+                                        lease.daysLeft < 0
+                                            ? t('leasing.headLeases.show.ended', { date: formatDate(lease.endDate) })
+                                            : t('leasing.common.daysLeft', { count: lease.daysLeft }),
+                                    ].join(' · '),
+                                },
+                                { label: t('leasing.headLeases.form.fields.annualRent'), value: formatCurrency(lease.annualRent, currency) },
+                                {
+                                    label: t('leasing.headLeases.form.fields.paymentsPerYear'),
+                                    value: t('leasing.headLeases.instalments', { count: lease.paymentsPerYear, amount: formatCurrency(lease.installmentAmount, currency) }),
+                                },
                                 { label: t('leasing.common.ejariNumber'), value: lease.ejariNumber },
                                 { label: t('leasing.common.securityDeposit'), value: lease.securityDeposit === null ? null : formatCurrency(lease.securityDeposit, currency) },
                                 {
@@ -180,7 +322,10 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
                                         </Link>
                                     ),
                                 },
+                                { label: t('leasing.landlords.form.fields.type'), value: t(`leasing.partyTypes.${lease.landlord.landlord_type}`) },
+                                { label: t('leasing.landlords.form.fields.contactPerson'), value: lease.landlord.contact_person_name },
                                 { label: t('leasing.landlords.form.fields.phone'), value: lease.landlord.phone },
+                                { label: t('leasing.landlords.form.fields.email'), value: lease.landlord.email },
                                 { label: t('leasing.landlords.form.fields.bankName'), value: lease.landlord.bank_name },
                                 { label: t('leasing.landlords.form.fields.iban'), value: lease.landlord.iban && <span className="font-mono">{lease.landlord.iban}</span> },
                             ]}

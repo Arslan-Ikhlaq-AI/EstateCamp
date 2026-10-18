@@ -1,8 +1,6 @@
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
     Card,
-    CardAction,
     CardContent,
     CardDescription,
     CardHeader,
@@ -18,7 +16,6 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
 import {
-    ArrowRightIcon,
     CircleAlertIcon,
     CircleCheckIcon,
     Clock3Icon,
@@ -65,12 +62,6 @@ export default function DocumentsCard({ documents, className }) {
             <CardHeader className="border-b">
                 <CardTitle>{t('dashboard.documents.title')}</CardTitle>
                 <CardDescription>{t('dashboard.documents.description')}</CardDescription>
-                <CardAction>
-                    <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={route('properties.documents')} />}>
-                        {t('nav.documents')}
-                        <ArrowRightIcon data-icon="inline-end" className="rtl:rotate-180" />
-                    </Button>
-                </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
                 {documents.length === 0 ? (
@@ -101,27 +92,29 @@ export default function DocumentsCard({ documents, className }) {
                                 const { icon: StatusIcon, tile } = STATUS_BY_KEY[document.status];
 
                                 return (
-                                    <li
-                                        key={document.id}
-                                        className="flex items-start gap-3 rounded-lg p-3 ring-1 ring-foreground/[0.07] transition-colors hover:bg-muted/40"
-                                    >
-                                        <span className={cn('mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg', tile)}>
-                                            <StatusIcon className="size-4" />
-                                        </span>
-                                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                            <span className="line-clamp-1 text-sm font-medium" dir="auto">{document.title}</span>
-                                            <span className="truncate text-xs text-muted-foreground">
-                                                <span dir="auto">{document.property}</span> · <span dir="ltr">{document.number}</span>
+                                    <li key={document.id}>
+                                        <Link
+                                            href={route('properties.show', document.propertyId)}
+                                            className="flex items-start gap-3 rounded-lg p-3 ring-1 ring-foreground/[0.07] transition-colors hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                        >
+                                            <span className={cn('mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg', tile)}>
+                                                <StatusIcon className="size-4" />
                                             </span>
-                                            <span className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
-                                                <span className={cn('font-medium', (document.status === 'expired' || document.status === 'expiring') && 'text-foreground')}>
-                                                    {timing(document, t)}
+                                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                <span className="line-clamp-1 text-sm font-medium" dir="auto">{document.title}</span>
+                                                <span className="truncate text-xs text-muted-foreground">
+                                                    <span dir="auto">{document.property}</span> · <span dir="ltr">{document.number}</span>
                                                 </span>
-                                                {document.expiresOn && (
-                                                    <span className="text-muted-foreground">{formatDate(document.expiresOn)}</span>
-                                                )}
-                                            </span>
-                                        </div>
+                                                <span className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
+                                                    <span className={cn('font-medium', (document.status === 'expired' || document.status === 'expiring') && 'text-foreground')}>
+                                                        {timing(document, t)}
+                                                    </span>
+                                                    {document.expiresOn && (
+                                                        <span className="text-muted-foreground">{formatDate(document.expiresOn)}</span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </Link>
                                     </li>
                                 );
                             })}

@@ -208,3 +208,18 @@ test('cannot lease another company\'s property', function () {
         ->post(route('head-leases.store'), validLeaseInput($otherProperty, $this->hamdan))
         ->assertSessionHasErrors('property_id');
 });
+
+test('shows a head lease with its property, what the property holds and its documents', function () {
+    $this->actingAs($this->superAdmin)
+        ->get(route('head-leases.show', $this->currentLease))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('HeadLeases/Show')
+            ->where('property.code', PropertySeeder::JEBEL_ALI)
+            ->where('property.rooms', $this->jebelAli->rooms()->count())
+            ->where('property.shops', $this->jebelAli->shops()->count())
+            ->where('property.apartments', $this->jebelAli->apartments()->count())
+            ->has('documents', $this->jebelAli->documents()->count())
+            ->where('documents.0.head_lease_id', $this->currentLease->id)
+        );
+});

@@ -90,7 +90,7 @@ class HandleInertiaRequests extends Middleware
                     'title' => $document->title,
                     'subject' => $document->property->name,
                     'days' => $days,
-                    'url' => route('properties.documents'),
+                    'url' => route('properties.show', $document->property_id),
                 ];
             });
 

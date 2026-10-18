@@ -190,10 +190,6 @@ test('sidebar sections without a module yet show a coming soon page', function (
             ->where('section', $routeName)
         );
 })->with([
-    'properties.documents',
-    'configuration.company',
-    'configuration.property-types',
-    'configuration.room-types',
     'maintenance.index',
     'amcs.fire-safety',
     'amcs.lifts',
