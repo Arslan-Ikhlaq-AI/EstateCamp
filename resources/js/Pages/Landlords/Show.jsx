@@ -40,11 +40,11 @@ export default function Show({ landlord, leases, upcomingPayments, currency }) {
 
             <FlashMessages />
 
-            <div className="grid items-start gap-6 xl:grid-cols-3">
-                <div className="flex flex-col gap-6 xl:col-span-2">
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+                <div className="flex min-w-0 flex-col gap-6">
                     <SectionCard title={t('leasing.landlords.show.leases')} description={t('leasing.landlords.show.leasesDescription')} flush>
                         {leases.length === 0 ? (
-                            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">{t('leasing.landlords.show.noLeases')}</p>
+                            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{t('leasing.landlords.show.noLeases')}</p>
                         ) : (
                             <DataTable
                                 rows={leases}
@@ -53,7 +53,7 @@ export default function Show({ landlord, leases, upcomingPayments, currency }) {
                                         id: 'number',
                                         header: t('leasing.headLeases.columns.lease'),
                                         cell: (lease) => (
-                                            <Link href={route('head-leases.show', lease.id)} className="font-medium hover:underline">
+                                            <Link href={route('head-leases.show', lease.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                                                 {lease.number}
                                             </Link>
                                         ),

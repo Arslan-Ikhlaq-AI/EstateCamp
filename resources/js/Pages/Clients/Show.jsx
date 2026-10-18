@@ -13,7 +13,7 @@ import { Head, Link } from '@inertiajs/react';
 import { BanknoteIcon, BedDoubleIcon, FileSignatureIcon, PencilIcon, ReceiptIcon, UserPlusIcon, UsersIcon } from 'lucide-react';
 
 function EmptyLine({ children }) {
-    return <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">{children}</p>;
+    return <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{children}</p>;
 }
 
 export default function Show({ client, contracts, stays, invoices, payments, currency }) {
@@ -73,8 +73,8 @@ export default function Show({ client, contracts, stays, invoices, payments, cur
                 <StatCard icon={UsersIcon} label={t('leasing.clients.show.occupants')} value={formatNumber(client.occupants)} detail={t('leasing.clients.show.occupantsDetail')} />
             </section>
 
-            <div className="grid items-start gap-6 xl:grid-cols-3">
-                <div className="flex flex-col gap-6 xl:col-span-2">
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+                <div className="flex min-w-0 flex-col gap-6">
                     <SectionCard title={t('leasing.contracts.title')} flush>
                         {contracts.length === 0 ? (
                             <EmptyLine>{t('leasing.clients.show.noContracts')}</EmptyLine>
@@ -86,7 +86,7 @@ export default function Show({ client, contracts, stays, invoices, payments, cur
                                         id: 'number',
                                         header: t('leasing.contracts.columns.contract'),
                                         cell: (contract) => (
-                                            <Link href={route('contracts.show', contract.id)} className="font-medium hover:underline">
+                                            <Link href={route('contracts.show', contract.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                                                 {contract.number}
                                             </Link>
                                         ),
@@ -117,7 +117,7 @@ export default function Show({ client, contracts, stays, invoices, payments, cur
                                         header: t('leasing.occupants.columns.name'),
                                         cell: (stay) => (
                                             <div className="flex flex-col">
-                                                <Link href={route('occupants.show', stay.occupant.id)} className="font-medium hover:underline" dir="auto">
+                                                <Link href={route('occupants.show', stay.occupant.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                                                     {stay.occupant.name}
                                                 </Link>
                                                 <span className="text-xs text-muted-foreground">{stay.occupant.employeeNumber || '—'}</span>
@@ -152,7 +152,7 @@ export default function Show({ client, contracts, stays, invoices, payments, cur
                                         id: 'number',
                                         header: t('leasing.invoices.columns.invoice'),
                                         cell: (invoice) => (
-                                            <Link href={route('invoices.show', invoice.id)} className="font-medium hover:underline">
+                                            <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                                                 {invoice.number}
                                             </Link>
                                         ),
@@ -216,7 +216,7 @@ export default function Show({ client, contracts, stays, invoices, payments, cur
                                 {payments.map((payment) => (
                                     <li key={payment.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
                                         <div className="flex min-w-0 flex-col">
-                                            <Link href={route('payments.show', payment.id)} className="text-sm font-medium hover:underline">
+                                            <Link href={route('payments.show', payment.id)} className="text-sm font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                                                 {payment.number}
                                             </Link>
                                             <span className="text-xs text-muted-foreground">

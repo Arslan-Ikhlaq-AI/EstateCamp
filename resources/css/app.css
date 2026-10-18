@@ -14,6 +14,11 @@
   --font-display: 'Plus Jakarta Sans', 'Geist Variable', 'IBM Plex Sans Arabic', sans-serif;
   --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
 
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: calc(1.125 / 0.8125);
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: calc(1.375 / 0.9375);
+
   --color-brand-cyan: #1cb5e0;
   --color-brand-navy: #000851;
   /* Warm accent for highlighted copy; pairs with the navy as its complement. */
@@ -136,8 +141,8 @@
 }
 
 @theme inline {
-  --font-heading: 'Geist Variable', 'IBM Plex Sans Arabic', sans-serif;
-  --font-sans: 'Geist Variable', 'IBM Plex Sans Arabic', sans-serif;
+  --font-heading: 'Plus Jakarta Sans', 'IBM Plex Sans Arabic', 'Geist Variable', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'IBM Plex Sans Arabic', 'Geist Variable', sans-serif;
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-highlight: var(--highlight);
@@ -164,6 +169,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-gold: var(--gold);
+  --color-gold-ink: var(--gold-ink);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -174,6 +184,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-active: var(--sidebar-active);
   --color-surface: var(--surface);
+  --color-brand-ink: var(--brand-ink);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -185,47 +196,59 @@
 
 @layer base {
   :root {
-    /* The page canvas sits one step off white so white cards and controls lift off it. */
-    --background: #f8f9fc;
-    --foreground: #0b1238;
+    --background: #ffffff;
+    --foreground: #070d33;
     --surface: #ffffff;
     --card: #ffffff;
-    --card-foreground: #0b1238;
+    --card-foreground: #070d33;
     --popover: #ffffff;
-    --popover-foreground: #0b1238;
+    --popover-foreground: #070d33;
     --primary: #000851;
     --primary-foreground: #ffffff;
-    --secondary: #eef1f7;
-    --secondary-foreground: #0b1238;
-    --muted: #f1f3f8;
-    --muted-foreground: #5b6482;
-    --accent: #eef1f8;
-    --accent-foreground: #0b1238;
+    --secondary: #eef2f8;
+    --secondary-foreground: #070d33;
+    --muted: #f4f6fa;
+    --muted-foreground: #4a5372;
+    --accent: #edf7fc;
+    --accent-foreground: #070d33;
     --destructive: #d03b3b;
     --success: #15803d;
     --warning: #b45309;
     --highlight: #f8e1a0;
-    --border: #e4e7ef;
-    --input: #d8dde8;
+    --border: #e0e4ed;
+    --input: #d6dbe6;
     --ring: #1cb5e0;
+    /* Brand cyan dark enough for text and icons on white (5.3:1). */
+    --brand-ink: #0b72a8;
     /* Validated with the dataviz palette check: 1 occupied, 2 available (same-hue track), 3 out of service. */
     --chart-1: #0e7fb8;
     --chart-2: #a5dcf2;
     --chart-3: #8e95a8;
     --chart-4: #0b4f8a;
     --chart-5: #1cb5e0;
+    /* Context series beside chart-1 (same hue, validated as an ordinal pair). */
+    --chart-context: #6cb8e2;
+    /* Categorical series: cyan, yellow, aqua, validated all-pairs in both themes; a fourth+ series folds into chart-3 grey. */
+    --cat-1: #1a9fd9;
+    --cat-2: #eda100;
+    --cat-3: #1baf7a;
+    /* The warm accent: gold for icons and fills, a deep gold for text on white (5.9:1). */
+    --gold: #f5b415;
+    --gold-ink: #8a5a00;
     --radius: 0.625rem;
-    /* A light frame around the content panel; the active link is raised in white. */
-    --sidebar: #f0f2f7;
-    --sidebar-foreground: #4b5373;
-    --sidebar-primary: #000851;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: rgb(11 18 56 / 0.055);
-    --sidebar-accent-foreground: #0b1238;
-    --sidebar-active: #ffffff;
-    --sidebar-border: rgb(11 18 56 / 0.08);
+    /* The brand navy frames the white content panel; the current link is lit with a cyan edge. */
+    --sidebar: #000851;
+    --sidebar-image: radial-gradient(120% 50% at 0% 0%, rgb(28 181 224 / 0.22) 0%, transparent 60%), linear-gradient(180deg, #00105c 0%, #000851 45%, #000640 100%);
+    --sidebar-foreground: rgb(255 255 255 / 0.72);
+    --sidebar-primary: #1cb5e0;
+    --sidebar-primary-foreground: #000851;
+    --sidebar-accent: rgb(255 255 255 / 0.07);
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-active: rgb(255 255 255 / 0.11);
+    --sidebar-active-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07);
+    --sidebar-border: rgb(255 255 255 / 0.1);
     --sidebar-ring: #1cb5e0;
-    --card-shadow: 0 1px 2px 0 rgb(11 18 56 / 0.04), 0 1px 3px 0 rgb(11 18 56 / 0.025);
+    --card-shadow: 0 1px 2px 0 rgb(11 18 56 / 0.06), 0 6px 16px -8px rgb(11 18 56 / 0.1);
     --raised-shadow: 0 1px 2px 0 rgb(11 18 56 / 0.07), 0 0 0 1px rgb(11 18 56 / 0.06);
     --overlay-shadow: 0 16px 36px -12px rgb(11 18 56 / 0.2), 0 4px 12px -4px rgb(11 18 56 / 0.08);
   }
@@ -252,18 +275,27 @@
     --border: rgb(255 255 255 / 0.08);
     --input: rgb(255 255 255 / 0.14);
     --ring: #1cb5e0;
+    --brand-ink: #5cc2ec;
     --chart-1: #2897cb;
     --chart-2: #1d4a7a;
     --chart-3: #6b7390;
     --chart-4: #5cc2ec;
     --chart-5: #1cb5e0;
+    --chart-context: #25557f;
+    --cat-1: #2196d1;
+    --cat-2: #c98500;
+    --cat-3: #199e70;
+    --gold: #f5c542;
+    --gold-ink: #f8d77a;
     --sidebar: #03061c;
+    --sidebar-image: radial-gradient(120% 50% at 0% 0%, rgb(28 181 224 / 0.14) 0%, transparent 60%), linear-gradient(180deg, #050a2a 0%, #03061c 100%);
     --sidebar-foreground: rgb(232 236 248 / 0.7);
     --sidebar-primary: #1cb5e0;
     --sidebar-primary-foreground: #00062e;
     --sidebar-accent: rgb(255 255 255 / 0.06);
     --sidebar-accent-foreground: #ffffff;
     --sidebar-active: rgb(255 255 255 / 0.09);
+    --sidebar-active-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06);
     --sidebar-border: rgb(255 255 255 / 0.08);
     --sidebar-ring: #1cb5e0;
     --card-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.25);

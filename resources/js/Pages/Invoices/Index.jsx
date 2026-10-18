@@ -37,7 +37,7 @@ export default function Index({ company, filters, facets, summary, invoices }) {
             header: t('leasing.invoices.columns.invoice'),
             cell: (invoice) => (
                 <div className="flex flex-col">
-                    <Link href={route('invoices.show', invoice.id)} className="font-medium hover:underline">
+                    <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                         {invoice.number}
                     </Link>
                     <span className="text-xs text-muted-foreground">{t('leasing.invoices.issuedOn', { date: formatDate(invoice.issueDate) })}</span>
@@ -49,10 +49,10 @@ export default function Index({ company, filters, facets, summary, invoices }) {
             header: t('leasing.invoices.columns.client'),
             cell: (invoice) => (
                 <div className="flex max-w-56 flex-col">
-                    <Link href={route('clients.show', invoice.client.id)} dir="auto" className="truncate hover:underline">
+                    <Link href={route('clients.show', invoice.client.id)} dir="auto" className="truncate underline-offset-4 hover:text-brand-ink hover:underline">
                         {invoice.client.name}
                     </Link>
-                    <Link href={route('contracts.show', invoice.contract.id)} className="text-xs text-muted-foreground hover:underline">
+                    <Link href={route('contracts.show', invoice.contract.id)} className="text-xs text-muted-foreground underline-offset-4 hover:text-brand-ink hover:underline">
                         {invoice.contract.number}
                     </Link>
                 </div>

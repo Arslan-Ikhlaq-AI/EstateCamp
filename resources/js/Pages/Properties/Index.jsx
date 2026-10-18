@@ -139,8 +139,9 @@ function PropertyList({ company, filters, facets, summary, properties }) {
     }
 
     return (
-        <Card className="gap-0 py-0">
-            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:px-5">
+        <Card className="gap-0 overflow-hidden py-0">
+            <div aria-hidden="true" className="h-1 bg-linear-to-r from-brand-cyan via-chart-1 to-gold rtl:bg-linear-to-l" />
+            <div className="flex flex-col gap-3 border-b px-4 py-3.5 sm:px-5 lg:px-6">
                 <PropertyToolbar
                     search={search}
                     onSearchChange={setSearch}
@@ -177,7 +178,7 @@ function PropertyList({ company, filters, facets, summary, properties }) {
             </div>
 
             {properties.total > 0 && (
-                <CardFooter className="bg-transparent px-4 py-3 sm:px-5">
+                <CardFooter className="bg-transparent px-4 py-3 sm:px-5 lg:px-6">
                     <ListPagination
                         paginator={properties}
                         perPage={query.perPage}

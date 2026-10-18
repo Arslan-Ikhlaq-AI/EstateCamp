@@ -1,18 +1,27 @@
 import {
+    BanknoteIcon,
+    BedDoubleIcon,
+    BriefcaseBusinessIcon,
     Building2Icon,
     DoorOpenIcon,
     FileKeyIcon,
     FileSignatureIcon,
+    FileTextIcon,
+    HandCoinsIcon,
     HandshakeIcon,
     HouseIcon,
+    IdCardIcon,
     LandmarkIcon,
     LayoutDashboardIcon,
     LifeBuoyIcon,
     LogInIcon,
     ReceiptIcon,
+    ReceiptTextIcon,
     SettingsIcon,
     SlidersHorizontalIcon,
     StoreIcon,
+    TagsIcon,
+    UserCogIcon,
     UserPlusIcon,
     UsersIcon,
     WalletIcon,
@@ -20,9 +29,10 @@ import {
 } from 'lucide-react';
 
 /**
- * The app's sections, shared by the sidebar and the command menu. A link is
- * current on its own route or on any route in `activeFor` (such as its add
- * and edit pages); `adminOnly` links show only to admins.
+ * The app's sections, shared by the sidebar, the command menu and page
+ * headers (which show the current page's icon). A link is current on its own
+ * route or on any route in `activeFor` (such as its add and edit pages);
+ * `adminOnly` links show only to admins.
  */
 export const navigation = [
     {
@@ -42,41 +52,41 @@ export const navigation = [
                 title: 'nav.properties',
                 icon: Building2Icon,
                 children: [
-                    { title: 'nav.allProperties', routeName: 'properties.index', activeFor: ['properties.index', 'properties.create', 'properties.edit'] },
-                    { title: 'nav.rooms', routeName: 'rooms.index', activeFor: ['rooms.*'] },
-                    { title: 'nav.shops', routeName: 'shops.index', activeFor: ['shops.*'] },
-                    { title: 'nav.apartments', routeName: 'apartments.index', activeFor: ['apartments.*'] },
-                    { title: 'nav.documents', routeName: 'properties.documents' },
+                    { title: 'nav.allProperties', icon: Building2Icon, routeName: 'properties.index', activeFor: ['properties.index', 'properties.create', 'properties.edit'] },
+                    { title: 'nav.rooms', icon: DoorOpenIcon, routeName: 'rooms.index', activeFor: ['rooms.*'] },
+                    { title: 'nav.shops', icon: StoreIcon, routeName: 'shops.index', activeFor: ['shops.*'] },
+                    { title: 'nav.apartments', icon: HouseIcon, routeName: 'apartments.index', activeFor: ['apartments.*'] },
+                    { title: 'nav.documents', icon: FileTextIcon, routeName: 'properties.documents' },
                 ],
             },
             {
                 title: 'nav.agreements',
                 icon: HandshakeIcon,
                 children: [
-                    { title: 'nav.contracts', routeName: 'contracts.index', activeFor: ['contracts.*'] },
-                    { title: 'nav.clients', routeName: 'clients.index', activeFor: ['clients.*'] },
-                    { title: 'nav.occupants', routeName: 'occupants.index', activeFor: ['occupants.*', 'occupancies.*'] },
-                    { title: 'nav.landlords', routeName: 'landlords.index', activeFor: ['landlords.*'] },
-                    { title: 'nav.headLeases', routeName: 'head-leases.index', activeFor: ['head-leases.*'] },
+                    { title: 'nav.contracts', icon: FileSignatureIcon, routeName: 'contracts.index', activeFor: ['contracts.*'] },
+                    { title: 'nav.clients', icon: UsersIcon, routeName: 'clients.index', activeFor: ['clients.*'] },
+                    { title: 'nav.occupants', icon: IdCardIcon, routeName: 'occupants.index', activeFor: ['occupants.*', 'occupancies.*'] },
+                    { title: 'nav.landlords', icon: LandmarkIcon, routeName: 'landlords.index', activeFor: ['landlords.*'] },
+                    { title: 'nav.headLeases', icon: FileKeyIcon, routeName: 'head-leases.index', activeFor: ['head-leases.*'] },
                 ],
             },
             {
                 title: 'nav.payments',
                 icon: WalletIcon,
                 children: [
-                    { title: 'nav.invoices', routeName: 'invoices.index', activeFor: ['invoices.*'] },
-                    { title: 'nav.paymentsReceived', routeName: 'payments.index', activeFor: ['payments.*'] },
-                    { title: 'nav.landlordPayments', routeName: 'landlord-payments.index', activeFor: ['landlord-payments.*'] },
+                    { title: 'nav.invoices', icon: ReceiptTextIcon, routeName: 'invoices.index', activeFor: ['invoices.*'] },
+                    { title: 'nav.paymentsReceived', icon: HandCoinsIcon, routeName: 'payments.index', activeFor: ['payments.*'] },
+                    { title: 'nav.landlordPayments', icon: BanknoteIcon, routeName: 'landlord-payments.index', activeFor: ['landlord-payments.*'] },
                 ],
             },
             {
                 title: 'nav.configuration',
                 icon: SlidersHorizontalIcon,
                 children: [
-                    { title: 'nav.companyProfile', routeName: 'configuration.company' },
-                    { title: 'nav.propertyTypes', routeName: 'configuration.property-types' },
-                    { title: 'nav.roomTypes', routeName: 'configuration.room-types' },
-                    { title: 'nav.users', routeName: 'admin.dashboard', adminOnly: true },
+                    { title: 'nav.companyProfile', icon: BriefcaseBusinessIcon, routeName: 'configuration.company' },
+                    { title: 'nav.propertyTypes', icon: TagsIcon, routeName: 'configuration.property-types' },
+                    { title: 'nav.roomTypes', icon: BedDoubleIcon, routeName: 'configuration.room-types' },
+                    { title: 'nav.users', icon: UserCogIcon, routeName: 'admin.dashboard', adminOnly: true },
                 ],
             },
             {
@@ -131,10 +141,29 @@ export function pageLinks(isAdmin) {
             item.children
                 ? item.children
                       .filter((child) => !child.adminOnly || isAdmin)
-                      .map((child) => ({ title: child.title, icon: item.icon, routeName: child.routeName, section: item.title }))
+                      .map((child) => ({ title: child.title, icon: child.icon ?? item.icon, routeName: child.routeName, section: item.title }))
                 : [{ title: item.title, icon: item.icon, routeName: item.routeName }],
         ),
     );
 
     return [...links, ...footerNavigation];
+}
+
+/**
+ * The icon of the page being viewed, from its link in the navigation.
+ *
+ * @return {import('react').ComponentType | null}
+ */
+export function currentPageIcon() {
+    for (const item of navigation.flatMap((group) => group.items)) {
+        const match = item.children
+            ? item.children.find((child) => isCurrentRoute(child.routeName, child.activeFor))
+            : isCurrentRoute(item.routeName) && item;
+
+        if (match) {
+            return match.icon ?? item.icon;
+        }
+    }
+
+    return footerNavigation.find((item) => isCurrentRoute(item.routeName))?.icon ?? null;
 }

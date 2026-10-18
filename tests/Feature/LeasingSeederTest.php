@@ -103,7 +103,7 @@ it('pays the landlord cheques already due and copies the running lease onto the 
         ->and((float) $current->payments()->value('amount'))->toBe(195000.0)
         ->and($current->renewedFrom->lease_number)->toBe('HL-2025-0001')
         ->and($property->ownership_type)->toBe('leased')
-        ->and($property->landlord_name)->toBe('Al Marsa Properties L.L.C.');
+        ->and($property->landlord->name)->toBe('Al Marsa Properties L.L.C.');
 });
 
 it('can be run again without duplicating leasing records', function () {

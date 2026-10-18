@@ -33,7 +33,20 @@ class PropertyDocument extends Model
         'insurance_policy',
         'municipality_permit',
         'labour_accommodation_permit',
+        'emirates_id',
+        'passport',
+        'trade_license',
         'other',
+    ];
+
+    /**
+     * Documents every property must have.
+     */
+    public const REQUIRED_TYPES = [
+        'tenancy_contract',
+        'emirates_id',
+        'trade_license',
+        'passport',
     ];
 
     /**

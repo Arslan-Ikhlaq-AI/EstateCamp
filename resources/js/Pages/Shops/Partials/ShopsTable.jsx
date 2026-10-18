@@ -33,8 +33,8 @@ export const DEFAULT_HIDDEN_SHOP_COLUMNS = [];
 
 // Solid equivalents of the header and hover tints, so the pinned actions
 // column matches the row it sits on while the rest of the table scrolls under it.
-const HEADER_BACKGROUND = 'bg-[color-mix(in_oklab,var(--muted)_40%,var(--card))]';
-const ROW_HOVER_BACKGROUND = 'hover:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))]';
+const HEADER_BACKGROUND = 'bg-[color-mix(in_oklab,var(--color-brand-cyan)_5%,var(--card))]';
+const ROW_HOVER_BACKGROUND = 'hover:bg-[color-mix(in_oklab,var(--color-brand-cyan)_7%,var(--card))]';
 
 function SortableHead({ column, query, onSort, className, children }) {
     const isSorted = query.sort === column.sort;
@@ -80,7 +80,7 @@ function Cell({ column, shop, currency }) {
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex min-w-0 flex-col">
-                        <Link href={route('shops.show', shop.id)} className="font-medium hover:underline">
+                        <Link href={route('shops.show', shop.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                             {t('shopList.shop', { number: shop.number })}
                         </Link>
                         <span className="truncate text-xs text-muted-foreground">{placement(shop) || '—'}</span>
@@ -139,7 +139,7 @@ export default function ShopsTable({ shops, currency, query, onSort, hiddenColum
                 <TableRow className="hover:bg-transparent">
                     {columns.map((column, index) => {
                         const label = t(`shopList.columns.${column.id}`);
-                        const padding = index === 0 && 'ps-4 sm:ps-5';
+                        const padding = index === 0 && 'ps-4 sm:ps-5 lg:ps-6';
 
                         return column.sort ? (
                             <SortableHead key={column.id} column={column} query={query} onSort={onSort} className={padding}>
@@ -154,7 +154,7 @@ export default function ShopsTable({ shops, currency, query, onSort, hiddenColum
                             </TableHead>
                         );
                     })}
-                    <TableHead className={cn('sticky end-0 w-12 pe-4 sm:pe-5', HEADER_BACKGROUND)}>
+                    <TableHead className={cn('sticky end-0 w-12 pe-4 sm:pe-5 lg:pe-6', HEADER_BACKGROUND)}>
                         <span className="sr-only">{t('shopList.columns.actions')}</span>
                     </TableHead>
                 </TableRow>
@@ -165,12 +165,12 @@ export default function ShopsTable({ shops, currency, query, onSort, hiddenColum
                         {columns.map((column, index) => (
                             <TableCell
                                 key={column.id}
-                                className={cn('py-3', index === 0 && 'ps-4 sm:ps-5', column.align === 'end' && 'text-end')}
+                                className={cn('py-3', index === 0 && 'ps-4 sm:ps-5 lg:ps-6', column.align === 'end' && 'text-end')}
                             >
                                 <Cell column={column} shop={shop} currency={currency} />
                             </TableCell>
                         ))}
-                        <TableCell className="sticky end-0 bg-card pe-4 text-end group-hover/row:bg-inherit sm:pe-5">
+                        <TableCell className="sticky end-0 bg-card pe-4 text-end group-hover/row:bg-inherit sm:pe-5 lg:pe-6">
                             <ShopActions shop={shop} />
                         </TableCell>
                     </TableRow>

@@ -41,7 +41,7 @@ export default function Index({ company, filters, facets, summary, landlords }) 
             header: t('leasing.landlords.columns.name'),
             cell: (landlord) => (
                 <div className="flex min-w-0 flex-col">
-                    <Link href={route('landlords.show', landlord.id)} dir="auto" className="font-medium hover:underline">
+                    <Link href={route('landlords.show', landlord.id)} dir="auto" className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                         {landlord.name}
                     </Link>
                     <span className="truncate text-xs text-muted-foreground">{landlord.contactPerson || '—'}</span>

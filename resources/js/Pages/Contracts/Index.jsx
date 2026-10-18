@@ -47,11 +47,11 @@ export default function Index({ company, filters, facets, summary, contracts }) 
             id: 'contract',
             header: t('leasing.contracts.columns.contract'),
             cell: (contract) => (
-                <div className="flex min-w-0 flex-col">
-                    <Link href={route('contracts.show', contract.id)} className="font-medium hover:underline">
+                <div className="flex max-w-48 min-w-0 flex-col">
+                    <Link href={route('contracts.show', contract.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                         {contract.number}
                     </Link>
-                    <Link href={route('clients.show', contract.client.id)} dir="auto" className="truncate text-xs text-muted-foreground hover:underline">
+                    <Link href={route('clients.show', contract.client.id)} dir="auto" className="truncate text-xs text-muted-foreground underline-offset-4 hover:text-brand-ink hover:underline">
                         {contract.client.name}
                     </Link>
                 </div>
@@ -72,7 +72,7 @@ export default function Index({ company, filters, facets, summary, contracts }) 
                 </div>
             ),
         },
-        { id: 'units', header: t('leasing.contracts.columns.units'), cell: (contract) => <span className="text-sm">{unitsSummary(contract.units) || '—'}</span> },
+        { id: 'units', header: t('leasing.contracts.columns.units'), className: 'min-w-28 whitespace-normal', cell: (contract) => <span className="text-sm">{unitsSummary(contract.units) || '—'}</span> },
         {
             id: 'value',
             header: t('leasing.contracts.columns.monthly'),

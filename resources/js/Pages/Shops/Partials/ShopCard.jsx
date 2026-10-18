@@ -51,7 +51,7 @@ export default function ShopCard({ shop, currency, actions, className }) {
                 <div className="flex min-w-0 flex-col gap-0.5">
                     <h3 className="truncate font-heading text-base leading-snug font-semibold">
                         {shop.id ? (
-                            <Link href={route('shops.show', shop.id)} className="hover:underline">
+                            <Link href={route('shops.show', shop.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                 {title}
                             </Link>
                         ) : (

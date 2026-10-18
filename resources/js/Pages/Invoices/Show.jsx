@@ -61,11 +61,11 @@ export default function Show({ invoice, items, allocations, company, currency })
                 badge={<InvoiceStatusBadge status={invoice.status} isOverdue={invoice.isOverdue} />}
                 description={
                     <span>
-                        <Link href={route('clients.show', invoice.client.id)} className="hover:underline" dir="auto">
+                        <Link href={route('clients.show', invoice.client.id)} className="underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                             {invoice.client.name}
                         </Link>{' '}
                         ·{' '}
-                        <Link href={route('contracts.show', invoice.contract.id)} className="hover:underline">
+                        <Link href={route('contracts.show', invoice.contract.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                             {invoice.contract.number}
                         </Link>
                     </span>
@@ -174,7 +174,7 @@ export default function Show({ invoice, items, allocations, company, currency })
                             {allocations.map((allocation) => (
                                 <li key={allocation.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
                                     <div className="flex flex-col">
-                                        <Link href={route('payments.show', allocation.payment.id)} className="text-sm font-medium hover:underline">
+                                        <Link href={route('payments.show', allocation.payment.id)} className="text-sm font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                                             {allocation.payment.number}
                                         </Link>
                                         <span className="text-xs text-muted-foreground">

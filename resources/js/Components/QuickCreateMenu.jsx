@@ -33,7 +33,7 @@ export default function QuickCreateMenu() {
             <DropdownMenuTrigger
                 render={
                     <Button
-                        variant="outline"
+                        variant="brand"
                         aria-label={t('header.create')}
                         className="max-sm:size-8 max-sm:px-0"
                     />

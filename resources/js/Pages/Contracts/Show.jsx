@@ -91,7 +91,7 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
             header: t('leasing.occupants.columns.name'),
             cell: (stay) => (
                 <div className="flex flex-col">
-                    <Link href={route('occupants.show', stay.occupant.id)} className="font-medium hover:underline" dir="auto">
+                    <Link href={route('occupants.show', stay.occupant.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                         {stay.occupant.name}
                     </Link>
                     <span className="text-xs text-muted-foreground">{stay.occupant.employeeNumber || t(`gender.${stay.occupant.gender}`)}</span>
@@ -125,7 +125,7 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
                 badge={<ContractStatusBadge status={contract.status} />}
                 description={
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <Link href={route('clients.show', contract.client.id)} className="font-medium text-foreground hover:underline" dir="auto">
+                        <Link href={route('clients.show', contract.client.id)} className="font-medium text-foreground underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                             {contract.client.name}
                         </Link>
                         <PartyTypeBadge type={contract.client.type} />
@@ -203,8 +203,8 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
                 />
             </section>
 
-            <div className="grid items-start gap-6 xl:grid-cols-3">
-                <div className="flex flex-col gap-6 xl:col-span-2">
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+                <div className="flex min-w-0 flex-col gap-6">
                     <SectionCard title={t('leasing.contracts.form.lines.title')} description={t('leasing.contracts.show.linesDescription')} flush>
                         <DataTable
                             rows={lines}
@@ -212,7 +212,7 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
                                 {
                                     id: 'unit',
                                     header: t('leasing.contracts.show.columns.unit'),
-                                    className: 'min-w-56 whitespace-normal',
+                                    className: 'min-w-48 whitespace-normal',
                                     cell: (line) => (
                                         <div className="flex flex-col">
                                             <span className="font-medium">{lineLabel(line)}</span>
@@ -284,7 +284,7 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
                             flush
                         >
                             {current.length === 0 ? (
-                                <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">{t('leasing.contracts.show.nobodyStaying')}</p>
+                                <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{t('leasing.contracts.show.nobodyStaying')}</p>
                             ) : (
                                 <DataTable
                                     rows={current}
@@ -308,7 +308,7 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
 
                     <SectionCard title={t('leasing.invoices.title')} description={t('leasing.contracts.show.invoicesDescription')} flush>
                         {invoices.length === 0 ? (
-                            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">{t('leasing.contracts.show.noInvoices')}</p>
+                            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{t('leasing.contracts.show.noInvoices')}</p>
                         ) : (
                             <DataTable
                                 rows={invoices}
@@ -317,7 +317,7 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
                                         id: 'number',
                                         header: t('leasing.invoices.columns.invoice'),
                                         cell: (invoice) => (
-                                            <Link href={route('invoices.show', invoice.id)} className="font-medium hover:underline">
+                                            <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                                                 {invoice.number}
                                             </Link>
                                         ),
@@ -351,7 +351,7 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
                                 {
                                     label: t('leasing.contracts.show.renewedFrom'),
                                     value: contract.renewedFrom && (
-                                        <Link href={route('contracts.show', contract.renewedFrom.id)} className="hover:underline">
+                                        <Link href={route('contracts.show', contract.renewedFrom.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                             {contract.renewedFrom.number}
                                         </Link>
                                     ),
@@ -359,7 +359,7 @@ export default function Show({ contract, lines, stays, invoices, totals, nextPer
                                 {
                                     label: t('leasing.contracts.show.renewedBy'),
                                     value: contract.renewal && (
-                                        <Link href={route('contracts.show', contract.renewal.id)} className="hover:underline">
+                                        <Link href={route('contracts.show', contract.renewal.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                             {contract.renewal.number}
                                         </Link>
                                     ),

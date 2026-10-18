@@ -44,7 +44,7 @@ export default function Index({ company, filters, facets, summary, occupants }) 
             header: t('leasing.occupants.columns.name'),
             cell: (occupant) => (
                 <div className="flex min-w-0 flex-col">
-                    <Link href={route('occupants.show', occupant.id)} dir="auto" className="font-medium hover:underline">
+                    <Link href={route('occupants.show', occupant.id)} dir="auto" className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                         {occupant.name}
                     </Link>
                     <span className="truncate text-xs text-muted-foreground">
@@ -58,7 +58,7 @@ export default function Index({ company, filters, facets, summary, occupants }) 
             header: t('leasing.occupants.columns.client'),
             cell: (occupant) => (
                 <div className="flex max-w-56 flex-col">
-                    <Link href={route('clients.show', occupant.client.id)} dir="auto" className="truncate hover:underline">
+                    <Link href={route('clients.show', occupant.client.id)} dir="auto" className="truncate underline-offset-4 hover:text-brand-ink hover:underline">
                         {occupant.client.name}
                     </Link>
                     <span className="text-xs text-muted-foreground">{occupant.employeeNumber || '—'}</span>

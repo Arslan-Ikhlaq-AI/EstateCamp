@@ -29,7 +29,7 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
                 badge={<LeaseStatusBadge status={lease.status} />}
                 description={
                     <span>
-                        <Link href={route('landlords.show', lease.landlordId)} className="hover:underline" dir="auto">
+                        <Link href={route('landlords.show', lease.landlordId)} className="underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                             {lease.landlordName}
                         </Link>{' '}
                         · <span dir="auto">{lease.property.name}</span> · {period(lease.startDate, lease.endDate)}
@@ -82,8 +82,8 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
                 />
             </section>
 
-            <div className="grid items-start gap-6 xl:grid-cols-3">
-                <div className="flex flex-col gap-6 xl:col-span-2">
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+                <div className="flex min-w-0 flex-col gap-6">
                     <SectionCard title={t('leasing.headLeases.show.schedule')} description={t('leasing.headLeases.show.scheduleDescription')} flush>
                         <DataTable
                             rows={payments}
@@ -151,7 +151,7 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
                                 {
                                     label: t('leasing.headLeases.show.renewedFrom'),
                                     value: lease.renewedFrom && (
-                                        <Link href={route('head-leases.show', lease.renewedFrom.id)} className="hover:underline">
+                                        <Link href={route('head-leases.show', lease.renewedFrom.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                             {lease.renewedFrom.number}
                                         </Link>
                                     ),
@@ -159,7 +159,7 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
                                 {
                                     label: t('leasing.headLeases.show.renewedBy'),
                                     value: lease.renewal && (
-                                        <Link href={route('head-leases.show', lease.renewal.id)} className="hover:underline">
+                                        <Link href={route('head-leases.show', lease.renewal.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                             {lease.renewal.number}
                                         </Link>
                                     ),
@@ -175,7 +175,7 @@ export default function Show({ lease, stats, payments, paymentStatuses, paymentM
                                 {
                                     label: t('leasing.landlords.columns.name'),
                                     value: (
-                                        <Link href={route('landlords.show', lease.landlord.id)} className="hover:underline" dir="auto">
+                                        <Link href={route('landlords.show', lease.landlord.id)} className="underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                                             {lease.landlord.name}
                                         </Link>
                                     ),

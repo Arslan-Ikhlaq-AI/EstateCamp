@@ -51,7 +51,7 @@ export default function ApartmentCard({ apartment, currency, actions, className 
                 <div className="flex min-w-0 flex-col gap-0.5">
                     <h3 className="truncate font-heading text-base leading-snug font-semibold">
                         {apartment.id ? (
-                            <Link href={route('apartments.show', apartment.id)} className="hover:underline">
+                            <Link href={route('apartments.show', apartment.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                 {title}
                             </Link>
                         ) : (

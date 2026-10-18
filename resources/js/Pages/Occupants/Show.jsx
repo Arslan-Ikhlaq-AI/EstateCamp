@@ -38,7 +38,7 @@ export default function Show({ occupant, stays }) {
                 }
                 description={
                     <span>
-                        <Link href={route('clients.show', occupant.client.id)} className="hover:underline" dir="auto">
+                        <Link href={route('clients.show', occupant.client.id)} className="underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                             {occupant.client.name}
                         </Link>
                         {occupant.employeeNumber && ` · ${occupant.employeeNumber}`}
@@ -67,8 +67,8 @@ export default function Show({ occupant, stays }) {
 
             <FlashMessages />
 
-            <div className="grid items-start gap-6 xl:grid-cols-3">
-                <div className="flex flex-col gap-6 xl:col-span-2">
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+                <div className="flex min-w-0 flex-col gap-6">
                     <SectionCard title={t('leasing.occupants.show.currentStay')}>
                         {current ? (
                             <DetailList
@@ -80,7 +80,7 @@ export default function Show({ occupant, stays }) {
                                     {
                                         label: t('leasing.contracts.columns.contract'),
                                         value: (
-                                            <Link href={route('contracts.show', current.contract.id)} className="hover:underline">
+                                            <Link href={route('contracts.show', current.contract.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                                 {current.contract.number}
                                             </Link>
                                         ),
@@ -108,7 +108,7 @@ export default function Show({ occupant, stays }) {
 
                     <SectionCard title={t('leasing.occupants.show.history')} description={t('leasing.occupants.show.historyDescription')} flush>
                         {history.length === 0 ? (
-                            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">{t('leasing.occupants.show.noHistory')}</p>
+                            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{t('leasing.occupants.show.noHistory')}</p>
                         ) : (
                             <DataTable
                                 rows={history}
@@ -127,7 +127,7 @@ export default function Show({ occupant, stays }) {
                                         id: 'contract',
                                         header: t('leasing.contracts.columns.contract'),
                                         cell: (stay) => (
-                                            <Link href={route('contracts.show', stay.contract.id)} className="hover:underline">
+                                            <Link href={route('contracts.show', stay.contract.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                                 {stay.contract.number}
                                             </Link>
                                         ),
@@ -148,7 +148,7 @@ export default function Show({ occupant, stays }) {
                                 {
                                     label: t('leasing.occupants.columns.client'),
                                     value: (
-                                        <Link href={route('clients.show', occupant.client.id)} className="hover:underline" dir="auto">
+                                        <Link href={route('clients.show', occupant.client.id)} className="underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                                             {occupant.client.name}
                                         </Link>
                                     ),

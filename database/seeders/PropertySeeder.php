@@ -9,8 +9,10 @@ use Illuminate\Database\Seeder;
  * The demo company's two properties: one owned, one leased.
  *
  * Safe to re-run: properties are matched on their code within the company.
- * The landlord and lease columns stay empty on the owned property, where they
- * do not apply. The room and bed totals are set by RoomSeeder from the rooms.
+ * The leased property points at its landlord, which is created here with
+ * its name and phone (LandlordSeeder later fills in the rest); the landlord
+ * and lease columns stay empty on the owned property, where they do not
+ * apply. The room and bed totals are set by RoomSeeder from the rooms.
  * Requires CompanySeeder.
  */
 class PropertySeeder extends Seeder
@@ -31,9 +33,13 @@ class PropertySeeder extends Seeder
                 ->where('slug', $property['type'])
                 ->firstOrFail();
 
+            $landlord = isset($property['landlord'])
+                ? $company->landlords()->firstOrCreate(['name' => $property['landlord']['name']], $property['landlord'])
+                : null;
+
             $company->properties()->updateOrCreate(
                 ['code' => $property['code']],
-                [...$property['attributes'], 'property_type_id' => $propertyType->id],
+                [...$property['attributes'], 'property_type_id' => $propertyType->id, 'landlord_id' => $landlord?->id],
             );
         }
     }
@@ -72,6 +78,11 @@ class PropertySeeder extends Seeder
             [
                 'code' => self::JEBEL_ALI,
                 'type' => 'staff_accommodation',
+                'landlord' => [
+                    'name' => LandlordSeeder::AL_MARSA,
+                    'landlord_type' => 'company',
+                    'phone' => '+971 4 456 7890',
+                ],
                 'attributes' => [
                     'name' => 'Jebel Ali Staff Residence',
                     'cover_image_url' => '/images/demo/jebel-ali-staff-residence.svg',
@@ -90,8 +101,6 @@ class PropertySeeder extends Seeder
                     'contact_person_name' => 'Fatima Noor',
                     'contact_person_phone' => '+971 55 987 6543',
                     'ownership_type' => 'leased',
-                    'landlord_name' => 'Al Marsa Properties L.L.C.',
-                    'landlord_phone' => '+971 4 456 7890',
                     'lease_start_date' => '2026-01-01',
                     'lease_end_date' => '2028-12-31',
                     'status' => 'active',

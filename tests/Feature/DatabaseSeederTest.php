@@ -113,7 +113,7 @@ it('fills every column except those that do not apply', function () {
 
     // Landlord and lease details do not apply to a property the company owns.
     expect(blankColumns(Property::where('code', PropertySeeder::AL_QUOZ)->sole()))
-        ->toEqualCanonicalizing(['landlord_name', 'landlord_phone', 'lease_start_date', 'lease_end_date'])
+        ->toEqualCanonicalizing(['landlord_id', 'lease_start_date', 'lease_end_date'])
         ->and(blankColumns(Property::where('code', PropertySeeder::JEBEL_ALI)->sole()))->toBe([]);
 
     // A title deed does not expire.

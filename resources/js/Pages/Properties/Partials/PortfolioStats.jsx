@@ -45,6 +45,7 @@ export default function PortfolioStats({ summary, currency }) {
             />
             <StatCard
                 icon={BedDoubleIcon}
+                tone="success"
                 label={t('properties.stats.occupancy')}
                 value={beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
                 meter={beds.occupancyRate ?? 0}
@@ -55,6 +56,7 @@ export default function PortfolioStats({ summary, currency }) {
             />
             <StatCard
                 icon={BanknoteIcon}
+                tone="gold"
                 label={t('properties.stats.rentRoll')}
                 value={formatCurrency(summary.rentRoll, currency)}
                 detail={t('properties.stats.rentRollDetail', { count: summary.rooms })}

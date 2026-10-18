@@ -52,7 +52,7 @@ export default function CommandMenu({ className }) {
                 aria-label={t('header.search')}
                 aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}
                 className={cn(
-                    'h-8 justify-start gap-2 px-2.5 font-normal text-muted-foreground max-sm:size-8 max-sm:justify-center max-sm:border-transparent max-sm:bg-transparent max-sm:px-0 max-sm:shadow-none sm:w-56 lg:w-72',
+                    'h-9 justify-start gap-2.5 border-transparent bg-muted/70 px-3 font-normal text-muted-foreground shadow-none hover:bg-muted max-sm:size-9 max-sm:justify-center max-sm:bg-transparent max-sm:px-0 sm:w-64 lg:w-80 dark:bg-input/30',
                     className,
                 )}
             >
@@ -70,7 +70,7 @@ export default function CommandMenu({ className }) {
                     <DialogDescription className="sr-only">{t('command.description')}</DialogDescription>
                     <Suspense
                         fallback={
-                            <div className="flex h-13 items-center gap-2.5 px-4 text-[0.9375rem] text-muted-foreground">
+                            <div className="flex h-13 items-center gap-2.5 px-4 text-base text-muted-foreground">
                                 <Spinner />
                                 {t('command.placeholder')}
                             </div>

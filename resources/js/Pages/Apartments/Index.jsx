@@ -147,7 +147,7 @@ function ApartmentList({ company, filters, facets, summary, apartments }) {
         content = <EmptyState hasApartments={summary.apartments > 0} onReset={reset} />;
     } else if (layout === 'grid') {
         content = (
-            <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 2xl:grid-cols-3">
+            <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:p-6 2xl:grid-cols-3">
                 {apartments.data.map((apartment) => (
                     <ApartmentCard
                         key={apartment.id}
@@ -172,7 +172,7 @@ function ApartmentList({ company, filters, facets, summary, apartments }) {
 
     return (
         <Card className="gap-0 py-0">
-            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:px-5 lg:px-6">
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex flex-1 flex-wrap items-center gap-2">
                         <ListSearch
@@ -233,7 +233,7 @@ function ApartmentList({ company, filters, facets, summary, apartments }) {
             </div>
 
             {apartments.total > 0 && (
-                <CardFooter className="bg-transparent px-4 py-3 sm:px-5">
+                <CardFooter className="bg-transparent px-4 py-3 sm:px-5 lg:px-6">
                     <ListPagination
                         paginator={apartments}
                         perPage={query.perPage}

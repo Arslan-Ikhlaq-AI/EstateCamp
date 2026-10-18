@@ -89,7 +89,7 @@ test('adds a head lease, builds its cheque schedule and marks the property as le
     $this->alQuoz->refresh();
 
     expect($this->alQuoz->ownership_type)->toBe('leased')
-        ->and($this->alQuoz->landlord_name)->toBe(LandlordSeeder::HAMDAN);
+        ->and($this->alQuoz->landlord->name)->toBe(LandlordSeeder::HAMDAN);
 });
 
 test('refuses a lease that overlaps another live lease on the same property', function () {

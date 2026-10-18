@@ -1,10 +1,5 @@
-import { BrandMark, BrandWordmark } from '@/Components/BrandLogo';
-import UserMenu from '@/Components/UserMenu';
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -27,14 +22,14 @@ import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
     SidebarRail,
-    SidebarSeparator,
     useSidebar,
 } from '@/components/ui/sidebar';
 import { useTranslation } from '@/hooks/use-translation';
+import { getInitials } from '@/lib/format';
 import { footerNavigation, isCurrentRoute, navigation } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { Link, usePage } from '@inertiajs/react';
-import { CheckIcon, ChevronRightIcon } from 'lucide-react';
+import { Building2Icon, CheckIcon, ChevronRightIcon } from 'lucide-react';
 
 function NavLink({ item }) {
     const { t } = useTranslation();
@@ -65,18 +60,11 @@ function NavFlyout({ item, children, isActive }) {
     return (
         <SidebarMenuItem>
             <DropdownMenu>
-                <DropdownMenuTrigger
-                    render={
-                        <SidebarMenuButton
-                            isActive={isActive}
-                            aria-label={t(item.title)}
-                        />
-                    }
-                >
+                <DropdownMenuTrigger render={<SidebarMenuButton isActive={isActive} aria-label={t(item.title)} />}>
                     <item.icon />
                     <span>{t(item.title)}</span>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent side="inline-end" align="start" sideOffset={10} className="w-56">
+                <DropdownMenuContent side="inline-end" align="start" sideOffset={12} className="w-60">
                     <DropdownMenuGroup>
                         <DropdownMenuLabel>{t(item.title)}</DropdownMenuLabel>
                         {children.map((child) => {
@@ -88,8 +76,9 @@ function NavFlyout({ item, children, isActive }) {
                                     aria-current={isChildActive ? 'page' : undefined}
                                     render={<Link href={route(child.routeName)} />}
                                 >
+                                    {child.icon && <child.icon className="text-muted-foreground" />}
                                     {t(child.title)}
-                                    {isChildActive && <CheckIcon className="ms-auto text-primary" />}
+                                    {isChildActive && <CheckIcon className="ms-auto text-brand-ink" />}
                                 </DropdownMenuItem>
                             );
                         })}
@@ -117,16 +106,16 @@ function NavSection({ item }) {
             <CollapsibleTrigger
                 render={
                     <SidebarMenuButton
-                        className={cn('group/trigger', isActive && 'font-medium text-sidebar-accent-foreground [&>svg:first-child]:text-sidebar-primary')}
+                        className={cn('group/trigger', isActive && 'font-semibold text-sidebar-accent-foreground [&>svg:first-child]:text-sidebar-primary')}
                     />
                 }
             >
                 <item.icon />
                 <span>{t(item.title)}</span>
-                <ChevronRightIcon className="ms-auto opacity-60 transition-transform duration-200 group-data-[panel-open]/trigger:rotate-90 rtl:-scale-x-100 rtl:group-data-[panel-open]/trigger:-rotate-90" />
+                <ChevronRightIcon className="ms-auto size-4! opacity-50 transition-transform duration-200 group-data-[panel-open]/trigger:rotate-90 rtl:-scale-x-100 rtl:group-data-[panel-open]/trigger:-rotate-90" />
             </CollapsibleTrigger>
             <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
-                <SidebarMenuSub className="mt-0.5 mb-1">
+                <SidebarMenuSub className="mt-1 mb-1.5">
                     {children.map((child) => {
                         const isChildActive = isCurrentRoute(child.routeName, child.activeFor);
 
@@ -148,61 +137,80 @@ function NavSection({ item }) {
     );
 }
 
-export default function AppSidebar(props) {
+/**
+ * The top of the sidebar belongs to the signed-in company: its logo (or
+ * initials), its name and the user's role there. Users without a company
+ * see a neutral placeholder instead.
+ */
+function CompanyBrand() {
     const { t } = useTranslation();
-    const { company } = usePage().props.auth;
+    const { company, role } = usePage().props.auth;
+    const name = company?.name ?? t('common.tagline');
 
     return (
-        <Sidebar collapsible="icon" variant="inset" {...props}>
-            <SidebarHeader className="pt-3">
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton
-                            size="lg"
-                            className="group/brand h-12 hover:bg-transparent active:bg-transparent"
-                            tooltip={{ children: 'EstateCamp', side: 'inline-end' }}
-                            render={<Link href={route('dashboard')} />}
-                        >
-                            <BrandMark className="size-8! drop-shadow-sm" />
-                            <span className="grid flex-1 leading-tight">
-                                <BrandWordmark className="text-[0.9375rem] text-sidebar-accent-foreground" />
-                                <span className="truncate text-xs text-sidebar-foreground" dir="auto">
-                                    {company?.name ?? t('common.tagline')}
-                                </span>
-                            </span>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
+        <SidebarMenu>
+            <SidebarMenuItem>
+                <SidebarMenuButton
+                    size="lg"
+                    className="h-auto gap-3 rounded-2xl bg-white/[0.06] p-2.5 inset-ring inset-ring-white/10 hover:bg-white/10 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:inset-ring-0"
+                    tooltip={{ children: name, side: 'inline-end' }}
+                    render={<Link href={route('dashboard')} />}
+                >
+                    <Avatar className="size-11 rounded-xl shadow-lg shadow-black/20 after:rounded-xl group-data-[collapsible=icon]:size-8">
+                        {company && <AvatarImage src={company.logo_url ?? undefined} alt="" className="rounded-xl bg-white" />}
+                        <AvatarFallback className="rounded-xl bg-linear-to-br from-brand-cyan to-[#0b4f8a] text-sm font-bold text-white">
+                            {company ? getInitials(company.short_name ?? company.name) : <Building2Icon className="size-5" />}
+                        </AvatarFallback>
+                    </Avatar>
+                    <span className="grid min-w-0 flex-1 leading-tight whitespace-normal!">
+                        <span className="line-clamp-2 text-[0.9375rem] font-bold text-white" dir="auto">
+                            {name}
+                        </span>
+                        {company && role && <span className="mt-0.5 truncate text-xs text-sidebar-foreground">{role}</span>}
+                    </span>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
+        </SidebarMenu>
+    );
+}
+
+export default function AppSidebar(props) {
+    return (
+        <Sidebar collapsible="icon" variant="sidebar" {...props}>
+            <SidebarHeader className="pt-5 pb-3">
+                <CompanyBrand />
             </SidebarHeader>
 
-            <SidebarContent className="gap-0">
+            <SidebarContent className="gap-1">
                 {navigation.map((group) => (
-                    <SidebarGroup key={group.label}>
-                        <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
-                        <SidebarMenu className="gap-0.5">
-                            {group.items.map((item) =>
-                                item.children ? (
-                                    <NavSection key={item.title} item={item} />
-                                ) : (
-                                    <NavLink key={item.title} item={item} />
-                                ),
-                            )}
-                        </SidebarMenu>
-                    </SidebarGroup>
+                    <NavGroup key={group.label} group={group} />
                 ))}
             </SidebarContent>
 
-            <SidebarFooter>
-                <SidebarMenu className="gap-0.5">
+            <SidebarFooter className="gap-1 border-t border-sidebar-border pt-3 pb-4">
+                <SidebarMenu className="gap-1">
                     {footerNavigation.map((item) => (
                         <NavLink key={item.title} item={item} />
                     ))}
                 </SidebarMenu>
-                <SidebarSeparator className="mx-0" />
-                <UserMenu />
             </SidebarFooter>
 
             <SidebarRail />
         </Sidebar>
+    );
+}
+
+function NavGroup({ group }) {
+    const { t } = useTranslation();
+
+    return (
+        <SidebarGroup>
+            <SidebarGroupLabel className="mb-1">{t(group.label)}</SidebarGroupLabel>
+            <SidebarMenu className="gap-1">
+                {group.items.map((item) =>
+                    item.children ? <NavSection key={item.title} item={item} /> : <NavLink key={item.title} item={item} />,
+                )}
+            </SidebarMenu>
+        </SidebarGroup>
     );
 }

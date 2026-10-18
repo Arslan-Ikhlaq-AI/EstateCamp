@@ -1,13 +1,6 @@
+import { PageBreadcrumbs } from '@/Components/HeaderBreadcrumbs';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
     Empty,
@@ -47,34 +40,7 @@ export default function ComingSoon({ section }) {
     return (
         <DashboardLayout>
             <Head title={title} />
-
-            <Breadcrumb>
-                <BreadcrumbList className="text-[0.8125rem]">
-                    <BreadcrumbItem>
-                        <BreadcrumbLink render={<Link href={route('dashboard')} />}>
-                            {t('nav.dashboard')}
-                        </BreadcrumbLink>
-                    </BreadcrumbItem>
-                    {parent && (
-                        <>
-                            <BreadcrumbSeparator className="rtl:rotate-180" />
-                            <BreadcrumbItem>
-                                {parentRoute ? (
-                                    <BreadcrumbLink render={<Link href={route(parentRoute)} />}>
-                                        {t(parent)}
-                                    </BreadcrumbLink>
-                                ) : (
-                                    t(parent)
-                                )}
-                            </BreadcrumbItem>
-                        </>
-                    )}
-                    <BreadcrumbSeparator className="rtl:rotate-180" />
-                    <BreadcrumbItem>
-                        <BreadcrumbPage>{title}</BreadcrumbPage>
-                    </BreadcrumbItem>
-                </BreadcrumbList>
-            </Breadcrumb>
+            <PageBreadcrumbs crumbs={[...(parent ? [{ label: t(parent) }] : []), { label: title }]} />
 
             <Empty className="border bg-card py-20 shadow-(--card-shadow)">
                 <EmptyHeader className="max-w-md">

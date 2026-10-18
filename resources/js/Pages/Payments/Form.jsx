@@ -191,7 +191,7 @@ export default function Form({ currency, clients, clientId, invoiceId, openInvoi
                                         <li key={invoice.id} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
                                             <div className="flex min-w-0 flex-col gap-0.5">
                                                 <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                                                    <Link href={route('invoices.show', invoice.id)} className="hover:underline">
+                                                    <Link href={route('invoices.show', invoice.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                                         {invoice.number}
                                                     </Link>
                                                     <InvoiceStatusBadge status={invoice.status} isOverdue={invoice.isOverdue} />

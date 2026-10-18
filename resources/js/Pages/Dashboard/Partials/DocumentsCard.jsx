@@ -96,7 +96,7 @@ export default function DocumentsCard({ documents, className }) {
                             ))}
                         </ul>
 
-                        <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-1">
+                        <ul className="grid gap-3 md:grid-cols-2">
                             {documents.map((document) => {
                                 const { icon: StatusIcon, tile } = STATUS_BY_KEY[document.status];
 

@@ -49,10 +49,10 @@ export default function Index({ company, filters, facets, summary, payments, pay
             header: t('leasing.landlordPayments.columns.landlord'),
             cell: (payment) => (
                 <div className="flex max-w-56 flex-col">
-                    <Link href={route('landlords.show', payment.landlord.id)} dir="auto" className="truncate hover:underline">
+                    <Link href={route('landlords.show', payment.landlord.id)} dir="auto" className="truncate underline-offset-4 hover:text-brand-ink hover:underline">
                         {payment.landlord.name}
                     </Link>
-                    <Link href={route('head-leases.show', payment.lease.id)} dir="auto" className="truncate text-xs text-muted-foreground hover:underline">
+                    <Link href={route('head-leases.show', payment.lease.id)} dir="auto" className="truncate text-xs text-muted-foreground underline-offset-4 hover:text-brand-ink hover:underline">
                         {payment.property.name}
                     </Link>
                 </div>

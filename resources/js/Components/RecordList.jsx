@@ -56,7 +56,7 @@ export default function RecordList({ routeName, filters, facets, labels, only, p
 
     return (
         <Card className="gap-0 py-0">
-            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:px-5 lg:px-6">
                 <div className="flex flex-1 flex-wrap items-center gap-2">
                     <ListSearch
                         id={`${routeName}-search`}
@@ -94,7 +94,7 @@ export default function RecordList({ routeName, filters, facets, labels, only, p
             </div>
 
             {paginator.total > 0 && (
-                <CardFooter className="bg-transparent px-4 py-3 sm:px-5">
+                <CardFooter className="bg-transparent px-4 py-3 sm:px-5 lg:px-6">
                     <ListPagination
                         paginator={paginator}
                         perPage={query.perPage}

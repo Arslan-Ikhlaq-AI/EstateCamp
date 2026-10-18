@@ -113,8 +113,7 @@ class HeadLease extends Model
 
         $this->property->update([
             'ownership_type' => 'leased',
-            'landlord_name' => $this->landlord->name,
-            'landlord_phone' => $this->landlord->phone,
+            'landlord_id' => $this->landlord_id,
             'lease_start_date' => $this->start_date,
             'lease_end_date' => $this->end_date,
         ]);

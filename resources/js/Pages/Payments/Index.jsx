@@ -45,7 +45,7 @@ export default function Index({ company, filters, facets, summary, payments }) {
             header: t('leasing.payments.columns.payment'),
             cell: (payment) => (
                 <div className="flex flex-col">
-                    <Link href={route('payments.show', payment.id)} className="font-medium hover:underline">
+                    <Link href={route('payments.show', payment.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                         {payment.number}
                     </Link>
                     <span className="text-xs text-muted-foreground tabular-nums">{formatDate(payment.receivedOn)}</span>
@@ -56,7 +56,7 @@ export default function Index({ company, filters, facets, summary, payments }) {
             id: 'client',
             header: t('leasing.invoices.columns.client'),
             cell: (payment) => (
-                <Link href={route('clients.show', payment.client.id)} dir="auto" className="block max-w-56 truncate hover:underline">
+                <Link href={route('clients.show', payment.client.id)} dir="auto" className="block max-w-56 truncate underline-offset-4 hover:text-brand-ink hover:underline">
                     {payment.client.name}
                 </Link>
             ),

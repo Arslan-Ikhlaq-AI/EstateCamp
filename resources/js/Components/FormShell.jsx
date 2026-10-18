@@ -11,7 +11,7 @@ import { Link } from '@inertiajs/react';
  */
 export function FormActions({ children }) {
     return (
-        <div className="sticky bottom-0 z-10 -mx-4 mt-auto -mb-5 flex flex-wrap items-center justify-end gap-2 border-t bg-background/80 px-4 py-3 backdrop-blur-xl md:-mx-6 md:-mb-6 md:rounded-b-xl md:px-6 lg:-mx-8 lg:-mb-8 lg:px-8">
+        <div className="sticky bottom-0 z-10 -mx-4 mt-auto -mb-6 flex flex-wrap items-center justify-end gap-2.5 border-t bg-background px-4 py-4 md:-mx-8 md:-mb-8 md:px-8 xl:-mx-10 xl:-mb-10 xl:px-10">
             {children}
         </div>
     );

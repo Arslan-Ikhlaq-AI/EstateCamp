@@ -8,21 +8,16 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-    useSidebar,
-} from '@/components/ui/sidebar';
 import { useTranslation } from '@/hooks/use-translation';
 import { getInitials } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { Link, usePage } from '@inertiajs/react';
-import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from 'lucide-react';
+import { ChevronDownIcon, LifeBuoyIcon, LogOutIcon, SettingsIcon } from 'lucide-react';
 
-function UserAvatar({ name }) {
+function UserAvatar({ name, className }) {
     return (
-        <Avatar className="size-8 rounded-lg after:rounded-lg">
-            <AvatarFallback className="rounded-lg bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
+        <Avatar className={cn('size-9', className)}>
+            <AvatarFallback className="bg-linear-to-br from-brand-cyan to-brand-navy text-xs font-bold text-white">
                 {getInitials(name)}
             </AvatarFallback>
         </Avatar>
@@ -30,84 +25,69 @@ function UserAvatar({ name }) {
 }
 
 /**
- * The signed-in account at the foot of the sidebar, with links to settings
- * and signing out.
+ * The signed-in account in the top bar: avatar, name and role, opening a
+ * menu with settings, help and signing out.
  */
 export default function UserMenu() {
     const { t } = useTranslation();
-    const { isMobile } = useSidebar();
     const { user, role } = usePage().props.auth;
 
     return (
-        <SidebarMenu>
-            <SidebarMenuItem>
-                <DropdownMenu>
-                    <DropdownMenuTrigger
-                        render={
-                            <SidebarMenuButton
-                                size="lg"
-                                aria-label={t('user.accountMenu', { name: user.name })}
-                            />
-                        }
-                    >
-                        <UserAvatar name={user.name} />
-                        <span className="grid flex-1 leading-tight">
-                            <span className="truncate font-medium text-sidebar-accent-foreground">
-                                {user.name}
-                            </span>
-                            <span className="truncate text-xs">
-                                {role ?? user.email}
-                            </span>
+        <DropdownMenu>
+            <DropdownMenuTrigger
+                render={
+                    <button
+                        type="button"
+                        aria-label={t('user.accountMenu', { name: user.name })}
+                        className="flex items-center gap-2.5 rounded-full p-0.5 outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted lg:pe-3"
+                    />
+                }
+            >
+                <UserAvatar name={user.name} className="ring-2 ring-background" />
+                <span className="hidden min-w-0 flex-col text-start leading-tight lg:flex">
+                    <span className="max-w-36 truncate text-sm font-semibold">{user.name}</span>
+                    <span className="max-w-36 truncate text-xs text-muted-foreground">{role ?? user.email}</span>
+                </span>
+                <ChevronDownIcon className="hidden size-4 text-muted-foreground lg:block" />
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end" sideOffset={10} className="w-64">
+                <DropdownMenuGroup>
+                    <DropdownMenuLabel className="flex items-center gap-3 py-2">
+                        <UserAvatar name={user.name} className="size-10" />
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                            <span className="truncate text-sm font-semibold text-foreground">{user.name}</span>
+                            <span className="truncate text-xs">{user.email}</span>
                         </span>
-                        <ChevronsUpDownIcon className="ms-auto" />
-                    </DropdownMenuTrigger>
+                    </DropdownMenuLabel>
+                </DropdownMenuGroup>
 
-                    <DropdownMenuContent
-                        side={isMobile ? 'bottom' : 'inline-end'}
-                        align="end"
-                        sideOffset={8}
-                        className="w-60"
+                <DropdownMenuSeparator />
+
+                <DropdownMenuGroup>
+                    <DropdownMenuItem render={<Link href={route('profile.edit')} />}>
+                        <SettingsIcon />
+                        {t('user.settings')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem render={<Link href={route('help')} />}>
+                        <LifeBuoyIcon />
+                        {t('nav.help')}
+                    </DropdownMenuItem>
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuGroup>
+                    <DropdownMenuItem
+                        variant="destructive"
+                        nativeButton
+                        render={<Link href={route('logout')} method="post" as="button" className="w-full" />}
                     >
-                        <DropdownMenuGroup>
-                            <DropdownMenuLabel className="flex flex-col gap-0.5 py-1.5">
-                                <span className="truncate text-sm font-medium text-foreground">
-                                    {user.name}
-                                </span>
-                                <span className="truncate">{user.email}</span>
-                            </DropdownMenuLabel>
-                        </DropdownMenuGroup>
-
-                        <DropdownMenuSeparator />
-
-                        <DropdownMenuGroup>
-                            <DropdownMenuItem
-                                render={<Link href={route('profile.edit')} />}
-                            >
-                                <SettingsIcon />
-                                {t('user.settings')}
-                            </DropdownMenuItem>
-                        </DropdownMenuGroup>
-
-                        <DropdownMenuSeparator />
-
-                        <DropdownMenuGroup>
-                            <DropdownMenuItem
-                                nativeButton
-                                render={
-                                    <Link
-                                        href={route('logout')}
-                                        method="post"
-                                        as="button"
-                                    />
-                                }
-                            >
-                                <LogOutIcon />
-                                {t('user.logOut')}
-                            </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </SidebarMenuItem>
-        </SidebarMenu>
+                        <LogOutIcon />
+                        {t('user.logOut')}
+                    </DropdownMenuItem>
+                </DropdownMenuGroup>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }

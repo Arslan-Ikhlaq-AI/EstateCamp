@@ -153,7 +153,7 @@ function RoomList({ company, filters, facets, summary, rooms }) {
         content = <EmptyState hasRooms={summary.rooms > 0} onReset={reset} />;
     } else if (layout === 'grid') {
         content = (
-            <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 2xl:grid-cols-3">
+            <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:p-6 2xl:grid-cols-3">
                 {rooms.data.map((room) => (
                     <RoomCard key={room.id} room={room} currency={company.currency} actions={<RoomActions room={room} onImage />} />
                 ))}
@@ -173,7 +173,7 @@ function RoomList({ company, filters, facets, summary, rooms }) {
 
     return (
         <Card className="gap-0 py-0">
-            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:px-5 lg:px-6">
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex flex-1 flex-wrap items-center gap-2">
                         <ListSearch
@@ -234,7 +234,7 @@ function RoomList({ company, filters, facets, summary, rooms }) {
             </div>
 
             {rooms.total > 0 && (
-                <CardFooter className="bg-transparent px-4 py-3 sm:px-5">
+                <CardFooter className="bg-transparent px-4 py-3 sm:px-5 lg:px-6">
                     <ListPagination
                         paginator={rooms}
                         perPage={query.perPage}

@@ -3,11 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\PropertyRequest;
+use App\Models\Apartment;
 use App\Models\Company;
+use App\Models\Landlord;
 use App\Models\Property;
 use App\Models\PropertyDocument;
 use App\Models\PropertyType;
 use App\Models\Room;
+use App\Models\RoomType;
+use App\Models\Shop;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +20,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -55,7 +60,7 @@ class PropertyController extends Controller
         $today = today();
 
         $query = $this->filteredQuery($company, $filters)
-            ->with('propertyType:id,name,slug')
+            ->with(['propertyType:id,name,slug', 'landlord:id,name'])
             ->withOccupancy()
             ->withCount([
                 'documents',
@@ -89,7 +94,8 @@ class PropertyController extends Controller
 
         return Inertia::render('Properties/Form', [
             'property' => null,
-            ...$this->formOptions(),
+            'unitSummary' => null,
+            ...$this->formOptions($request->user()->company_id),
         ]);
     }
 
@@ -100,14 +106,14 @@ class PropertyController extends Controller
     {
         $company = Company::findOrFail($request->user()->company_id);
 
-        $property = DB::transaction(function () use ($request, $company) {
-            $property = $company->properties()->create($this->propertyAttributes($request));
+        [$property, $added] = DB::transaction(function () use ($request, $company) {
+            $property = $company->properties()->create($this->propertyAttributes($request, $company));
             $this->syncDocuments($property, $request);
 
-            return $property;
+            return [$property, $property->addUnits($request->validated('units', []))];
         });
 
-        return to_route('properties.index')->with('success', "{$property->name} was added.");
+        return to_route('properties.index')->with('success', trim("{$property->name} was added. {$this->unitsAddedMessage($added)}"));
     }
 
     /**
@@ -120,6 +126,7 @@ class PropertyController extends Controller
         $property->load(['documents' => fn ($query) => $query->orderBy('id')]);
 
         return Inertia::render('Properties/Form', [
+            'unitSummary' => $this->unitSummary($property),
             'property' => [
                 'id' => $property->id,
                 ...$property->only([
@@ -127,7 +134,7 @@ class PropertyController extends Controller
                     'country_code', 'city', 'area', 'street', 'building_name', 'plot_number',
                     'makani_number', 'po_box', 'address', 'map_url',
                     'contact_person_name', 'contact_person_phone',
-                    'ownership_type', 'landlord_name', 'landlord_phone', 'notes',
+                    'ownership_type', 'landlord_id', 'notes', 'total_floors', 'total_units',
                 ]),
                 'latitude' => $property->latitude,
                 'longitude' => $property->longitude,
@@ -144,7 +151,7 @@ class PropertyController extends Controller
                     'file_url' => $document->file_url,
                 ]),
             ],
-            ...$this->formOptions(),
+            ...$this->formOptions($request->user()->company_id),
         ]);
     }
 
@@ -153,26 +160,75 @@ class PropertyController extends Controller
      */
     public function update(PropertyRequest $request, Property $property): RedirectResponse
     {
-        DB::transaction(function () use ($request, $property) {
-            $property->update($this->propertyAttributes($request));
+        $added = DB::transaction(function () use ($request, $property) {
+            $property->update($this->propertyAttributes($request, $property->company));
             $this->syncDocuments($property, $request);
+
+            return $property->addUnits($request->validated('units', []));
         });
 
-        return to_route('properties.index')->with('success', "{$property->name} was updated.");
+        return to_route('properties.index')->with('success', trim("{$property->name} was updated. {$this->unitsAddedMessage($added)}"));
+    }
+
+    /**
+     * How many rooms, shops and apartments the property already has, and the
+     * next free number of each, to start new batches from.
+     *
+     * @return array<string, array{count: int, next: string}>
+     */
+    private function unitSummary(Property $property): array
+    {
+        $kinds = ['rooms' => ['room_number', '101'], 'shops' => ['shop_number', 'S-01'], 'apartments' => ['apartment_number', 'A-101']];
+
+        return collect($kinds)->map(function (array $kind, string $relation) use ($property) {
+            [$column, $fallback] = $kind;
+            $numbers = $property->{$relation}()->pluck($column);
+
+            return ['count' => $numbers->count(), 'next' => Property::nextUnitNumber($numbers, $fallback)];
+        })->all();
+    }
+
+    /**
+     * "5 rooms and 2 shops were added." for what a save created, or nothing.
+     *
+     * @param  array{rooms: int, shops: int, apartments: int}  $added
+     */
+    private function unitsAddedMessage(array $added): string
+    {
+        $parts = collect(['rooms' => 'room', 'shops' => 'shop', 'apartments' => 'apartment'])
+            ->filter(fn (string $noun, string $kind) => $added[$kind] > 0)
+            ->map(fn (string $noun, string $kind) => $added[$kind].' '.Str::plural($noun, $added[$kind]))
+            ->values();
+
+        if ($parts->isEmpty()) {
+            return '';
+        }
+
+        return $parts->join(', ', ' and ').(array_sum($added) === 1 ? ' was added.' : ' were added.');
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function formOptions(): array
+    private function formOptions(int $companyId): array
     {
         return [
+            'currency' => Company::whereKey($companyId)->value('default_currency'),
+            'landlords' => Landlord::query()
+                ->where('company_id', $companyId)
+                ->orderBy('name')
+                ->get(['id', 'name', 'landlord_type', 'phone']),
             'propertyTypes' => PropertyType::query()
                 ->where('is_active', true)
                 ->orderBy('sort_order')
                 ->get(['id', 'name', 'slug']),
             'statuses' => self::STATUSES,
             'documentTypes' => PropertyDocument::TYPES,
+            'requiredDocumentTypes' => PropertyDocument::REQUIRED_TYPES,
+            'roomTypes' => RoomType::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug']),
+            'genderPolicies' => Room::GENDER_POLICIES,
+            'shopTypes' => Shop::TYPES,
+            'furnishingStatuses' => Apartment::FURNISHING_STATUSES,
         ];
     }
 
@@ -182,9 +238,13 @@ class PropertyController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function propertyAttributes(PropertyRequest $request): array
+    private function propertyAttributes(PropertyRequest $request, Company $company): array
     {
-        $attributes = Arr::except($request->validated(), ['cover_image', 'documents']);
+        $attributes = Arr::except($request->validated(), ['cover_image', 'documents', 'landlord_mode', 'new_landlord', 'units']);
+
+        if ($request->validated('landlord_mode') === 'new') {
+            $attributes['landlord_id'] = $company->landlords()->create($request->validated('new_landlord'))->id;
+        }
 
         if ($request->hasFile('cover_image')) {
             $attributes['cover_image_url'] = $this->storePublicly($request->file('cover_image'), 'properties/covers');
@@ -444,7 +504,7 @@ class PropertyController extends Controller
             'mapUrl' => $property->map_url,
             'contactName' => $property->contact_person_name,
             'contactPhone' => $property->contact_person_phone,
-            'landlordName' => $property->landlord_name,
+            'landlordName' => $property->landlord?->name,
             'leaseStartsOn' => $property->lease_start_date?->toDateString(),
             'leaseEndsOn' => $property->lease_end_date?->toDateString(),
             'leaseDaysLeft' => $property->lease_end_date === null ? null : (int) today()->diffInDays($property->lease_end_date, false),

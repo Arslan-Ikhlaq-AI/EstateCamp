@@ -130,8 +130,8 @@ export default function Show({ apartment, currency }) {
                 />
             </section>
 
-            <div className="grid items-start gap-6 xl:grid-cols-3">
-                <div className="flex flex-col gap-6 xl:col-span-2">
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+                <div className="flex min-w-0 flex-col gap-6">
                     <Section title={t('apartmentShow.sections.details.title')} description={t('apartmentShow.sections.details.description')}>
                         <DetailList
                             rows={[
@@ -164,7 +164,7 @@ export default function Show({ apartment, currency }) {
 
                                     return (
                                         <li key={amenity}>
-                                            <Badge variant="outline" className="h-7 gap-1.5 rounded-full px-3 text-[0.8125rem] font-normal">
+                                            <Badge variant="outline" className="h-7 gap-1.5 rounded-full px-3 text-[0.875rem] font-normal">
                                                 {Icon && <Icon data-icon="inline-start" />}
                                                 {t(`apartmentAmenities.${amenity}`)}
                                             </Badge>

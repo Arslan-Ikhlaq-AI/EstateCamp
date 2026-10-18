@@ -146,7 +146,7 @@ function PhotoPicker({ existing, keepIds, files, onKeepChange, onFilesChange, er
                     <li key={photo.key} className="group/photo relative aspect-[4/3] overflow-hidden rounded-lg bg-muted ring-1 ring-foreground/10">
                         <img src={photo.url} alt="" className="size-full object-cover" />
                         {index === 0 && (
-                            <span className="absolute start-2 top-2 flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[0.6875rem] font-medium text-white backdrop-blur">
+                            <span className="absolute start-2 top-2 flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[0.75rem] font-medium text-white backdrop-blur">
                                 <StarIcon className="size-3 fill-current" />
                                 {t('roomForm.photos.cover')}
                             </span>

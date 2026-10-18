@@ -46,7 +46,7 @@ export default function Index({ company, filters, facets, summary, leases }) {
             header: t('leasing.headLeases.columns.lease'),
             cell: (lease) => (
                 <div className="flex flex-col">
-                    <Link href={route('head-leases.show', lease.id)} className="font-medium hover:underline">
+                    <Link href={route('head-leases.show', lease.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                         {lease.number}
                     </Link>
                     <span className="text-xs text-muted-foreground">{lease.ejariNumber ? t('leasing.common.ejari', { number: lease.ejariNumber }) : '—'}</span>
@@ -59,7 +59,7 @@ export default function Index({ company, filters, facets, summary, leases }) {
             cell: (lease) => (
                 <div className="flex max-w-56 flex-col">
                     <span dir="auto" className="truncate">{lease.property.name}</span>
-                    <Link href={route('landlords.show', lease.landlordId)} dir="auto" className="truncate text-xs text-muted-foreground hover:underline">
+                    <Link href={route('landlords.show', lease.landlordId)} dir="auto" className="truncate text-xs text-muted-foreground underline-offset-4 hover:text-brand-ink hover:underline">
                         {lease.landlordName}
                     </Link>
                 </div>

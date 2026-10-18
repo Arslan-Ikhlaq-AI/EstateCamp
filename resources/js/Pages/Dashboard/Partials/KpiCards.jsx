@@ -1,69 +1,62 @@
 import StatCard from '@/Components/StatCard';
-import { Badge } from '@/components/ui/badge';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     BanknoteIcon,
-    BedDoubleIcon,
-    FileClockIcon,
+    HandCoinsIcon,
     PercentIcon,
+    ReceiptTextIcon,
 } from 'lucide-react';
 
 /**
- * The dashboard's headline figures: occupancy, free beds, the rent roll
- * against its potential, and documents about to expire.
+ * The dashboard's headline figures, each linking to the page behind it:
+ * occupancy, the rent roll against its potential, this month's collections
+ * and what clients still owe.
  */
-export default function KpiCards({ summary, currency }) {
-    const { t, formatNumber, formatPercent, formatCurrency } = useTranslation();
-    const { beds, documents } = summary;
-
+export default function KpiCards({ summary, finance, currency }) {
+    const { t, formatPercent, formatCurrency } = useTranslation();
+    const { beds } = summary;
+    const money = (value) => formatCurrency(value, currency);
     const rentShare = summary.potentialRent > 0 ? (summary.rentRoll / summary.potentialRent) * 100 : 0;
+    const collectedShare = finance.invoicedThisMonth > 0 ? Math.min((finance.collectedThisMonth / finance.invoicedThisMonth) * 100, 100) : undefined;
 
     return (
         <section aria-label={t('dashboard.title')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <StatCard
+                href={route('rooms.index')}
                 icon={PercentIcon}
                 label={t('dashboard.kpi.occupancy')}
                 value={beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
                 meter={beds.occupancyRate ?? 0}
-                detail={t('dashboard.kpi.occupancyDetail', {
-                    occupied: beds.occupied,
-                    total: beds.occupied + beds.available,
-                })}
+                detail={t('dashboard.kpi.occupancyDetail', { occupied: beds.occupied, total: beds.occupied + beds.available })}
             />
             <StatCard
-                icon={BedDoubleIcon}
-                tone={beds.available > 0 ? 'success' : 'primary'}
-                label={t('dashboard.kpi.availableBeds')}
-                value={formatNumber(beds.available)}
-                detail={t('dashboard.kpi.availableDetail')}
-                badge={
-                    beds.outOfService > 0 && (
-                        <Badge variant="secondary">{t('dashboard.kpi.outOfService', { count: beds.outOfService })}</Badge>
-                    )
-                }
-            />
-            <StatCard
+                href={route('properties.index')}
                 icon={BanknoteIcon}
+                tone="gold"
                 label={t('dashboard.kpi.rentRoll')}
-                value={formatCurrency(summary.rentRoll, currency)}
+                value={money(summary.rentRoll)}
                 meter={rentShare}
-                detail={t('dashboard.kpi.rentRollDetail', {
-                    percent: formatPercent(rentShare),
-                    potential: formatCurrency(summary.potentialRent, currency),
-                })}
+                detail={t('dashboard.kpi.rentRollDetail', { percent: formatPercent(rentShare), potential: money(summary.potentialRent) })}
             />
             <StatCard
-                icon={FileClockIcon}
-                tone={documents.expired > 0 || documents.expiring > 0 ? 'warning' : 'primary'}
-                label={t('dashboard.kpi.expiringDocuments')}
-                value={formatNumber(documents.expiring)}
-                detail={t('dashboard.kpi.expiringDetail', { total: documents.total })}
-                badge={
-                    documents.expired > 0 && (
-                        <Badge variant="destructive">
-                            {documents.expired} {t('status.expired')}
-                        </Badge>
-                    )
+                href={route('payments.index')}
+                icon={HandCoinsIcon}
+                tone="success"
+                label={t('dashboard.kpi.collected')}
+                value={money(finance.collectedThisMonth)}
+                meter={collectedShare}
+                detail={t('dashboard.kpi.collectedDetail', { amount: money(finance.invoicedThisMonth) })}
+            />
+            <StatCard
+                href={route('invoices.index')}
+                icon={ReceiptTextIcon}
+                tone={finance.overdue.count > 0 ? 'warning' : 'primary'}
+                label={t('dashboard.kpi.outstanding')}
+                value={money(finance.outstanding)}
+                detail={
+                    finance.overdue.count > 0
+                        ? t('dashboard.kpi.overdueDetail', { amount: money(finance.overdue.amount), count: finance.overdue.count })
+                        : t('dashboard.kpi.nothingOverdue')
                 }
             />
         </section>

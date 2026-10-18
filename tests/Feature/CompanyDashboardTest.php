@@ -5,6 +5,7 @@ use App\Models\Property;
 use App\Models\PropertyDocument;
 use App\Models\Room;
 use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\PortfolioSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -128,6 +129,56 @@ describe('for the seeded demo company', function () {
                 ->where('summary.documents.expired', 1)
             );
     });
+});
+
+test('summarises money collected and owed over the last six months', function () {
+    $this->travelTo(now()->setDate(2026, 10, 17)->setTime(10, 0));
+    $this->seed(DatabaseSeeder::class);
+
+    $this->actingAs(User::where('email', 'omar.rahman@horizonfm.test')->sole())
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('finance.collectedThisMonth', 27875)
+            ->where('finance.invoicedThisMonth', 52255)
+            ->where('finance.outstanding', 39500)
+            ->where('finance.overdue', ['count' => 4, 'amount' => 37800])
+            ->has('finance.trend', 6)
+            ->where('finance.trend.0', ['month' => '2026-05', 'invoiced' => 65100, 'collected' => 65100])
+            ->where('finance.trend.3', ['month' => '2026-08', 'invoiced' => 68680, 'collected' => 83380])
+            ->where('finance.trend.5', ['month' => '2026-10', 'invoiced' => 52255, 'collected' => 27875])
+        );
+});
+
+test('breaks down invoices, payments, balances, stays and recent activity', function () {
+    $this->travelTo(now()->setDate(2026, 10, 17)->setTime(10, 0));
+    $this->seed(DatabaseSeeder::class);
+
+    $this->actingAs(User::where('email', 'omar.rahman@horizonfm.test')->sole())
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('finance.invoiceStatus', ['paid' => 45, 'awaiting' => 1, 'partial' => 0, 'overdue' => 4])
+            ->has('finance.paymentMethods', 4)
+            ->where('finance.paymentMethods.0', ['method' => 'cheque', 'amount' => 138370])
+            ->has('finance.topDebtors', 5)
+            ->where('finance.topDebtors.0.name', 'FreshFold Laundry Services L.L.C.')
+            ->where('finance.topDebtors.0.balance', 15120)
+            ->where('finance.topDebtors.4.name', 'Daniel Okafor')
+            ->where('finance.topDebtors.4.overdue', 0)
+            ->has('occupancyTrend', 6)
+            ->where('occupancyTrend.5', ['month' => '2026-10', 'staying' => 27])
+            ->has('activity', 10)
+            ->where('activity.0.type', 'payment')
+            ->where('activity.0.status', 'pending')
+            ->where('activity.1.type', 'invoice')
+            ->where('activity', function ($activity) {
+                $dates = collect($activity)->pluck('date');
+
+                return $dates->every(fn (string $date) => $date <= '2026-10-17')
+                    && $dates->all() === $dates->sortDesc()->values()->all();
+            })
+        );
 });
 
 test('sidebar sections without a module yet show a coming soon page', function (string $routeName) {

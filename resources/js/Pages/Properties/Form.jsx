@@ -1,45 +1,45 @@
-import { FormSection, TextField } from '@/Components/FormFields';
+import { TextareaField, TextField } from '@/Components/FormFields';
 import { FormActions } from '@/Components/FormShell';
 import PageHeader from '@/Components/PageHeader';
-import PropertyCover from '@/Components/PropertyCover';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import {
-    Empty,
-    EmptyDescription,
-    EmptyHeader,
-    EmptyMedia,
-    EmptyTitle,
-} from '@/components/ui/empty';
-import {
-    Field,
-    FieldDescription,
-    FieldError,
-    FieldGroup,
-    FieldLabel,
-} from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FieldGroup } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
-import { Textarea } from '@/components/ui/textarea';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, useForm } from '@inertiajs/react';
 import {
-    ExternalLinkIcon,
+    Building2Icon,
+    BriefcaseBusinessIcon,
+    ChevronDownIcon,
+    CircleAlertIcon,
+    CircleCheckIcon,
+    CirclePauseIcon,
     FilePlusIcon,
     FileTextIcon,
-    ImageUpIcon,
-    Trash2Icon,
+    HandshakeIcon,
+    HardHatIcon,
+    HouseIcon,
+    KeyRoundIcon,
+    LayoutGridIcon,
+    MapPinIcon,
+    PhoneIcon,
+    WrenchIcon,
 } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import BuildingSize from './Partials/BuildingSize';
+import CoverDropzone from './Partials/CoverDropzone';
+import DocumentFields from './Partials/DocumentFields';
+import { ChoiceCards, StepBar, StepSection, useCurrentStep } from './Partials/FormSteps';
+import LandlordPicker, { emptyLandlord } from './Partials/LandlordPicker';
+import PropertyPreview from './Partials/PropertyPreview';
+import RequiredDocuments, { hasFile } from './Partials/RequiredDocuments';
+import UnitBatches, { emptyUnits, unitCount, unitNumbers } from './Partials/UnitBatches';
 
 const PROPERTY_FIELDS = {
     name: '',
@@ -61,16 +61,17 @@ const PROPERTY_FIELDS = {
     contact_person_name: '',
     contact_person_phone: '',
     ownership_type: 'owned',
-    landlord_name: '',
-    landlord_phone: '',
+    landlord_id: null,
     lease_start_date: '',
     lease_end_date: '',
     notes: '',
+    total_floors: '',
+    total_units: '',
 };
 
 const emptyDocument = () => ({
     id: null,
-    document_type: 'tenancy_contract',
+    document_type: 'title_deed',
     title: '',
     document_number: '',
     issued_on: '',
@@ -82,189 +83,176 @@ const emptyDocument = () => ({
 
 /**
  * The form's starting values: the property being edited (nulls become
- * empty strings for the inputs), or the defaults for a new one.
+ * empty strings for the inputs), or the defaults for a new one. Each
+ * required document type gets a place in the list, empty until uploaded.
  */
-function initialData(property) {
-    const data = { ...PROPERTY_FIELDS, cover_image: null, documents: [] };
+function initialData(property, landlords, requiredTypes) {
+    const data = {
+        ...PROPERTY_FIELDS,
+        cover_image: null,
+        documents: [],
+        landlord_mode: property?.landlord_id || landlords.length > 0 ? 'existing' : 'new',
+        new_landlord: emptyLandlord(),
+        units: emptyUnits(),
+    };
+
+    const withRequired = (documents) => [
+        ...documents,
+        ...requiredTypes
+            .filter((type) => !documents.some((document) => document.document_type === type))
+            .map((type) => ({ ...emptyDocument(), document_type: type })),
+    ];
 
     if (!property) {
-        return data;
+        return { ...data, documents: withRequired([]) };
     }
 
     Object.keys(PROPERTY_FIELDS).forEach((key) => {
         data[key] = property[key] ?? PROPERTY_FIELDS[key] ?? '';
     });
 
-    data.documents = property.documents.map((document) => ({
-        ...emptyDocument(),
-        ...Object.fromEntries(Object.entries(document).map(([key, value]) => [key, value ?? ''])),
-        id: document.id,
-        file_url: document.file_url,
-    }));
+    data.documents = withRequired(
+        property.documents.map((document) => ({
+            ...emptyDocument(),
+            ...Object.fromEntries(Object.entries(document).map(([key, value]) => [key, value ?? ''])),
+            id: document.id,
+            file_url: document.file_url,
+        })),
+    );
 
     return data;
 }
 
-function CoverPicker({ currentUrl, file, onChange, error }) {
-    const { t } = useTranslation();
-    const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : currentUrl), [file, currentUrl]);
+/**
+ * The form's steps, in order, with each one's accent. Units and contact
+ * details are optional.
+ */
+const STEPS = [
+    { key: 'basics', icon: Building2Icon, tone: 'brand' },
+    { key: 'location', icon: MapPinIcon, tone: 'green' },
+    { key: 'ownership', icon: KeyRoundIcon, tone: 'gold' },
+    { key: 'units', icon: LayoutGridIcon, tone: 'navy', optional: true },
+    { key: 'documents', icon: FileTextIcon, tone: 'orange' },
+    { key: 'contact', icon: PhoneIcon, tone: 'brand', optional: true },
+];
 
-    useEffect(() => () => file && URL.revokeObjectURL(previewUrl), [file, previewUrl]);
+/**
+ * The fields each step holds, to show a step's errors on its badge.
+ */
+const STEP_FIELDS = {
+    basics: ['name', 'code', 'property_type_id', 'status', 'cover_image'],
+    location: ['country_code', 'city', 'area', 'street', 'building_name', 'plot_number', 'makani_number', 'po_box', 'address', 'latitude', 'longitude', 'map_url'],
+    ownership: ['ownership_type', 'landlord_mode', 'landlord_id', 'new_landlord', 'lease_start_date', 'lease_end_date'],
+    units: ['units', 'total_floors', 'total_units'],
+    documents: ['documents'],
+    contact: ['contact_person_name', 'contact_person_phone', 'notes'],
+};
 
-    return (
-        <Field data-invalid={error ? true : undefined}>
-            <div className="aspect-[2/1] overflow-hidden rounded-lg bg-muted ring-1 ring-foreground/10">
-                <PropertyCover key={previewUrl} src={previewUrl} />
-            </div>
-            <FieldLabel htmlFor="cover_image" className="sr-only">
-                {t('propertyForm.sections.cover.title')}
-            </FieldLabel>
-            <Button variant="outline" nativeButton={false} render={<label htmlFor="cover_image" />}>
-                <ImageUpIcon data-icon="inline-start" />
-                {previewUrl ? t('propertyForm.cover.change') : t('propertyForm.cover.upload')}
-            </Button>
-            <input
-                id="cover_image"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                onChange={(event) => onChange(event.target.files[0] ?? null)}
-            />
-            <FieldDescription>{t('propertyForm.cover.hint')}</FieldDescription>
-            <FieldError>{error}</FieldError>
-        </Field>
-    );
+const EXTRA_LOCATION_FIELDS = ['plot_number', 'makani_number', 'po_box', 'map_url', 'latitude', 'longitude'];
+
+const stepOf = (field) => STEPS.find(({ key }) => STEP_FIELDS[key].some((name) => field === name || field.startsWith(`${name}.`)))?.key;
+
+/**
+ * Where each step stands: `error` when one of its fields was rejected,
+ * `done` when its required fields are filled (or, for an optional step,
+ * when something was added), otherwise `todo`.
+ */
+function stepStates(data, errors, requiredTypes) {
+    const withErrors = new Set(Object.keys(errors).map(stepOf));
+    const hasLandlord = data.landlord_mode === 'new' ? Boolean(data.new_landlord.name) : Boolean(data.landlord_id);
+    const isDone = {
+        basics: Boolean(data.name && data.code && data.property_type_id),
+        location: Boolean(data.country_code && (data.area || data.street || data.building_name || data.address)),
+        ownership: data.ownership_type !== 'leased' || Boolean(hasLandlord && data.lease_start_date && data.lease_end_date),
+        units:
+            Boolean(data.total_floors || data.total_units) ||
+            Object.values(data.units).some((batches) => batches.some((batch) => unitNumbers(batch.first_number, batch.count).length > 0)),
+        documents: requiredTypes.every((type) => data.documents.some((document) => document.document_type === type && hasFile(document))),
+        contact: Boolean(data.contact_person_name || data.contact_person_phone || data.notes),
+    };
+
+    return Object.fromEntries(STEPS.map(({ key }) => [key, withErrors.has(key) ? 'error' : isDone[key] ? 'done' : 'todo']));
 }
 
-function DocumentFields({ index, document, documentTypes, errors, onChange, onRemove }) {
-    const { t } = useTranslation();
-    const prefix = `documents.${index}`;
-    const id = (field) => `document-${index}-${field}`;
-    const typeItems = documentTypes.map((type) => ({ value: type, label: t(`documentTypes.${type}`) }));
+const TYPE_STYLES = {
+    worker_accommodation: { icon: HardHatIcon, tone: 'gold' },
+    staff_accommodation: { icon: BriefcaseBusinessIcon, tone: 'brand' },
+    residential_building: { icon: Building2Icon, tone: 'green' },
+};
 
-    return (
-        <fieldset className="flex flex-col gap-4 rounded-lg border p-4">
-            <div className="flex items-center justify-between gap-2">
-                <legend className="flex items-center gap-2 text-sm font-medium">
-                    <FileTextIcon className="size-4 text-muted-foreground" />
-                    {t('propertyForm.documents.heading', { number: index + 1 })}
-                </legend>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={onRemove}
-                    aria-label={t('propertyForm.documents.remove')}
-                >
-                    <Trash2Icon />
-                </Button>
-            </div>
+const STATUS_STYLES = {
+    active: { icon: CircleCheckIcon, tone: 'green' },
+    inactive: { icon: CirclePauseIcon, tone: 'navy' },
+    under_maintenance: { icon: WrenchIcon, tone: 'orange' },
+};
 
-            <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                <Field data-invalid={errors[`${prefix}.document_type`] ? true : undefined}>
-                    <FieldLabel htmlFor={id('type')}>{t('propertyForm.documents.type')}</FieldLabel>
-                    <Select
-                        items={typeItems}
-                        value={document.document_type}
-                        onValueChange={(value) => onChange('document_type', value)}
-                    >
-                        <SelectTrigger id={id('type')} className="w-full">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectGroup>
-                                {typeItems.map((item) => (
-                                    <SelectItem key={item.value} value={item.value}>
-                                        {item.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
-                    <FieldError>{errors[`${prefix}.document_type`]}</FieldError>
-                </Field>
-                <TextField
-                    id={id('title')}
-                    label={t('propertyForm.documents.title')}
-                    value={document.title}
-                    onChange={(value) => onChange('title', value)}
-                    error={errors[`${prefix}.title`]}
-                    optional
-                />
-                <TextField
-                    id={id('number')}
-                    label={t('propertyForm.documents.number')}
-                    value={document.document_number}
-                    onChange={(value) => onChange('document_number', value)}
-                    error={errors[`${prefix}.document_number`]}
-                    optional
-                />
-                <Field data-invalid={errors[`${prefix}.file`] ? true : undefined}>
-                    <FieldLabel htmlFor={id('file')}>{t('propertyForm.documents.file')}</FieldLabel>
-                    <Input
-                        id={id('file')}
-                        type="file"
-                        accept=".pdf,image/jpeg,image/png,image/webp"
-                        onChange={(event) => onChange('file', event.target.files[0] ?? null)}
-                        aria-invalid={Boolean(errors[`${prefix}.file`])}
-                    />
-                    {!errors[`${prefix}.file`] && (
-                        <FieldDescription className="flex flex-wrap items-center gap-x-2">
-                            {document.file_url ? t('propertyForm.documents.keepFile') : t('propertyForm.documents.fileHint')}
-                            {document.file_url && (
-                                <a
-                                    href={document.file_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
-                                >
-                                    {t('propertyForm.documents.currentFile')}
-                                    <ExternalLinkIcon className="size-3" />
-                                </a>
-                            )}
-                        </FieldDescription>
-                    )}
-                    <FieldError>{errors[`${prefix}.file`]}</FieldError>
-                </Field>
-                <TextField
-                    id={id('issued')}
-                    type="date"
-                    label={t('propertyForm.documents.issuedOn')}
-                    value={document.issued_on}
-                    onChange={(value) => onChange('issued_on', value)}
-                    error={errors[`${prefix}.issued_on`]}
-                    optional
-                />
-                <TextField
-                    id={id('expires')}
-                    type="date"
-                    label={t('propertyForm.documents.expiresOn')}
-                    value={document.expires_on}
-                    onChange={(value) => onChange('expires_on', value)}
-                    error={errors[`${prefix}.expires_on`]}
-                    optional
-                />
-                <TextField
-                    id={id('notes')}
-                    label={t('propertyForm.documents.notes')}
-                    value={document.notes}
-                    onChange={(value) => onChange('notes', value)}
-                    error={errors[`${prefix}.notes`]}
-                    optional
-                    className="sm:col-span-2"
-                />
-            </FieldGroup>
-        </fieldset>
-    );
+/**
+ * Whole months the lease covers, counting its last day (1 Jan to 31 Dec is
+ * 12 months), or null until both dates are set.
+ */
+function leaseMonths(start, end) {
+    if (!start || !end || end < start) {
+        return null;
+    }
+
+    const from = new Date(`${start}T00:00:00`);
+    const to = new Date(`${end}T00:00:00`);
+    to.setDate(to.getDate() + 1);
+
+    const months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) - (to.getDate() < from.getDate() ? 1 : 0);
+
+    return Math.max(months, 1);
 }
 
-export default function Form({ property, propertyTypes, statuses, documentTypes }) {
+export default function Form({
+    property,
+    propertyTypes,
+    statuses,
+    documentTypes,
+    requiredDocumentTypes,
+    landlords,
+    roomTypes,
+    genderPolicies,
+    shopTypes,
+    furnishingStatuses,
+    currency,
+    unitSummary,
+}) {
     const { t, tOr } = useTranslation();
     const isEditing = property !== null;
-    const form = useForm(initialData(property));
+    const form = useForm(initialData(property, landlords, requiredDocumentTypes));
     const { data, setData, errors, processing } = form;
+    const states = stepStates(data, errors, requiredDocumentTypes);
+    const current = useCurrentStep(STEPS.map((step) => step.key));
+    const [showMoreLocation, setShowMoreLocation] = useState(() => EXTRA_LOCATION_FIELDS.some((field) => data[field]));
 
     const title = isEditing ? t('propertyForm.editTitle') : t('propertyForm.addTitle');
+    const months = leaseMonths(data.lease_start_date, data.lease_end_date);
+
+    const slots = requiredDocumentTypes.map((type) => {
+        const index = data.documents.findIndex((document) => document.document_type === type);
+
+        return { type, index, document: data.documents[index] };
+    });
+    const extraIndexes = data.documents.map((_, index) => index).filter((index) => !slots.some((slot) => slot.index === index));
+
+    const savedUnits = unitSummary ? Object.values(unitSummary).reduce((sum, kind) => sum + kind.count, 0) : 0;
+    const addingUnits = Object.values(data.units).reduce((sum, batches) => sum + unitCount(batches), 0);
+    const remainingUnits = Number(data.total_units) > 0 ? Number(data.total_units) - savedUnits - addingUnits : null;
+
+    const coverUrl = useMemo(
+        () => (data.cover_image ? URL.createObjectURL(data.cover_image) : (property?.cover_image_url ?? null)),
+        [data.cover_image, property],
+    );
+
+    useEffect(() => () => data.cover_image && URL.revokeObjectURL(coverUrl), [coverUrl, data.cover_image]);
+
+    // Rejected location details hide behind the disclosure, so open it for them.
+    useEffect(() => {
+        if (EXTRA_LOCATION_FIELDS.some((field) => errors[field])) {
+            setShowMoreLocation(true);
+        }
+    }, [errors]);
 
     // Binds a text input to a form field.
     const bind = (field) => ({
@@ -287,6 +275,11 @@ export default function Form({ property, propertyTypes, statuses, documentTypes 
         form.post(isEditing ? route('properties.update', property.id) : route('properties.store'), {
             forceFormData: true,
             preserveScroll: true,
+            onError: (rejected) => {
+                const first = STEPS.find(({ key }) => Object.keys(rejected).some((field) => stepOf(field) === key));
+
+                document.getElementById(`step-${first?.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
         });
     };
 
@@ -295,17 +288,19 @@ export default function Form({ property, propertyTypes, statuses, documentTypes 
             <Button variant="outline" nativeButton={false} render={<Link href={route('properties.index')} />}>
                 {t('propertyForm.cancel')}
             </Button>
-            <Button type="submit" disabled={processing}>
+            <Button type="submit" variant="brand" disabled={processing}>
                 {processing && <Spinner data-icon="inline-start" />}
                 {isEditing ? t('propertyForm.saveChanges') : t('propertyForm.save')}
             </Button>
         </div>
     );
 
-    const typeItems = propertyTypes.map((type) => ({
-        value: type.id,
-        label: tOr(`propertyTypes.${type.slug}`, type.name),
-    }));
+    const section = (key) => ({
+        step: STEPS.find((step) => step.key === key),
+        index: STEPS.findIndex((step) => step.key === key),
+        total: STEPS.length,
+        state: states[key],
+    });
 
     return (
         <DashboardLayout>
@@ -323,212 +318,210 @@ export default function Form({ property, propertyTypes, statuses, documentTypes 
                     actionsClassName="max-sm:hidden"
                 />
 
-                <div className="grid items-start gap-6 xl:grid-cols-3">
-                    <div className="flex flex-col gap-6 xl:col-span-2">
-                        <FormSection
-                            title={t('propertyForm.sections.details.title')}
-                            description={t('propertyForm.sections.details.description')}
-                        >
-                            <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                                <TextField {...bind('name')} label={t('propertyForm.fields.name')} required className="sm:col-span-2" />
-                                <TextField
-                                    {...bind('code')}
-                                    label={t('propertyForm.fields.code')}
-                                    description={t('propertyForm.fields.codeHint')}
-                                    inputClassName="font-mono"
-                                    required
-                                />
-                                <Field data-invalid={errors.property_type_id ? true : undefined}>
-                                    <FieldLabel htmlFor="property_type_id">{t('propertyForm.fields.type')}</FieldLabel>
-                                    <Select
-                                        items={typeItems}
-                                        value={data.property_type_id}
-                                        onValueChange={(value) => setData('property_type_id', value)}
-                                    >
-                                        <SelectTrigger id="property_type_id" className="w-full" aria-invalid={Boolean(errors.property_type_id)}>
-                                            <SelectValue placeholder={t('propertyForm.fields.typePlaceholder')} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectGroup>
-                                                {typeItems.map((item) => (
-                                                    <SelectItem key={item.value} value={item.value}>
-                                                        {item.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectGroup>
-                                        </SelectContent>
-                                    </Select>
-                                    <FieldError>{errors.property_type_id}</FieldError>
-                                </Field>
-                                <Field data-invalid={errors.status ? true : undefined} className="sm:col-span-2">
-                                    <FieldLabel id="status-label">{t('propertyForm.fields.status')}</FieldLabel>
-                                    <ToggleGroup
-                                        aria-labelledby="status-label"
-                                        variant="outline"
-                                        spacing={0}
-                                        value={[data.status]}
-                                        onValueChange={([value]) => value && setData('status', value)}
-                                    >
-                                        {statuses.map((status) => (
-                                            <ToggleGroupItem key={status} value={status}>
-                                                {t(`status.${status}`)}
-                                            </ToggleGroupItem>
-                                        ))}
-                                    </ToggleGroup>
-                                    <FieldError>{errors.status}</FieldError>
-                                </Field>
-                            </FieldGroup>
-                        </FormSection>
+                <StepBar steps={STEPS} states={states} current={current} />
 
-                        <FormSection
-                            title={t('propertyForm.sections.location.title')}
-                            description={t('propertyForm.sections.location.description')}
-                        >
-                            <FieldGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                <TextField {...bind('country_code')} label={t('propertyForm.fields.country')} maxLength={2} inputClassName="uppercase" required />
-                                <TextField {...bind('city')} label={t('propertyForm.fields.city')} optional />
-                                <TextField {...bind('area')} label={t('propertyForm.fields.area')} optional />
-                                <TextField {...bind('street')} label={t('propertyForm.fields.street')} optional />
-                                <TextField {...bind('building_name')} label={t('propertyForm.fields.building')} optional />
-                                <TextField {...bind('plot_number')} label={t('propertyForm.fields.plot')} optional />
-                                <TextField
-                                    {...bind('makani_number')}
-                                    label={t('propertyForm.fields.makani')}
-                                    description={t('propertyForm.fields.makaniHint')}
-                                    inputMode="numeric"
-                                    maxLength={10}
-                                    optional
+                <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]">
+                    <div className="flex min-w-0 flex-col gap-6">
+                        <StepSection {...section('basics')}>
+                            <FieldGroup className="gap-5">
+                                <CoverDropzone
+                                    previewUrl={coverUrl}
+                                    hasNewFile={Boolean(data.cover_image)}
+                                    onChange={(file) => setData('cover_image', file)}
+                                    error={errors.cover_image}
                                 />
-                                <TextField {...bind('po_box')} label={t('propertyForm.fields.poBox')} optional />
-                                <TextField {...bind('map_url')} type="url" label={t('propertyForm.fields.mapUrl')} placeholder="https://maps.google.com/…" optional />
-                                <TextField {...bind('latitude')} label={t('propertyForm.fields.latitude')} inputMode="decimal" placeholder="25.1352" optional />
-                                <TextField {...bind('longitude')} label={t('propertyForm.fields.longitude')} inputMode="decimal" placeholder="55.2401" optional />
-                                <Field data-invalid={errors.address ? true : undefined} className="sm:col-span-2 lg:col-span-3">
-                                    <FieldLabel htmlFor="address">{t('propertyForm.fields.address')}</FieldLabel>
-                                    <Textarea
-                                        id="address"
-                                        rows={2}
-                                        value={data.address}
-                                        onChange={(event) => setData('address', event.target.value)}
-                                        aria-invalid={Boolean(errors.address)}
+                                <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                                    <TextField {...bind('name')} label={t('propertyForm.fields.name')} inputClassName="h-11 text-base font-medium" required />
+                                    <TextField
+                                        {...bind('code')}
+                                        label={t('propertyForm.fields.code')}
+                                        description={t('propertyForm.fields.codeHint')}
+                                        inputClassName="h-11 font-mono uppercase"
+                                        required
                                     />
-                                    <FieldError>{errors.address}</FieldError>
-                                </Field>
+                                </div>
+                                <ChoiceCards
+                                    name="property_type_id"
+                                    label={t('propertyForm.fields.type')}
+                                    value={data.property_type_id}
+                                    onChange={(value) => setData('property_type_id', Number(value))}
+                                    error={errors.property_type_id}
+                                    columns={3}
+                                    options={propertyTypes.map((type) => ({
+                                        value: type.id,
+                                        title: tOr(`propertyTypes.${type.slug}`, type.name),
+                                        description: tOr(`propertyForm.typeCards.${type.slug}`, t('propertyForm.typeCards.other')),
+                                        icon: TYPE_STYLES[type.slug]?.icon ?? HouseIcon,
+                                        tone: TYPE_STYLES[type.slug]?.tone ?? 'brand',
+                                    }))}
+                                />
+                                <ChoiceCards
+                                    name="status"
+                                    label={t('propertyForm.fields.status')}
+                                    value={data.status}
+                                    onChange={(value) => setData('status', value)}
+                                    error={errors.status}
+                                    columns={3}
+                                    compact
+                                    options={statuses.map((status) => ({
+                                        value: status,
+                                        title: t(`status.${status}`),
+                                        description: t(`propertyForm.statusHints.${status}`),
+                                        icon: STATUS_STYLES[status]?.icon ?? CircleCheckIcon,
+                                        tone: STATUS_STYLES[status]?.tone ?? 'brand',
+                                    }))}
+                                />
                             </FieldGroup>
-                        </FormSection>
+                        </StepSection>
 
-                        <FormSection
-                            title={t('propertyForm.sections.ownership.title')}
-                            description={t('propertyForm.sections.ownership.description')}
-                        >
-                            <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                                <Field className="sm:col-span-2">
-                                    <FieldLabel id="ownership-label">{t('propertyForm.fields.ownership')}</FieldLabel>
-                                    <ToggleGroup
-                                        aria-labelledby="ownership-label"
-                                        variant="outline"
-                                        spacing={0}
-                                        value={[data.ownership_type]}
-                                        onValueChange={([value]) => value && setData('ownership_type', value)}
+                        <StepSection {...section('location')}>
+                            <FieldGroup className="gap-5">
+                                <div className="grid gap-4 sm:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)]">
+                                    <TextField {...bind('country_code')} label={t('propertyForm.fields.country')} maxLength={2} inputClassName="uppercase" required />
+                                    <TextField {...bind('city')} label={t('propertyForm.fields.city')} optional />
+                                    <TextField {...bind('area')} label={t('propertyForm.fields.area')} optional />
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <TextField {...bind('street')} label={t('propertyForm.fields.street')} optional />
+                                    <TextField {...bind('building_name')} label={t('propertyForm.fields.building')} optional />
+                                </div>
+                                <TextareaField {...bind('address')} label={t('propertyForm.fields.address')} rows={2} optional />
+
+                                <Collapsible open={showMoreLocation} onOpenChange={setShowMoreLocation}>
+                                    <CollapsibleTrigger
+                                        render={<Button type="button" variant="ghost" size="sm" className="group/more -ms-2 text-brand-ink" />}
                                     >
-                                        <ToggleGroupItem value="owned">{t('properties.ownership.owned')}</ToggleGroupItem>
-                                        <ToggleGroupItem value="leased">{t('properties.ownership.leased')}</ToggleGroupItem>
-                                    </ToggleGroup>
-                                </Field>
+                                        <ChevronDownIcon data-icon="inline-start" className="transition-transform group-data-[panel-open]/more:rotate-180" />
+                                        {showMoreLocation ? t('propertyForm.fewerLocation') : t('propertyForm.moreLocation')}
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
+                                        <div className="grid gap-4 pt-4 sm:grid-cols-2 lg:grid-cols-3">
+                                            <TextField
+                                                {...bind('makani_number')}
+                                                label={t('propertyForm.fields.makani')}
+                                                description={t('propertyForm.fields.makaniHint')}
+                                                inputMode="numeric"
+                                                maxLength={10}
+                                                optional
+                                            />
+                                            <TextField {...bind('plot_number')} label={t('propertyForm.fields.plot')} optional />
+                                            <TextField {...bind('po_box')} label={t('propertyForm.fields.poBox')} optional />
+                                            <TextField {...bind('map_url')} type="url" label={t('propertyForm.fields.mapUrl')} placeholder="https://maps.google.com/…" optional />
+                                            <TextField {...bind('latitude')} label={t('propertyForm.fields.latitude')} inputMode="decimal" placeholder="25.1352" optional />
+                                            <TextField {...bind('longitude')} label={t('propertyForm.fields.longitude')} inputMode="decimal" placeholder="55.2401" optional />
+                                        </div>
+                                    </CollapsibleContent>
+                                </Collapsible>
+                            </FieldGroup>
+                        </StepSection>
+
+                        <StepSection {...section('ownership')}>
+                            <FieldGroup className="grid gap-5 sm:grid-cols-2">
+                                <div className="sm:col-span-2">
+                                    <ChoiceCards
+                                        name="ownership_type"
+                                        label={t('propertyForm.fields.ownership')}
+                                        value={data.ownership_type}
+                                        onChange={(value) => setData('ownership_type', value)}
+                                        error={errors.ownership_type}
+                                        options={[
+                                            { value: 'owned', title: t('propertyForm.ownershipCards.owned.title'), description: t('propertyForm.ownershipCards.owned.description'), icon: KeyRoundIcon, tone: 'brand' },
+                                            { value: 'leased', title: t('propertyForm.ownershipCards.leased.title'), description: t('propertyForm.ownershipCards.leased.description'), icon: HandshakeIcon, tone: 'gold' },
+                                        ]}
+                                    />
+                                </div>
                                 {data.ownership_type === 'leased' && (
                                     <>
-                                        <TextField {...bind('landlord_name')} label={t('propertyForm.fields.landlordName')} required />
-                                        <TextField {...bind('landlord_phone')} type="tel" label={t('propertyForm.fields.landlordPhone')} optional />
+                                        <LandlordPicker landlords={landlords} data={data} setData={setData} errors={errors} />
                                         <TextField {...bind('lease_start_date')} type="date" label={t('propertyForm.fields.leaseStart')} required />
                                         <TextField {...bind('lease_end_date')} type="date" label={t('propertyForm.fields.leaseEnd')} required />
+                                        {months !== null && (
+                                            <p className="-mt-2 text-[0.8125rem] text-muted-foreground sm:col-span-2">{t('propertyForm.leaseLength', { count: months })}</p>
+                                        )}
                                     </>
                                 )}
                             </FieldGroup>
-                        </FormSection>
+                        </StepSection>
 
-                        <FormSection
-                            title={t('propertyForm.sections.documents.title')}
-                            description={t('propertyForm.sections.documents.description')}
-                            action={
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setData('documents', [...data.documents, emptyDocument()])}
-                                >
-                                    <FilePlusIcon data-icon="inline-start" />
-                                    {t('propertyForm.documents.add')}
-                                </Button>
-                            }
-                        >
-                            {data.documents.length === 0 ? (
-                                <Empty className="border py-8">
-                                    <EmptyHeader>
-                                        <EmptyMedia variant="icon">
-                                            <FileTextIcon />
-                                        </EmptyMedia>
-                                        <EmptyTitle>{t('propertyForm.documents.empty')}</EmptyTitle>
-                                        <EmptyDescription>{t('propertyForm.documents.emptyDescription')}</EmptyDescription>
-                                    </EmptyHeader>
-                                </Empty>
-                            ) : (
-                                <div className="flex flex-col gap-4">
-                                    {data.documents.map((document, index) => (
+                        <StepSection {...section('units')}>
+                            <div className="flex flex-col gap-6">
+                                <BuildingSize
+                                    floors={data.total_floors}
+                                    units={data.total_units}
+                                    onChange={setData}
+                                    errors={errors}
+                                    saved={savedUnits}
+                                    adding={addingUnits}
+                                />
+                                <UnitBatches
+                                units={data.units}
+                                onChange={(units) => setData('units', units)}
+                                errors={errors}
+                                options={{ roomTypes, genderPolicies, shopTypes, furnishingStatuses }}
+                                currency={currency}
+                                summary={unitSummary}
+                                remaining={remainingUnits}
+                            />
+                            </div>
+                        </StepSection>
+
+                        <StepSection {...section('documents')}>
+                            <div className="flex flex-col gap-6">
+                                {errors.documents && (
+                                    <Alert variant="destructive">
+                                        <CircleAlertIcon />
+                                        <AlertDescription>{errors.documents}</AlertDescription>
+                                    </Alert>
+                                )}
+
+                                <RequiredDocuments slots={slots} errors={errors} onChange={updateDocument} />
+
+                                <section className="flex flex-col gap-4 border-t pt-6">
+                                    <div className="flex flex-wrap items-end justify-between gap-3">
+                                        <div className="flex flex-col gap-0.5">
+                                            <h3 className="text-sm font-bold">{t('propertyForm.documents.additional.title')}</h3>
+                                            <p className="text-[0.8125rem] text-muted-foreground">{t('propertyForm.documents.additional.description')}</p>
+                                        </div>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('documents', [...data.documents, emptyDocument()])}>
+                                            <FilePlusIcon data-icon="inline-start" />
+                                            {t('propertyForm.documents.add')}
+                                        </Button>
+                                    </div>
+                                    {extraIndexes.map((index) => (
                                         <DocumentFields
-                                            key={document.id ?? `new-${index}`}
+                                            key={data.documents[index].id ?? `new-${index}`}
                                             index={index}
-                                            document={document}
+                                            document={data.documents[index]}
                                             documentTypes={documentTypes}
                                             errors={errors}
                                             onChange={(field, value) => updateDocument(index, field, value)}
                                             onRemove={() => setData('documents', data.documents.filter((_, position) => position !== index))}
                                         />
                                     ))}
+                                </section>
+                            </div>
+                        </StepSection>
+
+                        <StepSection {...section('contact')}>
+                            <FieldGroup className="gap-5">
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <TextField {...bind('contact_person_name')} label={t('propertyForm.fields.contactName')} optional />
+                                    <TextField
+                                        {...bind('contact_person_phone')}
+                                        type="tel"
+                                        label={t('propertyForm.fields.contactPhone')}
+                                        placeholder="+971 50 123 4567"
+                                        optional
+                                    />
                                 </div>
-                            )}
-                        </FormSection>
-                    </div>
-
-                    <div className="flex flex-col gap-6">
-                        <FormSection
-                            title={t('propertyForm.sections.cover.title')}
-                            description={t('propertyForm.sections.cover.description')}
-                        >
-                            <CoverPicker
-                                currentUrl={property?.cover_image_url}
-                                file={data.cover_image}
-                                onChange={(file) => setData('cover_image', file)}
-                                error={errors.cover_image}
-                            />
-                        </FormSection>
-
-                        <FormSection
-                            title={t('propertyForm.sections.contact.title')}
-                            description={t('propertyForm.sections.contact.description')}
-                        >
-                            <FieldGroup>
-                                <TextField {...bind('contact_person_name')} label={t('propertyForm.fields.contactName')} optional />
-                                <TextField {...bind('contact_person_phone')} type="tel" label={t('propertyForm.fields.contactPhone')} placeholder="+971 50 123 4567" optional />
+                                <TextareaField {...bind('notes')} label={t('propertyForm.fields.notes')} rows={4} optional />
                             </FieldGroup>
-                        </FormSection>
-
-                        <FormSection
-                            title={t('propertyForm.sections.notes.title')}
-                            description={t('propertyForm.sections.notes.description')}
-                        >
-                            <Field data-invalid={errors.notes ? true : undefined}>
-                                <FieldLabel htmlFor="notes" className="sr-only">{t('propertyForm.fields.notes')}</FieldLabel>
-                                <Textarea
-                                    id="notes"
-                                    rows={5}
-                                    value={data.notes}
-                                    onChange={(event) => setData('notes', event.target.value)}
-                                    aria-invalid={Boolean(errors.notes)}
-                                />
-                                <FieldError>{errors.notes}</FieldError>
-                            </Field>
-                        </FormSection>
+                        </StepSection>
                     </div>
+
+                    <aside className="hidden flex-col gap-6 xl:sticky xl:top-40 xl:flex xl:max-h-[calc(100svh-11rem)] xl:overflow-y-auto xl:pb-1 [&>*]:shrink-0">
+                        <PropertyPreview data={data} coverUrl={coverUrl} propertyTypes={propertyTypes} landlords={landlords} savedUnits={savedUnits} />
+                    </aside>
                 </div>
 
                 <FormActions>{actions}</FormActions>

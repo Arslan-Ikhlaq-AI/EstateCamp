@@ -1,5 +1,5 @@
-import BedBar from '@/Components/BedBar';
 import PropertyCover from '@/Components/PropertyCover';
+import RadialGauge from '@/Components/RadialGauge';
 import { Button } from '@/components/ui/button';
 import {
     Table,
@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/table';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
-import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from 'lucide-react';
+import { Link } from '@inertiajs/react';
+import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, MapPinIcon } from 'lucide-react';
 import {
     ComplianceBadge,
     LeaseNote,
@@ -40,8 +41,8 @@ export const DEFAULT_HIDDEN_COLUMNS = ['type', 'rooms'];
 
 // Solid equivalents of the header and hover tints, so the pinned actions
 // column matches the row it sits on while the rest of the table scrolls under it.
-const HEADER_BACKGROUND = 'bg-[color-mix(in_oklab,var(--muted)_40%,var(--card))]';
-const ROW_HOVER_BACKGROUND = 'hover:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))]';
+const HEADER_BACKGROUND = 'bg-[color-mix(in_oklab,var(--color-brand-cyan)_5%,var(--card))]';
+const ROW_HOVER_BACKGROUND = 'hover:bg-[color-mix(in_oklab,var(--color-brand-cyan)_7%,var(--card))]';
 
 function SortableHead({ column, query, onSort, className, children }) {
     const isSorted = query.sort === column.sort;
@@ -61,7 +62,7 @@ function SortableHead({ column, query, onSort, className, children }) {
                 size="sm"
                 onClick={() => onSort(column.sort)}
                 className={cn(
-                    'h-7 px-2 text-muted-foreground',
+                    'h-7 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase',
                     column.align === 'end' ? '-me-2' : '-ms-2',
                     isSorted && 'text-foreground',
                 )}
@@ -77,16 +78,23 @@ function PropertyCell({ property }) {
     const { tOr } = useTranslation();
 
     return (
-        <div className="flex max-w-64 items-center gap-3">
-            <div className="h-10 w-14 shrink-0 overflow-hidden rounded-md bg-muted ring-1 ring-foreground/10">
+        <div className="flex max-w-56 items-center gap-3">
+            <div className="h-11 w-14 shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-foreground/10 transition-transform duration-200 group-hover/row:scale-105 motion-reduce:transform-none">
                 <PropertyCover src={property.coverImageUrl} />
             </div>
-            <div className="flex min-w-0 flex-col items-start gap-0.5">
-                <span dir="auto" className="max-w-full truncate font-medium" title={property.name}>
+            <div className="flex min-w-0 flex-col items-start gap-1">
+                <Link
+                    href={route('properties.edit', property.id)}
+                    dir="auto"
+                    className="max-w-full truncate font-semibold outline-none hover:text-brand-ink focus-visible:underline"
+                    title={property.name}
+                >
                     {property.name}
-                </span>
-                <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="font-mono tracking-tight">{property.code}</span>
+                </Link>
+                <span className="flex max-w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="shrink-0 rounded-md bg-brand-cyan/10 px-1.5 py-px font-mono text-[0.6875rem] font-semibold tracking-tight text-brand-ink">
+                        {property.code}
+                    </span>
                     {property.type && (
                         <>
                             <span aria-hidden="true">·</span>
@@ -109,16 +117,16 @@ function OccupancyCell({ beds }) {
     }
 
     return (
-        <div className="flex w-32 flex-col gap-0.5">
-            <div className="flex items-baseline justify-between gap-2">
-                <span className="text-sm font-semibold tabular-nums">
+        <div className="flex items-center gap-2.5">
+            <RadialGauge value={beds.occupancyRate ?? 0} size={36} thickness={5} label={t('properties.columns.occupancy')} />
+            <div className="flex flex-col leading-tight">
+                <span className="text-sm font-bold tabular-nums">
                     {beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
                 </span>
-                <span className="text-xs text-muted-foreground tabular-nums">
+                <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
                     {t('properties.occupancy.beds', { occupied: beds.occupied, total: beds.total })}
                 </span>
             </div>
-            <BedBar beds={beds} />
         </div>
     );
 }
@@ -131,13 +139,16 @@ function Cell({ column, property, currency }) {
             return <PropertyCell property={property} />;
         case 'location':
             return (
-                <div className="flex max-w-36 flex-col items-start">
-                    <span dir="auto" className="max-w-full truncate" title={property.address ?? undefined}>
-                        {property.area ?? '—'}
-                    </span>
-                    <span dir="auto" className="max-w-full truncate text-xs text-muted-foreground">
-                        {property.city ?? property.address}
-                    </span>
+                <div className="flex max-w-36 items-start gap-1.5">
+                    <MapPinIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
+                    <div className="flex min-w-0 flex-col items-start">
+                        <span dir="auto" className="max-w-full truncate font-medium" title={property.address ?? undefined}>
+                            {property.area ?? '—'}
+                        </span>
+                        <span dir="auto" className="max-w-full truncate text-xs text-muted-foreground">
+                            {property.city ?? property.address}
+                        </span>
+                    </div>
                 </div>
             );
         case 'type':
@@ -155,7 +166,7 @@ function Cell({ column, property, currency }) {
             return <span className="tabular-nums">{formatNumber(property.rooms)}</span>;
         case 'rentRoll':
             return (
-                <span className="font-medium tabular-nums">
+                <span className="font-bold tabular-nums">
                     {formatCurrency(property.rentRoll, currency)}
                 </span>
             );
@@ -177,11 +188,11 @@ export default function PropertiesTable({ properties, currency, query, onSort, h
 
     return (
         <Table>
-            <TableHeader className={HEADER_BACKGROUND}>
+            <TableHeader className={cn(HEADER_BACKGROUND, '[&_th]:font-semibold [&_th]:tracking-wide [&_th]:uppercase')}>
                 <TableRow className="hover:bg-transparent">
                     {columns.map((column, index) => {
                         const label = t(`properties.columns.${column.id}`);
-                        const padding = index === 0 && 'ps-4 sm:ps-5';
+                        const padding = index === 0 && 'ps-4 sm:ps-5 lg:ps-6';
 
                         return column.sort ? (
                             <SortableHead
@@ -202,23 +213,28 @@ export default function PropertiesTable({ properties, currency, query, onSort, h
                             </TableHead>
                         );
                     })}
-                    <TableHead className={cn('sticky end-0 w-12 pe-4 sm:pe-5', HEADER_BACKGROUND)}>
+                    <TableHead className={cn('sticky end-0 w-12 pe-4 sm:pe-5 lg:pe-6', HEADER_BACKGROUND)}>
                         <span className="sr-only">{t('properties.columns.actions')}</span>
                     </TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {properties.map((property) => (
-                    <TableRow key={property.id} className={cn('group/row', ROW_HOVER_BACKGROUND)}>
+                    <TableRow key={property.id} className={cn('group/row transition-colors', ROW_HOVER_BACKGROUND)}>
                         {columns.map((column, index) => (
                             <TableCell
                                 key={column.id}
-                                className={cn('py-3', index === 0 && 'ps-4 sm:ps-5', column.align === 'end' && 'text-end')}
+                                className={cn(
+                                    'py-3.5',
+                                    index === 0 &&
+                                        'relative ps-4 before:absolute before:inset-y-2 before:start-0 before:w-[3px] before:rounded-e-full before:bg-linear-to-b before:from-brand-cyan before:to-gold before:opacity-0 before:transition-opacity group-hover/row:before:opacity-100 sm:ps-5 lg:ps-6',
+                                    column.align === 'end' && 'text-end',
+                                )}
                             >
                                 <Cell column={column} property={property} currency={currency} />
                             </TableCell>
                         ))}
-                        <TableCell className="sticky end-0 bg-card pe-4 text-end group-hover/row:bg-inherit sm:pe-5 before:pointer-events-none before:absolute before:inset-y-0 before:-start-4 before:w-4 before:bg-linear-to-l before:from-black/[0.04] before:to-transparent rtl:before:bg-linear-to-r dark:before:from-black/30">
+                        <TableCell className="sticky end-0 bg-card pe-4 text-end group-hover/row:bg-inherit sm:pe-5 lg:pe-6 before:pointer-events-none before:absolute before:inset-y-0 before:-start-4 before:w-4 before:bg-linear-to-l before:from-black/[0.04] before:to-transparent rtl:before:bg-linear-to-r dark:before:from-black/30">
                             <PropertyActions property={property} />
                         </TableCell>
                     </TableRow>

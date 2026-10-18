@@ -98,6 +98,7 @@ class HandleInertiaRequests extends Middleware
             ->where('ownership_type', 'leased')
             ->whereNotNull('lease_end_date')
             ->whereDate('lease_end_date', '<=', $today->copy()->addDays(self::CONTRACT_WARNING_DAYS))
+            ->with('landlord:id,name')
             ->get()
             ->map(function (Property $property) use ($today): array {
                 $days = (int) $today->diffInDays($property->lease_end_date, false);
@@ -107,7 +108,7 @@ class HandleInertiaRequests extends Middleware
                     'type' => $days < 0 ? 'lease_ended' : 'lease_ending',
                     'severity' => $days < 0 ? 'critical' : 'warning',
                     'title' => $property->name,
-                    'subject' => $property->landlord_name,
+                    'subject' => $property->landlord?->name,
                     'days' => $days,
                     'url' => route('properties.index'),
                 ];

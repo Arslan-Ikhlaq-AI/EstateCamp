@@ -26,7 +26,7 @@ export default function Show({ payment, allocations, currency }) {
                 badge={<PaymentStatusBadge status={payment.status} />}
                 description={
                     <span>
-                        <Link href={route('clients.show', payment.client.id)} className="hover:underline" dir="auto">
+                        <Link href={route('clients.show', payment.client.id)} className="underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                             {payment.client.name}
                         </Link>{' '}
                         · {formatMoney(payment.amount, currency)} · {formatDate(payment.receivedOn)}
@@ -52,11 +52,11 @@ export default function Show({ payment, allocations, currency }) {
 
             <FlashMessages errorKeys={['status']} />
 
-            <div className="grid items-start gap-6 xl:grid-cols-3">
-                <div className="flex flex-col gap-6 xl:col-span-2">
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+                <div className="flex min-w-0 flex-col gap-6">
                     <SectionCard title={t('leasing.payments.show.allocations')} description={t('leasing.payments.show.allocationsDescription')} flush>
                         {allocations.length === 0 ? (
-                            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">{t('leasing.payments.show.noAllocations')}</p>
+                            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{t('leasing.payments.show.noAllocations')}</p>
                         ) : (
                             <DataTable
                                 rows={allocations}
@@ -65,7 +65,7 @@ export default function Show({ payment, allocations, currency }) {
                                         id: 'invoice',
                                         header: t('leasing.invoices.columns.invoice'),
                                         cell: (allocation) => (
-                                            <Link href={route('invoices.show', allocation.invoice.id)} className="font-medium hover:underline">
+                                            <Link href={route('invoices.show', allocation.invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                                                 {allocation.invoice.number}
                                             </Link>
                                         ),
@@ -109,7 +109,7 @@ export default function Show({ payment, allocations, currency }) {
                                 {
                                     label: t('leasing.invoices.columns.client'),
                                     value: (
-                                        <Link href={route('clients.show', payment.client.id)} className="hover:underline" dir="auto">
+                                        <Link href={route('clients.show', payment.client.id)} className="underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
                                             {payment.client.name}
                                         </Link>
                                     ),

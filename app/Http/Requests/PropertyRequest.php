@@ -3,15 +3,33 @@
 namespace App\Http\Requests;
 
 use App\Http\Controllers\PropertyController;
+use App\Models\Apartment;
+use App\Models\Landlord;
 use App\Models\Property;
 use App\Models\PropertyDocument;
+use App\Models\Room;
+use App\Models\Shop;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class PropertyRequest extends FormRequest
 {
+    /**
+     * How the required documents are named in error messages.
+     *
+     * @var array<string, string>
+     */
+    private const DOCUMENT_NAMES = [
+        'tenancy_contract' => 'contract',
+        'emirates_id' => 'Emirates ID',
+        'trade_license' => 'trade licence',
+        'passport' => 'passport',
+    ];
+
     /**
      * Only members of a company can save properties, and only their own.
      * Another company's property answers 404 so its existence is not revealed.
@@ -28,17 +46,24 @@ class PropertyRequest extends FormRequest
     }
 
     /**
-     * Landlord and lease details only apply to leased properties.
+     * Landlord and lease details only apply to leased properties. A leased
+     * property either picks one of the company's landlords (`existing`) or
+     * brings the details of a new one (`new`).
      */
     protected function prepareForValidation(): void
     {
         if ($this->input('ownership_type') !== 'leased') {
             $this->merge([
-                'landlord_name' => null,
-                'landlord_phone' => null,
+                'landlord_mode' => null,
+                'landlord_id' => null,
+                'new_landlord' => null,
                 'lease_start_date' => null,
                 'lease_end_date' => null,
             ]);
+        } elseif ($this->input('landlord_mode') === 'new') {
+            $this->merge(['landlord_id' => null]);
+        } else {
+            $this->merge(['new_landlord' => null]);
         }
 
         if ($this->filled('country_code')) {
@@ -85,12 +110,28 @@ class PropertyRequest extends FormRequest
             'contact_person_phone' => ['nullable', 'string', 'max:40'],
 
             'ownership_type' => ['nullable', Rule::in(PropertyController::OWNERSHIP_TYPES)],
-            'landlord_name' => ['nullable', 'required_if:ownership_type,leased', 'string', 'max:255'],
-            'landlord_phone' => ['nullable', 'string', 'max:40'],
+            'landlord_mode' => ['nullable', 'required_if:ownership_type,leased', Rule::in(['existing', 'new'])],
+            'landlord_id' => [
+                'nullable',
+                'required_if:landlord_mode,existing',
+                'integer',
+                Rule::exists('landlords', 'id')
+                    ->where('company_id', $this->user()->company_id)
+                    ->whereNull('deleted_at'),
+            ],
+            'new_landlord' => ['nullable', 'array'],
+            'new_landlord.landlord_type' => ['required_if:landlord_mode,new', Rule::in(Landlord::TYPES)],
+            'new_landlord.name' => ['required_if:landlord_mode,new', 'nullable', 'string', 'max:255'],
+            'new_landlord.contact_person_name' => ['nullable', 'string', 'max:255'],
+            'new_landlord.phone' => ['nullable', 'string', 'max:40'],
+            'new_landlord.email' => ['nullable', 'email', 'max:255'],
             'lease_start_date' => ['nullable', 'required_if:ownership_type,leased', 'date'],
             'lease_end_date' => ['nullable', 'required_if:ownership_type,leased', 'date', 'after_or_equal:lease_start_date'],
 
             'notes' => ['nullable', 'string', 'max:5000'],
+
+            'total_floors' => ['nullable', 'integer', 'between:1,200'],
+            'total_units' => ['nullable', 'integer', 'between:1,10000'],
 
             'documents' => ['array', 'max:20'],
             'documents.*.id' => ['nullable', 'integer'],
@@ -101,6 +142,130 @@ class PropertyRequest extends FormRequest
             'documents.*.issued_on' => ['nullable', 'date'],
             'documents.*.expires_on' => ['nullable', 'date', 'after_or_equal:documents.*.issued_on'],
             'documents.*.notes' => ['nullable', 'string', 'max:2000'],
+
+            ...$this->unitRules(),
+        ];
+    }
+
+    /**
+     * Rooms, shops and apartments added in batches: `count` alike units
+     * numbered up from `first_number`, which must end in a digit.
+     *
+     * @return array<string, array<mixed>>
+     */
+    private function unitRules(): array
+    {
+        $batch = fn (string $kind) => [
+            "units.{$kind}" => ['array', 'max:20'],
+            "units.{$kind}.*.count" => ['required', 'integer', 'between:1,100'],
+            "units.{$kind}.*.first_number" => ['required', 'string', 'max:25', 'regex:/\d$/'],
+            "units.{$kind}.*.floor_number" => ['nullable', 'integer', 'between:-5,200'],
+            "units.{$kind}.*.area_sqm" => ['nullable', 'numeric', 'gt:0', 'max:10000'],
+        ];
+
+        return [
+            'units' => ['nullable', 'array'],
+            ...$batch('rooms'),
+            'units.rooms.*.room_type_id' => ['required', 'integer', Rule::exists('room_types', 'id')],
+            'units.rooms.*.capacity' => ['required', 'integer', 'between:1,100'],
+            'units.rooms.*.gender_policy' => ['nullable', Rule::in(Room::GENDER_POLICIES)],
+            'units.rooms.*.rent_per_bed' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            ...$batch('shops'),
+            'units.shops.*.shop_type' => ['nullable', Rule::in(Shop::TYPES)],
+            'units.shops.*.monthly_rent' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            ...$batch('apartments'),
+            'units.apartments.*.bedrooms' => ['required', 'integer', 'between:0,20'],
+            'units.apartments.*.bathrooms' => ['required', 'integer', 'between:0,20'],
+            'units.apartments.*.furnishing_status' => ['nullable', Rule::in(Apartment::FURNISHING_STATUSES)],
+            'units.apartments.*.monthly_rent' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+        ];
+    }
+
+    /**
+     * Every required document type must be listed, as a new upload or one of
+     * the property's saved documents. Each batch's numbers must be free: not
+     * used by a unit of the same kind already in the property, nor by an
+     * earlier batch in this request. And the property's units, saved and
+     * new, must not outnumber its unit total.
+     *
+     * @return array<int, Closure>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                $property = $this->route('property');
+                $savedIds = $property instanceof Property ? $property->documents()->pluck('id')->all() : [];
+                $listed = [];
+
+                foreach ($this->input('documents', []) as $index => $document) {
+                    if ($this->hasFile("documents.{$index}.file") || in_array((int) ($document['id'] ?? 0), $savedIds, true)) {
+                        $listed[] = $document['document_type'] ?? null;
+                    }
+                }
+
+                $missing = array_values(array_diff(PropertyDocument::REQUIRED_TYPES, $listed));
+
+                if ($missing !== []) {
+                    $names = array_map(fn (string $type) => self::DOCUMENT_NAMES[$type], $missing);
+                    $validator->errors()->add('documents', 'Add the required documents: '.implode(', ', $names).'.');
+                }
+            },
+            function (Validator $validator) {
+                $hasUnitErrors = collect($validator->errors()->keys())
+                    ->contains(fn (string $key) => str_starts_with($key, 'units') || $key === 'total_units');
+
+                if ($hasUnitErrors) {
+                    return;
+                }
+
+                $property = $this->route('property');
+                $kinds = [
+                    'rooms' => ['column' => 'room_number', 'label' => 'Room'],
+                    'shops' => ['column' => 'shop_number', 'label' => 'Shop'],
+                    'apartments' => ['column' => 'apartment_number', 'label' => 'Apartment'],
+                ];
+
+                foreach ($kinds as $kind => ['column' => $column, 'label' => $label]) {
+                    $taken = $property instanceof Property
+                        ? $property->{$kind}()->pluck($column)->map(fn (string $number) => mb_strtolower($number))->all()
+                        : [];
+
+                    foreach ($this->input("units.{$kind}", []) as $index => $batch) {
+                        $numbers = Property::unitNumbers($batch['first_number'], (int) $batch['count']);
+                        $clash = collect($numbers)->first(fn (string $number) => in_array(mb_strtolower($number), $taken, true));
+
+                        if ($clash !== null) {
+                            $validator->errors()->add("units.{$kind}.{$index}.first_number", "{$label} {$clash} already exists in this property.");
+                        }
+
+                        $taken = [...$taken, ...array_map('mb_strtolower', $numbers)];
+                    }
+                }
+
+                $totalUnits = $this->integer('total_units');
+
+                if ($totalUnits > 0) {
+                    $adding = collect($this->input('units', []))
+                        ->flatten(1)
+                        ->sum(fn (array $batch) => (int) $batch['count']);
+                    $planned = ($property instanceof Property ? $property->unitCount() : 0) + $adding;
+
+                    if ($planned > $totalUnits) {
+                        $validator->errors()->add('total_units', "The property holds {$totalUnits} units, but it would have {$planned} rooms, shops and apartments.");
+                    }
+                }
+            },
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'documents.*.file.required_without' => 'Upload the file.',
         ];
     }
 
@@ -111,11 +276,23 @@ class PropertyRequest extends FormRequest
     {
         return [
             'property_type_id' => 'property type',
+            'landlord_id' => 'landlord',
+            'new_landlord.landlord_type' => 'landlord type',
+            'new_landlord.name' => 'landlord name',
+            'new_landlord.contact_person_name' => 'contact person',
+            'new_landlord.phone' => 'landlord phone',
+            'new_landlord.email' => 'landlord email',
             'makani_number' => 'Makani number',
             'documents.*.document_type' => 'document type',
             'documents.*.file' => 'file',
             'documents.*.expires_on' => 'expiry date',
             'documents.*.issued_on' => 'issue date',
+            'total_floors' => 'number of floors',
+            'total_units' => 'number of units',
+            'units.*.*.count' => 'how many',
+            'units.*.*.first_number' => 'first number',
+            'units.rooms.*.room_type_id' => 'room type',
+            'units.rooms.*.capacity' => 'beds per room',
         ];
     }
 }

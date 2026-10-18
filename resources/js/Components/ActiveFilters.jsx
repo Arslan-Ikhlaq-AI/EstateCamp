@@ -7,7 +7,7 @@ function FilterChip({ label, value, icon: Icon, onRemove }) {
     const { t } = useTranslation();
 
     return (
-        <Badge variant="secondary" className="h-7 gap-1.5 rounded-md ps-2 pe-1 text-[0.8125rem] font-normal">
+        <Badge variant="secondary" className="h-7 gap-1.5 rounded-md ps-2 pe-1 text-[0.875rem] font-normal">
             {Icon && <Icon data-icon="inline-start" className="text-muted-foreground" />}
             <span className="text-muted-foreground">{label}:</span>
             <span className="max-w-48 truncate font-medium">{value}</span>

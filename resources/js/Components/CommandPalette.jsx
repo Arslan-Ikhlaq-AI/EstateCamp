@@ -125,7 +125,7 @@ export default function CommandPalette({ onDone }) {
                     aria-label={t('command.label')}
                     aria-describedby={hintId}
                     placeholder={t('command.placeholder')}
-                    className="h-13 w-full border-0 bg-transparent px-0 text-[0.9375rem] shadow-none outline-none placeholder:text-muted-foreground focus:ring-0 focus:outline-none"
+                    className="h-13 w-full border-0 bg-transparent px-0 text-base shadow-none outline-none placeholder:text-muted-foreground focus:ring-0 focus:outline-none"
                 />
                 <Kbd className="hidden sm:inline-flex">Esc</Kbd>
             </div>
@@ -142,7 +142,7 @@ export default function CommandPalette({ onDone }) {
                 <Autocomplete.List>
                     {(group) => (
                         <Autocomplete.Group key={group.value} items={group.items} className="not-last:mb-2">
-                            <Autocomplete.GroupLabel className="px-2.5 pt-1.5 pb-1 text-[0.6875rem] font-medium text-muted-foreground ltr:tracking-[0.06em] ltr:uppercase">
+                            <Autocomplete.GroupLabel className="px-2.5 pt-1.5 pb-1 text-[0.75rem] font-medium text-muted-foreground ltr:tracking-[0.06em] ltr:uppercase">
                                 {group.value}
                             </Autocomplete.GroupLabel>
                             <Autocomplete.Collection>
@@ -153,7 +153,7 @@ export default function CommandPalette({ onDone }) {
                                         onClick={() => runItem(item)}
                                         className="group/item flex min-h-10 cursor-default items-center gap-3 rounded-lg px-2.5 text-sm outline-none select-none [scroll-margin-block:0.5rem] data-highlighted:bg-accent data-highlighted:text-accent-foreground"
                                     >
-                                        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-data-highlighted/item:bg-surface group-data-highlighted/item:text-primary group-data-highlighted/item:shadow-(--raised-shadow)">
+                                        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-data-highlighted/item:bg-surface group-data-highlighted/item:text-brand-ink group-data-highlighted/item:shadow-(--raised-shadow)">
                                             <item.icon className="size-4" />
                                         </span>
                                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
