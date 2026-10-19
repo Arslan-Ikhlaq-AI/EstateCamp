@@ -9,6 +9,7 @@ use App\Models\User;
 use Database\Seeders\ClientSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\PropertySeeder;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -92,7 +93,9 @@ describe('invoices', function () {
         ])->assertSessionHasNoErrors();
 
         $contract = Contract::where('contract_number', 'CTR-2026-0012')->sole();
-        $this->actingAs($this->superAdmin)->post(route('contracts.activate', $contract));
+        Storage::fake('local');
+        collectChequesDueThisYear($contract);
+        $this->actingAs($this->superAdmin)->post(route('contracts.activate', $contract))->assertSessionHasNoErrors();
         $this->actingAs($this->superAdmin)->post(route('contracts.invoices.store', $contract));
 
         expect((float) $contract->invoices()->sole()->total)->toBe(1500.0);

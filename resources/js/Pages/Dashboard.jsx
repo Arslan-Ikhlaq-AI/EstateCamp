@@ -12,6 +12,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { BellRingIcon, Building2Icon, LogInIcon, PercentIcon, ReceiptIcon } from 'lucide-react';
 import AttentionCard from './Dashboard/Partials/AttentionCard';
 import BedCapacity from './Dashboard/Partials/BedCapacity';
+import ChequesOverview from './Dashboard/Partials/ChequesOverview';
 import CollectionsChart from './Dashboard/Partials/CollectionsChart';
 import DocumentsCard from './Dashboard/Partials/DocumentsCard';
 import InvoiceStatus from './Dashboard/Partials/InvoiceStatus';
@@ -126,7 +127,7 @@ function NoCompany() {
     );
 }
 
-export default function Dashboard({ company, summary, finance, occupancyTrend, activity, properties, roomTypes, documents }) {
+export default function Dashboard({ company, summary, finance, cheques, occupancyTrend, activity, properties, roomTypes, documents }) {
     const { t } = useTranslation();
 
     return (
@@ -144,6 +145,8 @@ export default function Dashboard({ company, summary, finance, occupancyTrend, a
                     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]">
                         <div className="flex min-w-0 flex-col gap-6">
                             <AttentionCard />
+
+                            <ChequesOverview cheques={cheques} currency={company.currency} />
 
                             <CollectionsChart trend={finance.trend} currency={company.currency} />
 

@@ -6,7 +6,7 @@ use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\LandlordRequest;
 use App\Models\Company;
 use App\Models\HeadLease;
-use App\Models\HeadLeasePayment;
+use App\Models\Cheque;
 use App\Models\Landlord;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -88,12 +88,14 @@ class LandlordController extends Controller
 
         $leases = $landlord->headLeases()->with('property:id,name,code')->orderByDesc('start_date')->get();
 
-        $upcoming = HeadLeasePayment::query()
-            ->whereIn('head_lease_id', $leases->pluck('id'))
-            ->where('status', 'scheduled')
-            ->with('headLease:id,lease_number')
-            ->orderBy('due_date')
-            ->limit(6)
+        $cheques = fn () => Cheque::query()
+            ->where('chequeable_type', (new HeadLease)->getMorphClass())
+            ->whereIn('chequeable_id', $leases->modelKeys());
+        $upcoming = $cheques()
+            ->whereIn('status', ['pending', 'issued'])
+            ->with(ChequeController::detailRelations())
+            ->orderBy('cheque_date')
+            ->limit(8)
             ->get();
 
         return Inertia::render('Landlords/Show', [
@@ -114,14 +116,13 @@ class LandlordController extends Controller
                 'annualRent' => (float) $lease->annual_rent,
                 'status' => $lease->status,
             ]),
-            'upcomingPayments' => $upcoming->map(fn (HeadLeasePayment $payment) => [
-                'id' => $payment->id,
-                'leaseNumber' => $payment->headLease->lease_number,
-                'installmentNumber' => $payment->installment_number,
-                'dueDate' => $payment->due_date->toDateString(),
-                'amount' => (float) $payment->amount,
-                'isOverdue' => $payment->isOverdue(),
-            ]),
+            'upcomingCheques' => $upcoming->map(fn (Cheque $cheque) => ChequeController::details($cheque)),
+            'chequeTotals' => [
+                'paidThisYear' => round((float) $cheques()->where('status', 'cleared')->whereYear('cleared_on', today()->year)->sum('amount'), 2),
+                'toPay' => round((float) $cheques()->whereIn('status', ['pending', 'issued'])->sum('amount'), 2),
+                'toWrite' => $cheques()->where('status', 'pending')->whereDate('cheque_date', '<=', today()->addDays(30))->count(),
+                'bounced' => $cheques()->where('status', 'bounced')->whereDoesntHave('replacement')->count(),
+            ],
         ]);
     }
 
@@ -180,11 +181,12 @@ class LandlordController extends Controller
     private function summary(Company $company): array
     {
         $activeLeases = $company->headLeases()->where('status', 'active');
-        $nextPayment = $company->headLeasePayments()
-            ->where('status', 'scheduled')
-            ->whereHas('headLease', fn (Builder $leases) => $leases->where('status', 'active'))
-            ->with('headLease.landlord:id,name')
-            ->orderBy('due_date')
+        $nextPayment = $company->cheques()
+            ->where('direction', 'issued')
+            ->whereIn('status', ['pending', 'issued'])
+            ->whereHasMorph('chequeable', [HeadLease::class], fn (Builder $leases) => $leases->where('status', 'active'))
+            ->with('chequeable.landlord:id,name')
+            ->orderBy('cheque_date')
             ->first();
 
         return [
@@ -192,9 +194,9 @@ class LandlordController extends Controller
             'activeLeases' => (clone $activeLeases)->count(),
             'annualRent' => (float) (clone $activeLeases)->sum('annual_rent'),
             'nextPayment' => $nextPayment ? [
-                'dueDate' => $nextPayment->due_date->toDateString(),
+                'dueDate' => $nextPayment->cheque_date->toDateString(),
                 'amount' => (float) $nextPayment->amount,
-                'landlord' => $nextPayment->headLease->landlord->name,
+                'landlord' => $nextPayment->chequeable->landlord->name,
             ] : null,
         ];
     }

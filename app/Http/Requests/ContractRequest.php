@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidatesChequeSchedule;
 use App\Models\Apartment;
 use App\Models\Client;
 use App\Models\Contract;
@@ -11,16 +12,20 @@ use App\Models\Room;
 use App\Models\Shop;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * A contract with its lines. Besides the field rules, after() checks that
- * every unit is in the line's property and is not already let to another
- * live contract for the same days.
+ * A contract with its lines and its cheque schedule. Besides the field
+ * rules, after() checks that every unit is in the line's property and is not
+ * already let to another live contract for the same days, and that this
+ * year's cheques are in hand.
  */
 class ContractRequest extends CompanyScopedRequest
 {
+    use ValidatesChequeSchedule;
+
     protected ?string $recordParameter = 'contract';
 
     /**
@@ -65,6 +70,7 @@ class ContractRequest extends CompanyScopedRequest
             'documents.*.issued_on' => ['nullable', 'date'],
             'documents.*.expires_on' => ['nullable', 'date', 'after_or_equal:documents.*.issued_on'],
             'documents.*.notes' => ['nullable', 'string', 'max:2000'],
+            ...$this->chequeRules(),
         ];
     }
 
@@ -162,8 +168,26 @@ class ContractRequest extends CompanyScopedRequest
                         $this->checkUnitIsFree($validator, $index, $line);
                     }
                 }
+
+                // A draft is saved before the cheques are handed over; a running contract needs this year's.
+                if ($validator->errors()->isEmpty() && $this->route('contract')?->status === 'active') {
+                    $this->checkChequesDueNow($validator, $this->plannedContract(), $this->route('contract'));
+                }
             },
         ];
+    }
+
+    /**
+     * The contract as this form would leave it, unsaved, to plan its cheques.
+     */
+    private function plannedContract(): Contract
+    {
+        $contract = new Contract($this->only(['start_date', 'end_date', 'billing_cycle', 'security_deposit']));
+        $contract->setRelation('lines', collect($this->input('lines'))->map(
+            fn (array $line) => new ContractLine(Arr::only($line, ['quantity', 'monthly_rate', 'vat_rate', 'start_date', 'end_date'])),
+        ));
+
+        return $contract;
     }
 
     /**
@@ -297,6 +321,7 @@ class ContractRequest extends CompanyScopedRequest
             'lines.*.vat_rate' => 'VAT rate',
             'lines.*.start_date' => 'line start date',
             'lines.*.end_date' => 'line end date',
+            ...$this->chequeAttributes(),
         ];
     }
 

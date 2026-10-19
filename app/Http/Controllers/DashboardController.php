@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\Invoice;
@@ -38,6 +39,16 @@ class DashboardController extends Controller
      * How many clients the "most owed" list shows.
      */
     public const TOP_DEBTORS = 5;
+
+    /**
+     * How many months ahead, from this one, the cheque forecast covers.
+     */
+    public const CHEQUE_FORECAST_MONTHS = 12;
+
+    /**
+     * How many days ahead the "coming up" cheque list looks.
+     */
+    public const CHEQUE_LOOKAHEAD_DAYS = 14;
 
     /**
      * Show the operations overview for the signed-in user's company.
@@ -103,6 +114,7 @@ class DashboardController extends Controller
                 ->sortByDesc('beds.total')
                 ->values(),
             'finance' => $this->finance($company),
+            'cheques' => $this->cheques($company),
             'occupancyTrend' => $this->occupancyTrend($company),
             'activity' => $this->recentActivity($company),
             'rooms' => $rooms->map(fn (Room $room) => $this->roomDetails($room)),
@@ -227,6 +239,54 @@ class DashboardController extends Controller
                 ->values()
                 ->all(),
             'topDebtors' => $this->topDebtors($company),
+        ];
+    }
+
+    /**
+     * Cheques at a glance: the register's headline figures, what comes up in
+     * the next two weeks (and anything overdue or bounced), and a forecast of
+     * money in and out by month from cheque dates.
+     *
+     * @return array<string, mixed>
+     */
+    private function cheques(Company $company): array
+    {
+        $today = today();
+        $start = $today->copy()->startOfMonth();
+        $end = $start->copy()->addMonths(self::CHEQUE_FORECAST_MONTHS)->subDay();
+
+        $byMonth = $company->cheques()
+            ->whereNotIn('status', ['bounced', 'returned', 'cancelled'])
+            ->whereBetween('cheque_date', [$start, $end])
+            ->get(['direction', 'cheque_date', 'amount'])
+            ->groupBy(fn (Cheque $cheque) => $cheque->cheque_date->format('Y-m'));
+
+        $upcoming = $company->cheques()
+            ->where(fn ($query) => $query
+                ->where(fn ($query) => $query->open()->whereDate('cheque_date', '<=', $today->copy()->addDays(self::CHEQUE_LOOKAHEAD_DAYS)))
+                ->orWhere(fn ($query) => $query->where('status', 'bounced')->whereDoesntHave('replacement')))
+            ->whereNot('status', 'deposited')
+            ->with(ChequeController::detailRelations())
+            ->orderByRaw("case when status = 'bounced' then 0 else 1 end")
+            ->orderBy('cheque_date')
+            ->limit(8)
+            ->get();
+
+        return [
+            'summary' => ChequeController::summary($company),
+            'upcoming' => $upcoming->map(fn (Cheque $cheque) => ChequeController::details($cheque))->all(),
+            'forecast' => collect(range(0, self::CHEQUE_FORECAST_MONTHS - 1))
+                ->map(function (int $offset) use ($start, $byMonth) {
+                    $month = $start->copy()->addMonths($offset)->format('Y-m');
+                    $cheques = $byMonth->get($month, collect());
+
+                    return [
+                        'month' => $month,
+                        'incoming' => round((float) $cheques->where('direction', 'received')->sum('amount'), 2),
+                        'outgoing' => round((float) $cheques->where('direction', 'issued')->sum('amount'), 2),
+                    ];
+                })
+                ->all(),
         ];
     }
 

@@ -116,6 +116,16 @@ class Payment extends Model
     }
 
     /**
+     * The cheque this payment was made by, when it came from clearing one.
+     *
+     * @return BelongsTo<Cheque, $this>
+     */
+    public function cheque(): BelongsTo
+    {
+        return $this->belongsTo(Cheque::class);
+    }
+
+    /**
      * @return HasMany<PaymentAllocation, $this>
      */
     public function allocations(): HasMany

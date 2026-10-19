@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCheques;
 use App\Models\Concerns\HasDocumentNumber;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -19,7 +20,9 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * A client renting from the operator. What is rented, and at what rate,
- * lives in its ContractLines.
+ * lives in its ContractLines. The client pays by cheques, one per billing
+ * period (four a year on a quarterly cycle), plus one for the security
+ * deposit; clearing a cheque settles that period's invoice.
  *
  * Lifecycle: draft → active → ended (its end date passed) or terminated
  * (stopped early). Status changes go through activate(), markEnded() and
@@ -39,7 +42,7 @@ use Illuminate\Validation\ValidationException;
 class Contract extends Model
 {
     /** @use HasFactory<ContractFactory> */
-    use HasDocumentNumber, HasFactory, SoftDeletes;
+    use HasCheques, HasDocumentNumber, HasFactory, SoftDeletes;
 
     public const NUMBER_PREFIX = 'CTR';
 
@@ -97,6 +100,79 @@ class Contract extends Model
     }
 
     /**
+     * The client's cheques come to the company.
+     */
+    public function chequeDirection(): string
+    {
+        return 'received';
+    }
+
+    /**
+     * One cheque per billing period.
+     */
+    public function monthsPerCheque(): int
+    {
+        return self::BILLING_CYCLES[$this->billing_cycle];
+    }
+
+    /**
+     * What the period's invoice should come to: each line running in it,
+     * pro-rated by month at its rate, with its VAT. Bed lines billed on
+     * actual use are estimated at their contracted beds.
+     */
+    public function plannedChequeAmount(CarbonImmutable $from, CarbonImmutable $to): float
+    {
+        $total = 0.0;
+
+        foreach ($this->lines as $line) {
+            $lineFrom = $line->start_date->gt($from) ? $line->start_date->toImmutable() : $from;
+            $lineTo = $line->end_date->lt($to) ? $line->end_date->toImmutable() : $to;
+
+            if ($lineFrom->gt($lineTo)) {
+                continue;
+            }
+
+            $amount = round((float) $line->monthly_rate * $lineFrom->floatDiffInMonths($lineTo->addDay()), 2) * $line->quantity;
+            $total += $amount + round($amount * (float) $line->vat_rate / 100, 2);
+        }
+
+        return round($total, 2);
+    }
+
+    /**
+     * A saved contract plans from its stored lines; an unsaved one (checking
+     * a form before it is saved) from the lines set on it.
+     */
+    protected function refreshChequeTerms(): void
+    {
+        if ($this->exists) {
+            $this->load('lines');
+        }
+    }
+
+    /**
+     * Issue every invoice whose period starts on or before `$date`, so a
+     * cheque for that period has an invoice to settle. Only a running
+     * contract is invoiced.
+     */
+    public function invoiceThrough(CarbonInterface $date): void
+    {
+        if ($this->status !== 'active') {
+            return;
+        }
+
+        for ($guard = 0; $guard < 600; $guard++) {
+            $period = $this->nextBillingPeriod();
+
+            if ($period === null || $period[0]->gt($date)) {
+                return;
+            }
+
+            $this->generateNextInvoice();
+        }
+    }
+
+    /**
      * Put a draft into force.
      *
      * @throws ValidationException When the contract is not a draft or has no lines.
@@ -111,8 +187,29 @@ class Contract extends Model
             throw ValidationException::withMessages(['lines' => 'Add at least one line before activating the contract.']);
         }
 
+        $missing = $this->chequesMissingForThisYear();
+
+        if ($missing > 0) {
+            throw ValidationException::withMessages(['cheques' => "Collect this year's cheques before activating: {$missing} still need their number, bank and a photo of the front."]);
+        }
+
         $this->forceFill(['status' => 'active', 'signed_on' => $this->signed_on ?? $signedOn ?? today()])->save();
         $this->syncUnitStatuses();
+    }
+
+    /**
+     * How many cheques dated up to the end of the current contract year are
+     * not in hand yet, or have no photo of the front.
+     */
+    public function chequesMissingForThisYear(): int
+    {
+        [, $yearEnd] = $this->currentChequeYear();
+
+        return $this->cheques()
+            ->whereIn('status', ['pending', 'received'])
+            ->whereDate('cheque_date', '<=', $yearEnd)
+            ->where(fn ($query) => $query->where('status', 'pending')->orWhereNull('front_image_path'))
+            ->count();
     }
 
     /**
@@ -131,6 +228,9 @@ class Contract extends Model
             $this->closeOpenStays($on);
             $this->forceFill(['status' => 'terminated', 'terminated_on' => $on, 'termination_reason' => $reason])->save();
             $this->syncUnitStatuses();
+
+            // Cheques still expected for the time after the contract stops are no longer due.
+            $this->cheques()->where('status', 'pending')->whereDate('cheque_date', '>', $on)->update(['status' => 'cancelled']);
         });
     }
 

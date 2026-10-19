@@ -1,7 +1,8 @@
-import DataTable from '@/Components/DataTable';
+import ChequeSchedule from '@/Components/ChequeSchedule';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
-import { InstalmentStatusBadge, LeaseStatusBadge } from '@/Components/LeasingBadges';
+import { LeaseStatusBadge } from '@/Components/LeasingBadges';
+import PostButton from '@/Components/PostButton';
 import PageHeader from '@/Components/PageHeader';
 import PropertyCover from '@/Components/PropertyCover';
 import StatCard from '@/Components/StatCard';
@@ -20,14 +21,12 @@ import {
     FilePlusIcon,
     HouseIcon,
     PencilIcon,
-    ReceiptIcon,
     RefreshCwIcon,
+    WalletCardsIcon,
     StoreIcon,
     WalletIcon,
 } from 'lucide-react';
-import { useState } from 'react';
 import DocumentsOnFile from './Partials/DocumentsOnFile';
-import RecordInstalmentDialog from './Partials/RecordInstalmentDialog';
 
 /**
  * Whole months a lease covers, counting its last day (1 Jan to 31 Dec is 12).
@@ -59,12 +58,11 @@ function UnitTile({ icon: Icon, label, value, detail, href }) {
     );
 }
 
-export default function Show({ lease, property, documents, stats, payments, paymentStatuses, paymentMethods, currency }) {
+export default function Show({ lease, property, documents, stats, cheques, banks, currency }) {
     const { t, tOr, formatCurrency, formatMoney, formatDate, formatNumber, formatPercent } = useTranslation();
     const filter = { properties: [property.code] };
     const place = [property.area, property.city].filter(Boolean).join(', ');
     const { period } = useLeasingFormat();
-    const [recording, setRecording] = useState(null);
     const canRenew = ['active', 'expired'].includes(lease.status) && lease.renewal === null;
 
     return (
@@ -99,7 +97,7 @@ export default function Show({ lease, property, documents, stats, payments, paym
                 }
             />
 
-            <FlashMessages />
+            <FlashMessages errorKeys={['action', 'cheques']} />
 
             <section aria-label={t('leasing.headLeases.stats.label')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 <StatCard
@@ -117,10 +115,16 @@ export default function Show({ lease, property, documents, stats, payments, paym
                 />
                 <StatCard
                     icon={WalletIcon}
-                    tone={stats.overdue > 0 ? 'warning' : 'primary'}
+                    tone={stats.overdue > 0 || stats.toWrite > 0 ? 'warning' : 'primary'}
                     label={t('leasing.headLeases.stats.outstanding')}
                     value={formatCurrency(stats.outstanding, currency)}
-                    detail={stats.overdue > 0 ? t('leasing.headLeases.stats.overdueDetail', { count: stats.overdue }) : t('leasing.headLeases.stats.outstandingDetail')}
+                    detail={
+                        stats.toWrite > 0
+                            ? t('leasing.cheques.schedule.attention', { count: stats.toWrite })
+                            : stats.overdue > 0
+                              ? t('leasing.headLeases.stats.overdueDetail', { count: stats.overdue })
+                              : t('leasing.headLeases.stats.outstandingDetail')
+                    }
                 />
                 <StatCard
                     icon={CalendarClockIcon}
@@ -186,48 +190,27 @@ export default function Show({ lease, property, documents, stats, payments, paym
                         </div>
                     </SectionCard>
 
-                    <SectionCard title={t('leasing.headLeases.show.schedule')} description={t('leasing.headLeases.show.scheduleDescription')} flush>
-                        <DataTable
-                            rows={payments}
-                            columns={[
-                                { id: 'number', header: '#', cell: (payment) => <span className="tabular-nums">{formatNumber(payment.installmentNumber)}</span> },
-                                { id: 'due', header: t('leasing.landlordPayments.columns.due'), cell: (payment) => <span className="tabular-nums">{formatDate(payment.dueDate)}</span> },
-                                {
-                                    id: 'amount',
-                                    header: t('leasing.common.amount'),
-                                    align: 'end',
-                                    cell: (payment) => <span className="font-medium tabular-nums">{formatMoney(payment.amount, currency)}</span>,
-                                },
-                                {
-                                    id: 'method',
-                                    header: t('leasing.landlordPayments.columns.method'),
-                                    cell: (payment) => (
-                                        <div className="flex flex-col text-sm">
-                                            <span>{t(`leasing.methods.${payment.method}`)}</span>
-                                            {payment.chequeNumber && <span className="font-mono text-xs text-muted-foreground">{payment.chequeNumber}</span>}
-                                        </div>
-                                    ),
-                                },
-                                {
-                                    id: 'status',
-                                    header: t('leasing.common.status'),
-                                    cell: (payment) => (
-                                        <div className="flex flex-col items-start gap-1">
-                                            <InstalmentStatusBadge status={payment.status} isOverdue={payment.isOverdue} />
-                                            {payment.paidOn && (
-                                                <span className="text-xs text-muted-foreground">{t('leasing.landlordPayments.paidOn', { date: formatDate(payment.paidOn) })}</span>
-                                            )}
-                                        </div>
-                                    ),
-                                },
-                            ]}
-                            actions={(payment) => (
-                                <Button variant="outline" size="sm" onClick={() => setRecording(payment)}>
-                                    <ReceiptIcon data-icon="inline-start" />
-                                    {payment.status === 'scheduled' ? t('leasing.landlordPayments.record') : t('leasing.common.edit')}
-                                </Button>
-                            )}
-                        />
+                    <SectionCard
+                        title={t('leasing.cheques.schedule.title')}
+                        description={t('leasing.cheques.schedule.description.issued')}
+                        flush
+                        action={
+                            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('head-leases.edit', lease.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('leasing.cheques.actions.record')}
+                            </Button>
+                        }
+                    >
+                        {cheques.length === 0 ? (
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-5 lg:px-6">
+                                <p className="max-w-xl text-sm text-muted-foreground">{t('leasing.cheques.schedule.setUpDescription')}</p>
+                                <PostButton href={route('head-leases.cheques.store', lease.id)} icon={WalletCardsIcon}>
+                                    {t('leasing.cheques.schedule.setUp')}
+                                </PostButton>
+                            </div>
+                        ) : (
+                            <ChequeSchedule cheques={cheques} currency={currency} banks={banks} />
+                        )}
                     </SectionCard>
 
                     <SectionCard
@@ -334,17 +317,6 @@ export default function Show({ lease, property, documents, stats, payments, paym
                 </div>
             </div>
 
-            {recording && (
-                <RecordInstalmentDialog
-                    key={recording.id}
-                    payment={recording}
-                    open
-                    onOpenChange={(open) => !open && setRecording(null)}
-                    statuses={paymentStatuses}
-                    methods={paymentMethods}
-                    currency={currency}
-                />
-            )}
         </DashboardLayout>
     );
 }

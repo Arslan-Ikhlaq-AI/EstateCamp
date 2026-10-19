@@ -6,6 +6,11 @@ import {
     CalendarX2Icon,
     FileClockIcon,
     FileWarningIcon,
+    HandCoinsIcon,
+    LandmarkIcon,
+    PenLineIcon,
+    TicketXIcon,
+    WalletCardsIcon,
     WrenchIcon,
 } from 'lucide-react';
 
@@ -17,6 +22,19 @@ const ICONS = {
     room_maintenance: WrenchIcon,
     license_expiring: BadgeAlertIcon,
     license_expired: BadgeAlertIcon,
+    cheque_bounced: TicketXIcon,
+    cheque_deposit_due: LandmarkIcon,
+    cheque_to_collect: HandCoinsIcon,
+    cheque_to_write: PenLineIcon,
+    cheque_clearing: WalletCardsIcon,
+};
+
+const CHEQUE_HEADINGS = {
+    cheque_bounced: 'alerts.chequeBounced',
+    cheque_deposit_due: 'alerts.chequeDeposit',
+    cheque_to_collect: 'alerts.chequeToCollect',
+    cheque_to_write: 'alerts.chequeToWrite',
+    cheque_clearing: 'alerts.chequeClearing',
 };
 
 const TONES = {
@@ -59,6 +77,19 @@ function describe({ type, title, subject, days }, t) {
             return {
                 heading: t('alerts.license', { title }),
                 details: [timing('alerts.expiredAgo', 'alerts.expiresIn'), subject],
+            };
+        case 'cheque_bounced':
+            return {
+                heading: t(CHEQUE_HEADINGS[type], { title }),
+                details: [days === 0 ? t('alerts.bouncedToday') : t('alerts.bouncedAgo', { count: Math.abs(days) }), subject],
+            };
+        case 'cheque_deposit_due':
+        case 'cheque_to_collect':
+        case 'cheque_to_write':
+        case 'cheque_clearing':
+            return {
+                heading: t(CHEQUE_HEADINGS[type], { title }),
+                details: [days === 0 ? t('alerts.dueToday') : days < 0 ? t('alerts.dueAgo', { count: Math.abs(days) }) : t('alerts.dueIn', { count: days }), subject],
             };
         default:
             return {

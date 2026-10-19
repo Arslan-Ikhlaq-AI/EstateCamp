@@ -1,18 +1,18 @@
+import ChequeScheduleFields, { ChequePlanCard, TermPicker } from '@/Components/ChequeScheduleFields';
 import { ChoiceField, FormSection, MoneyField, SelectField, TextareaField, TextField } from '@/Components/FormFields';
 import FormShell from '@/Components/FormShell';
 import DashboardLayout from '@/Layouts/DashboardLayout';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FieldGroup } from '@/components/ui/field';
 import { useTranslation } from '@/hooks/use-translation';
+import { chequePayload, emptyChequeEntry, initialChequeEntries, planLeaseCheques, scheduleRows } from '@/lib/cheques';
 import { Head, useForm } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { CircleAlertIcon, FilePlusIcon } from 'lucide-react';
+import { FilePlusIcon } from 'lucide-react';
 import { useEffect } from 'react';
 import DocumentFields from '../Properties/Partials/DocumentFields';
 import LandlordPicker, { emptyLandlord } from '../Properties/Partials/LandlordPicker';
 import RequiredDocuments from '../Properties/Partials/RequiredDocuments';
 import DocumentsOnFile from './Partials/DocumentsOnFile';
-import SchedulePreview, { useSchedule } from './Partials/SchedulePreview';
 
 const emptyDocument = (documentType = 'other') => ({
     document_type: documentType,
@@ -41,8 +41,16 @@ function withMissingTypes(documents, missingTypes, requiredTypes) {
 
 function initialData(lease, prefill, landlords) {
     const source = lease ?? prefill ?? {};
+    const terms = {
+        start_date: source.start_date ?? '',
+        end_date: source.end_date ?? '',
+        annual_rent: source.annual_rent ?? '',
+        payments_per_year: source.payments_per_year ?? 4,
+        security_deposit: source.security_deposit ?? '',
+    };
 
     return {
+        cheques: initialChequeEntries(lease?.cheques ?? [], planLeaseCheques(terms)),
         property_id: source.property_id ?? null,
         landlord_mode: source.landlord_id || landlords.length > 0 ? 'existing' : 'new',
         landlord_id: source.landlord_id ?? null,
@@ -73,12 +81,17 @@ export default function Form({
     documentTypes,
     requiredDocumentTypes,
     propertyDocuments,
+    banks,
 }) {
     const { t } = useTranslation();
     const isEditing = lease !== null;
     const form = useForm(initialData(lease, prefill, landlords));
     const { data, setData, errors, processing } = form;
-    const schedule = useSchedule(data);
+    const isKept = Boolean(lease?.hasLockedCheques);
+    const chequeRows = (values) => scheduleRows(planLeaseCheques(values), values.cheques, lease?.cheques ?? [], isKept);
+    const rows = chequeRows(data);
+    const patchCheque = (key, patch) =>
+        setData((current) => ({ ...current, cheques: { ...current.cheques, [key]: { ...(current.cheques[key] ?? emptyChequeEntry()), ...patch } } }));
     const onFile = propertyDocuments[data.property_id] ?? [];
     const missingTypes = requiredDocumentTypes.filter((type) => !onFile.some((document) => document.document_type === type));
     const slots = missingTypes
@@ -105,7 +118,7 @@ export default function Form({
     const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
 
     const submit = () => {
-        form.transform((values) => (isEditing ? { ...values, _method: 'put' } : values));
+        form.transform((values) => ({ ...values, cheques: chequePayload(chequeRows(values)), ...(isEditing ? { _method: 'put' } : {}) }));
         form.post(isEditing ? route('head-leases.update', lease.id) : route('head-leases.store'), { forceFormData: true });
     };
 
@@ -124,14 +137,8 @@ export default function Form({
                 submitLabel={isEditing ? t('leasing.common.saveChanges') : t('leasing.headLeases.form.save')}
                 processing={processing}
                 onSubmit={submit}
-                aside={<SchedulePreview schedule={schedule} currency={currency} />}
+                aside={<ChequePlanCard rows={rows} startDate={data.start_date} endDate={data.end_date} perYear={Number(data.payments_per_year)} currency={currency} />}
             >
-                {isEditing && lease.hasRecordedPayments && (
-                    <Alert>
-                        <CircleAlertIcon />
-                        <AlertDescription>{t('leasing.headLeases.form.recordedWarning')}</AlertDescription>
-                    </Alert>
-                )}
 
                 <FormSection title={t('leasing.headLeases.form.parties.title')} description={t('leasing.headLeases.form.parties.description')}>
                     <FieldGroup className="grid gap-4 sm:grid-cols-2">
@@ -150,6 +157,7 @@ export default function Form({
                     <FieldGroup className="grid gap-4 sm:grid-cols-2">
                         <TextField {...bind('start_date')} type="date" label={t('leasing.common.startDate')} />
                         <TextField {...bind('end_date')} type="date" label={t('leasing.common.endDate')} />
+                        <TermPicker startDate={data.start_date} endDate={data.end_date} onChange={(value) => setData('end_date', value)} />
                         <MoneyField {...bind('annual_rent')} label={t('leasing.headLeases.form.fields.annualRent')} currency={currency} suffix={t('leasing.common.perYear')} placeholder="780000" />
                         <MoneyField {...bind('security_deposit')} label={t('leasing.common.securityDeposit')} currency={currency} optional />
                         <ChoiceField
@@ -170,6 +178,21 @@ export default function Form({
                             optional
                         />
                     </FieldGroup>
+                </FormSection>
+
+                <FormSection title={t('leasing.cheques.schedule.title')} description={t('leasing.cheques.schedule.formDescription.issued')}>
+                    <ChequeScheduleFields
+                        rows={rows}
+                        startDate={data.start_date}
+                        endDate={data.end_date}
+                        direction="issued"
+                        enforce={data.status === 'active'}
+                        isKept={isKept}
+                        onPatch={patchCheque}
+                        errors={errors}
+                        currency={currency}
+                        banks={banks}
+                    />
                 </FormSection>
 
                 <FormSection title={t('leasing.headLeases.form.documents.title')} description={t('leasing.headLeases.form.documents.description')}>

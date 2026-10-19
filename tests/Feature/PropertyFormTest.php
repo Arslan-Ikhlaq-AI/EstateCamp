@@ -231,7 +231,7 @@ describe('for the seeded demo company', function () {
             ->and((float) $lease->annual_rent)->toBe(240000.0)
             ->and($lease->ejari_number)->toBe('EJ-2026-555')
             ->and($lease->status)->toBe('active')
-            ->and($lease->payments()->count())->toBe(8)
+            ->and($lease->cheques()->where('purpose', 'rent')->count())->toBe(8)
             ->and($property->documents()->where('head_lease_id', $lease->id)->count())->toBe(4);
     });
 
@@ -247,7 +247,7 @@ describe('for the seeded demo company', function () {
         $lease = $property->headLeases()->sole();
 
         expect((float) $lease->annual_rent)->toBe(300000.0)
-            ->and($lease->payments()->count())->toBe(4);
+            ->and($lease->cheques()->where('purpose', 'rent')->count())->toBe(4);
     });
 
     test('rejects invalid input', function (array $overrides, string $field) {

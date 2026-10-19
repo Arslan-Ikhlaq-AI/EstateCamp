@@ -279,8 +279,8 @@ class Property extends Model
     /**
      * Create or update the head lease behind a leased property from its
      * landlord, lease dates and the lease terms entered with it. A new lease
-     * is active unless it has already ended; its payment schedule is built,
-     * and rebuilt when the dates or rent change (unless cheques are recorded).
+     * is active unless it has already ended; its cheque schedule is built,
+     * and rebuilt when the dates or rent change (unless a cheque has reached the bank).
      *
      * @param  array{ejari_number?: ?string, annual_rent: numeric, payments_per_year: int, security_deposit?: ?numeric, notice_period_days?: ?int}  $terms
      */
@@ -305,8 +305,8 @@ class Property extends Model
 
         $lease->save();
 
-        if ($lease->wasRecentlyCreated || $lease->wasChanged(['start_date', 'end_date', 'annual_rent', 'payments_per_year'])) {
-            $lease->rebuildSchedule();
+        if ($lease->wasRecentlyCreated || $lease->wasChanged(['start_date', 'end_date', 'annual_rent', 'payments_per_year', 'security_deposit'])) {
+            $lease->syncCheques();
         }
 
         return $lease;

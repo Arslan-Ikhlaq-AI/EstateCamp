@@ -32,7 +32,7 @@ test('every leasing page opens for a member of the company', function (Closure $
     'head lease' => [fn () => route('head-leases.show', HeadLease::first()), 'HeadLeases/Show'],
     'add head lease' => [fn () => route('head-leases.create'), 'HeadLeases/Form'],
     'edit head lease' => [fn () => route('head-leases.edit', HeadLease::first()), 'HeadLeases/Form'],
-    'landlord payments' => [fn () => route('landlord-payments.index'), 'LandlordPayments/Index'],
+    'cheques' => [fn () => route('cheques.index'), 'Cheques/Index'],
     'clients' => [fn () => route('clients.index'), 'Clients/Index'],
     'client' => [fn () => route('clients.show', Client::first()), 'Clients/Show'],
     'add client' => [fn () => route('clients.create'), 'Clients/Form'],
@@ -55,7 +55,7 @@ test('every leasing page opens for a member of the company', function (Closure $
 
 test('guests are sent to the login page', function (string $routeName) {
     $this->get(route($routeName))->assertRedirect(route('login'));
-})->with(['landlords.index', 'head-leases.index', 'landlord-payments.index', 'clients.index', 'contracts.index', 'occupants.index', 'invoices.index', 'payments.index']);
+})->with(['landlords.index', 'head-leases.index', 'cheques.index', 'clients.index', 'contracts.index', 'occupants.index', 'invoices.index', 'payments.index']);
 
 test('users without a company see empty lists and cannot add records', function (string $index, string $create, string $component) {
     $user = User::factory()->create();

@@ -1,3 +1,4 @@
+import ChequeScheduleFields, { ChequePlanCard, TermPicker } from '@/Components/ChequeScheduleFields';
 import { ChoiceField, FormSection, MoneyField, TextareaField, TextField } from '@/Components/FormFields';
 import FormShell from '@/Components/FormShell';
 import DashboardLayout from '@/Layouts/DashboardLayout';
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldGroup } from '@/components/ui/field';
 import { useTranslation } from '@/hooks/use-translation';
+import { chequePayload, emptyChequeEntry, initialChequeEntries, planContractCheques, scheduleRows } from '@/lib/cheques';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { DetailList } from '@/Components/DetailCards';
 import { ContractStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
@@ -70,8 +72,16 @@ function initialData(contract, clientId, clients) {
             notes: '',
             lines: [],
             documents: [],
+            cheques: {},
         };
     }
+
+    const lines = contract.lines.map((line) => ({
+        ...line,
+        start_date: line.start_date === contract.start_date ? '' : line.start_date,
+        end_date: line.end_date === contract.end_date ? '' : line.end_date,
+        description: line.description ?? '',
+    }));
 
     return {
         ...client,
@@ -84,12 +94,11 @@ function initialData(contract, clientId, clients) {
         security_deposit: contract.security_deposit ?? '',
         signed_on: contract.signed_on ?? '',
         notes: contract.notes ?? '',
-        lines: contract.lines.map((line) => ({
-            ...line,
-            start_date: line.start_date === contract.start_date ? '' : line.start_date,
-            end_date: line.end_date === contract.end_date ? '' : line.end_date,
-            description: line.description ?? '',
-        })),
+        lines,
+        cheques: initialChequeEntries(
+            contract.cheques,
+            planContractCheques({ start_date: contract.start_date, end_date: contract.end_date, billing_cycle: contract.billing_cycle, security_deposit: contract.security_deposit, lines }),
+        ),
         documents: contract.documents.map((document) => ({
             ...emptyDocument(),
             ...Object.fromEntries(Object.entries(document).map(([key, value]) => [key, value ?? ''])),
@@ -304,11 +313,16 @@ function Summary({ data, currency }) {
     );
 }
 
-export default function Form({ contract, clientId, currency, clients, clientTypes, idTypes, documentTypes, properties, billingCycles, billingBases }) {
+export default function Form({ contract, clientId, currency, clients, clientTypes, idTypes, documentTypes, properties, billingCycles, billingBases, banks }) {
     const { t } = useTranslation();
     const isEditing = contract !== null;
     const form = useForm(initialData(contract, clientId, clients));
     const { data, setData, errors, processing } = form;
+    const isKept = Boolean(contract?.hasLockedCheques);
+    const chequeRows = (values) => scheduleRows(planContractCheques(values), values.cheques, contract?.cheques ?? [], isKept);
+    const rows = chequeRows(data);
+    const patchCheque = (key, patch) =>
+        setData((current) => ({ ...current, cheques: { ...current.cheques, [key]: { ...(current.cheques[key] ?? emptyChequeEntry()), ...patch } } }));
     const title = isEditing ? t('leasing.contracts.form.editTitle', { number: contract.contract_number }) : t('leasing.contracts.form.addTitle');
 
     const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
@@ -339,6 +353,7 @@ export default function Form({ contract, clientId, currency, clients, clientType
                 start_date: line.start_date || values.start_date,
                 end_date: line.end_date || values.end_date,
             })),
+            cheques: chequePayload(chequeRows(values)),
             ...(isEditing ? { _method: 'put' } : {}),
         }));
 
@@ -366,6 +381,7 @@ export default function Form({ contract, clientId, currency, clients, clientType
                             currency={currency}
                         />
                         <Summary data={data} currency={currency} />
+                        <ChequePlanCard rows={rows} startDate={data.start_date} endDate={data.end_date} perYear={12 / (CYCLE_MONTHS[data.billing_cycle] ?? 1)} currency={currency} />
                     </>
                 }
             >
@@ -390,12 +406,14 @@ export default function Form({ contract, clientId, currency, clients, clientType
                     <FieldGroup className="grid gap-4 sm:grid-cols-2">
                         <TextField {...bind('start_date')} type="date" label={t('leasing.common.startDate')} />
                         <TextField {...bind('end_date')} type="date" label={t('leasing.common.endDate')} />
+                        <TermPicker startDate={data.start_date} endDate={data.end_date} onChange={(value) => setData('end_date', value)} />
                         <ChoiceField
                             id="billing_cycle"
                             label={t('leasing.contracts.form.fields.billingCycle')}
                             value={data.billing_cycle}
                             onChange={(value) => setData('billing_cycle', value)}
                             options={billingCycles.map((cycle) => ({ value: cycle, label: t(`leasing.billingCycles.${cycle}`) }))}
+                            description={t('leasing.cheques.perYearHint', { count: 12 / (CYCLE_MONTHS[data.billing_cycle] ?? 1) })}
                             error={errors.billing_cycle}
                             className="sm:col-span-2"
                         />
@@ -457,6 +475,21 @@ export default function Form({ contract, clientId, currency, clients, clientType
                             );
                         })}
                     </div>
+                </FormSection>
+
+                <FormSection title={t('leasing.cheques.schedule.title')} description={t('leasing.cheques.schedule.formDescription.received')}>
+                    <ChequeScheduleFields
+                        rows={rows}
+                        startDate={data.start_date}
+                        endDate={data.end_date}
+                        direction="received"
+                        enforce={isEditing && contract.status === 'active'}
+                        isKept={isKept}
+                        onPatch={patchCheque}
+                        errors={errors}
+                        currency={currency}
+                        banks={banks}
+                    />
                 </FormSection>
 
                 <FormSection

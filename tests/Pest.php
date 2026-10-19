@@ -1,6 +1,9 @@
 <?php
 
+use App\Models\Cheque;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 /*
@@ -47,4 +50,24 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Record the number, bank and a front photo of every cheque an agreement
+ * needs this year, as staff do when the cheques are handed over. Fake the
+ * private disk first.
+ */
+function collectChequesDueThisYear(Model $agreement): void
+{
+    [, $yearEnd] = $agreement->currentChequeYear();
+
+    $agreement->cheques()
+        ->where('status', 'pending')
+        ->whereDate('cheque_date', '<=', $yearEnd)
+        ->get()
+        ->each(fn (Cheque $cheque) => $cheque->applyEntry([
+            'cheque_number' => (string) (100000 + $cheque->id),
+            'bank_name' => 'Emirates NBD',
+            'front_image' => UploadedFile::fake()->image('front.jpg'),
+        ]));
 }

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\ApartmentController;
+use App\Http\Controllers\ChequeController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\ContractController;
@@ -9,7 +10,6 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HeadLeaseController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LandlordController;
-use App\Http\Controllers\LandlordPaymentController;
 use App\Http\Controllers\OccupancyController;
 use App\Http\Controllers\OccupantController;
 use App\Http\Controllers\PaymentController;
@@ -36,14 +36,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Leasing: what the company rents from landlords, and what clients rent from it.
     Route::resource('landlords', LandlordController::class)->except(['destroy']);
     Route::resource('head-leases', HeadLeaseController::class)->except(['destroy']);
-    Route::get('landlord-payments', [LandlordPaymentController::class, 'index'])->name('landlord-payments.index');
-    Route::patch('landlord-payments/{head_lease_payment}', [LandlordPaymentController::class, 'update'])->name('landlord-payments.update');
+    Route::post('head-leases/{head_lease}/cheques', [ChequeController::class, 'scheduleLease'])->name('head-leases.cheques.store');
+    // Landlord instalments became issued cheques; the old address opens them in the cheque register.
+    Route::redirect('landlord-payments', '/cheques?direction[]=issued')->name('landlord-payments.index');
     Route::resource('clients', ClientController::class)->except(['destroy']);
     Route::resource('contracts', ContractController::class)->except(['destroy']);
     Route::post('contracts/{contract}/activate', [ContractController::class, 'activate'])->name('contracts.activate');
     Route::post('contracts/{contract}/terminate', [ContractController::class, 'terminate'])->name('contracts.terminate');
     Route::post('contracts/{contract}/renew', [ContractController::class, 'renew'])->name('contracts.renew');
     Route::post('contracts/{contract}/invoices', [InvoiceController::class, 'store'])->name('contracts.invoices.store');
+    Route::post('contracts/{contract}/cheques', [ChequeController::class, 'scheduleContract'])->name('contracts.cheques.store');
     Route::resource('occupants', OccupantController::class)->except(['destroy']);
     Route::get('check-in', [OccupancyController::class, 'create'])->name('occupancies.create');
     Route::post('occupancies', [OccupancyController::class, 'store'])->name('occupancies.store');
@@ -52,6 +54,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
     Route::post('invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
     Route::resource('payments', PaymentController::class)->only(['index', 'create', 'store', 'show', 'update']);
+
+    // Cheques: the main record of money moving under contracts and head leases.
+    Route::get('cheques', [ChequeController::class, 'index'])->name('cheques.index');
+    Route::put('cheques/{cheque}', [ChequeController::class, 'update'])->name('cheques.update');
+    Route::post('cheques/{cheque}/transition', [ChequeController::class, 'transition'])->name('cheques.transition');
+    Route::post('cheques/{cheque}/replace', [ChequeController::class, 'replace'])->name('cheques.replace');
+    Route::get('cheques/{cheque}/images/{side}', [ChequeController::class, 'image'])->whereIn('side', ['front', 'back'])->name('cheques.image');
 
     Route::get('configuration/company', [CompanyProfileController::class, 'edit'])->name('configuration.company');
     Route::put('configuration/company', [CompanyProfileController::class, 'update'])->name('configuration.company.update');

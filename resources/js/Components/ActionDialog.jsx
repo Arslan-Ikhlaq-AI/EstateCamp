@@ -10,18 +10,19 @@ import {
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import { cn } from '@/lib/utils';
 
 /**
  * A small dialog holding a form for one action, such as recording a payment
  * or checking someone out. The caller owns `open` so it can close the dialog
- * once the request succeeds.
+ * once the request succeeds; `className` can widen it for a larger form.
  */
-export default function ActionDialog({ open, onOpenChange, title, description, submitLabel, onSubmit, processing, destructive = false, children }) {
+export default function ActionDialog({ open, onOpenChange, title, description, submitLabel, onSubmit, processing, destructive = false, className, children }) {
     const { t } = useTranslation();
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className={cn('sm:max-w-md', className)}>
                 <form
                     noValidate
                     className="flex flex-col gap-4"

@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\HeadLeaseRequest;
 use App\Models\Company;
+use App\Models\Cheque;
 use App\Models\HeadLease;
-use App\Models\HeadLeasePayment;
 use App\Models\Property;
 use App\Models\PropertyDocument;
 use App\Models\Room;
@@ -29,7 +29,7 @@ class HeadLeaseController extends Controller
     private const RELATION_FIELDS = ['property_id', 'landlord_id', 'renewed_from_id', 'landlord_mode', 'new_landlord', 'documents'];
 
     /**
-     * List the company's head leases with what has been paid and what is due next.
+     * List the company's head leases with what has been paid and when the next cheque is due.
      */
     public function index(Request $request): Response
     {
@@ -54,8 +54,8 @@ class HeadLeaseController extends Controller
             'summary' => $this->summary($company),
             'leases' => $this->filteredQuery($company, $filters)
                 ->with(['property:id,name,code', 'landlord:id,name'])
-                ->withSum(['payments as paid_amount' => fn (Builder $payments) => $payments->where('status', 'paid')], 'amount')
-                ->withMin(['payments as next_due_date' => fn (Builder $payments) => $payments->where('status', 'scheduled')], 'due_date')
+                ->withSum(['cheques as paid_amount' => fn (Builder $cheques) => $cheques->where('status', 'cleared')], 'amount')
+                ->withMin(['cheques as next_due_date' => fn (Builder $cheques) => $cheques->whereIn('status', ['pending', 'issued'])], 'cheque_date')
                 ->orderByDesc('start_date')
                 ->paginate($filters['perPage'])
                 ->withQueryString()
@@ -102,7 +102,7 @@ class HeadLeaseController extends Controller
     }
 
     /**
-     * Save a new head lease and build its payment schedule.
+     * Save a new head lease with its cheque schedule.
      */
     public function store(HeadLeaseRequest $request): RedirectResponse
     {
@@ -117,7 +117,7 @@ class HeadLeaseController extends Controller
                 'lease_number' => HeadLease::nextNumber($company->id, $request->date('start_date')),
             ])->save();
 
-            $lease->rebuildSchedule();
+            $lease->syncCheques($request->chequeEntries(), $request->user());
             $lease->syncPropertyLease();
             $this->addDocuments($lease, $request);
 
@@ -125,11 +125,11 @@ class HeadLeaseController extends Controller
         });
 
         return to_route('head-leases.show', $lease)
-            ->with('success', "Lease {$lease->lease_number} was added with {$lease->payments()->count()} scheduled payments.");
+            ->with('success', "Lease {$lease->lease_number} was added with {$lease->cheques()->count()} cheques to the landlord.");
     }
 
     /**
-     * Show a head lease with its payment schedule.
+     * Show a head lease with its cheque schedule.
      */
     public function show(Request $request, HeadLease $headLease): Response
     {
@@ -138,19 +138,24 @@ class HeadLeaseController extends Controller
         $headLease->load([
             'property:id,name,code',
             'landlord',
-            'payments' => fn (HasMany $payments) => $payments->orderBy('installment_number'),
             'renewedFrom:id,lease_number',
             'renewal:id,renewed_from_id,lease_number',
         ]);
-        $payments = $headLease->payments->each(fn (HeadLeasePayment $payment) => $payment->setRelation('headLease', $headLease));
+        $cheques = $headLease->cheques()
+            ->with(['replacement:id,replaces_id', 'payment:id,cheque_id,payment_number'])
+            ->orderByRaw("case when purpose = 'security_deposit' then 0 else 1 end")
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get()
+            ->each(fn (Cheque $cheque) => $cheque->setRelation('chequeable', $headLease));
         $property = Property::query()
             ->whereKey($headLease->property_id)
             ->with(['propertyType:id,name,slug', 'documents' => fn (HasMany $documents) => $documents->with('headLease:id,lease_number')->orderBy('id')])
             ->withOccupancy()
             ->withCount(['shops', 'apartments'])
             ->firstOrFail();
-        $scheduled = $payments->where('status', 'scheduled');
-        $next = $scheduled->sortBy('due_date')->first();
+        $toPay = $cheques->whereIn('status', ['pending', 'issued']);
+        $next = $toPay->sortBy('cheque_date')->first();
 
         return Inertia::render('HeadLeases/Show', [
             'currency' => $headLease->company->default_currency,
@@ -167,10 +172,11 @@ class HeadLeaseController extends Controller
                 'renewal' => $headLease->renewal ? ['id' => $headLease->renewal->id, 'number' => $headLease->renewal->lease_number] : null,
             ],
             'stats' => [
-                'paid' => (float) $payments->where('status', 'paid')->sum('amount'),
-                'outstanding' => (float) $scheduled->sum('amount'),
-                'overdue' => $scheduled->filter(fn (HeadLeasePayment $payment) => $payment->isOverdue())->count(),
-                'nextPayment' => $next ? ['dueDate' => $next->due_date->toDateString(), 'amount' => (float) $next->amount] : null,
+                'paid' => (float) $cheques->where('status', 'cleared')->sum('amount'),
+                'outstanding' => (float) $toPay->sum('amount'),
+                'overdue' => $toPay->filter(fn (Cheque $cheque) => $cheque->isOverdue())->count(),
+                'toWrite' => $cheques->filter(fn (Cheque $cheque) => $cheque->isDueNow())->count(),
+                'nextPayment' => $next ? ['dueDate' => $next->cheque_date->toDateString(), 'amount' => (float) $next->amount] : null,
             ],
             'property' => [
                 ...$property->only(['id', 'name', 'code', 'cover_image_url', 'status', 'area', 'city', 'address', 'total_floors', 'total_units']),
@@ -186,9 +192,8 @@ class HeadLeaseController extends Controller
                 'expires_on' => $document->expires_on?->toDateString(),
                 'lease_number' => $document->headLease?->lease_number,
             ]),
-            'payments' => $payments->map(fn (HeadLeasePayment $payment) => LandlordPaymentController::paymentDetails($payment)),
-            'paymentStatuses' => HeadLeasePayment::STATUSES,
-            'paymentMethods' => HeadLeasePayment::METHODS,
+            'cheques' => $cheques->map(fn (Cheque $cheque) => ChequeController::details($cheque)),
+            'banks' => ChequeController::knownBanks($headLease->company),
         ]);
     }
 
@@ -209,7 +214,8 @@ class HeadLeaseController extends Controller
                 ]),
                 'start_date' => $headLease->start_date->toDateString(),
                 'end_date' => $headLease->end_date->toDateString(),
-                'hasRecordedPayments' => $headLease->payments()->whereNot('status', 'scheduled')->exists(),
+                'hasLockedCheques' => $headLease->cheques()->whereNotIn('status', Cheque::EDITABLE_STATUSES)->exists(),
+                'cheques' => $headLease->cheques()->whereNull('replaces_id')->get()->map(fn (Cheque $cheque) => ChequeController::formDetails($cheque)),
             ],
             'prefill' => null,
             'renewing' => null,
@@ -218,8 +224,8 @@ class HeadLeaseController extends Controller
     }
 
     /**
-     * Save changes to a head lease. Changed financial terms rebuild the
-     * schedule, unless cheques have already been recorded against it.
+     * Save changes to a head lease and its cheques. Changed terms rebuild the
+     * cheque schedule, unless a cheque has already reached the bank.
      */
     public function update(HeadLeaseRequest $request, HeadLease $headLease): RedirectResponse
     {
@@ -230,19 +236,18 @@ class HeadLeaseController extends Controller
                 'landlord_id' => $this->landlordId($request, $headLease->company),
             ])->save();
 
-            $rebuilt = $headLease->wasChanged(['start_date', 'end_date', 'annual_rent', 'payments_per_year'])
-                ? $headLease->rebuildSchedule()
-                : null;
+            $termsChanged = $headLease->wasChanged(['start_date', 'end_date', 'annual_rent', 'payments_per_year', 'security_deposit']);
+            $rebuilt = $headLease->syncCheques($request->chequeEntries(), $request->user());
 
             $headLease->syncPropertyLease();
             $this->addDocuments($headLease, $request);
 
-            return $rebuilt;
+            return $termsChanged ? $rebuilt : null;
         });
 
         $message = match ($rebuilt) {
-            true => "Lease {$headLease->lease_number} was updated and its payment schedule rebuilt.",
-            false => "Lease {$headLease->lease_number} was updated. Its payment schedule was kept because payments are already recorded; adjust the instalments by hand.",
+            true => "Lease {$headLease->lease_number} was updated and its cheque schedule rebuilt.",
+            false => "Lease {$headLease->lease_number} was updated. Its cheque schedule was kept because cheques have already cleared or bounced; adjust them on the lease page.",
             null => "Lease {$headLease->lease_number} was updated.",
         };
 
@@ -313,6 +318,7 @@ class HeadLeaseController extends Controller
             'landlords' => $company->landlords()->orderBy('name')->get(['id', 'name']),
             'statuses' => HeadLease::STATUSES,
             'paymentsPerYear' => HeadLease::PAYMENTS_PER_YEAR,
+            'banks' => ChequeController::knownBanks($company),
         ];
     }
 
@@ -341,20 +347,21 @@ class HeadLeaseController extends Controller
     private function summary(Company $company): array
     {
         $active = fn () => $company->headLeases()->where('status', 'active');
-        $scheduled = fn () => $company->headLeasePayments()
-            ->where('status', 'scheduled')
-            ->whereHas('headLease', fn (Builder $leases) => $leases->where('status', 'active'));
-        $next = $scheduled()->with('headLease:id,lease_number')->orderBy('due_date')->first();
+        $toPay = fn () => $company->cheques()
+            ->where('direction', 'issued')
+            ->whereIn('status', ['pending', 'issued'])
+            ->whereHasMorph('chequeable', [HeadLease::class], fn (Builder $leases) => $leases->where('status', 'active'));
+        $next = $toPay()->with('chequeable')->orderBy('cheque_date')->first();
 
         return [
             'activeLeases' => $active()->count(),
             'annualRent' => (float) $active()->sum('annual_rent'),
-            'outstanding' => (float) $scheduled()->sum('amount'),
-            'overdue' => $scheduled()->whereDate('due_date', '<', today())->count(),
+            'outstanding' => (float) $toPay()->sum('amount'),
+            'overdue' => $toPay()->where('status', 'pending')->whereDate('cheque_date', '<', today())->count(),
             'nextPayment' => $next ? [
-                'dueDate' => $next->due_date->toDateString(),
+                'dueDate' => $next->cheque_date->toDateString(),
                 'amount' => (float) $next->amount,
-                'leaseNumber' => $next->headLease->lease_number,
+                'leaseNumber' => $next->chequeable->lease_number,
             ] : null,
         ];
     }

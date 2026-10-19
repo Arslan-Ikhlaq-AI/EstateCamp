@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Models\Cheque;
 use App\Models\HeadLease;
-use App\Models\HeadLeasePayment;
 use Illuminate\Database\Seeder;
 
 /**
@@ -11,9 +11,11 @@ use Illuminate\Database\Seeder;
  * expired, and the three-year renewal running today. Al Quoz Worker Village
  * is owned, so it has none.
  *
- * Each lease gets its quarterly cheque schedule; every cheque already due
- * is marked paid. Safe to re-run: leases are matched on their number, and a
- * schedule with paid cheques is never rebuilt.
+ * Each lease gets its cheque schedule (the security deposit plus quarterly
+ * rent). The cheques for the lease year running today, and every earlier
+ * one, are written with a photo; those whose date has come have cleared.
+ * Safe to re-run: leases are matched on their number, and a schedule with
+ * cleared cheques is never rebuilt.
  * Requires PropertySeeder and LandlordSeeder.
  */
 class HeadLeaseSeeder extends Seeder
@@ -39,8 +41,8 @@ class HeadLeaseSeeder extends Seeder
                 ],
             );
 
-            $lease->rebuildSchedule();
-            $this->payDueCheques($lease);
+            $lease->syncCheques();
+            $this->writeCheques($lease);
             $lease->syncPropertyLease();
 
             $previous = $lease;
@@ -51,21 +53,31 @@ class HeadLeaseSeeder extends Seeder
     }
 
     /**
-     * Mark every instalment due by today as paid by cheque on its due date.
+     * Write the cheques due by the end of the lease year running today, with
+     * a photo, and clear those whose date has come.
      */
-    private function payDueCheques(HeadLease $lease): void
+    private function writeCheques(HeadLease $lease): void
     {
-        $lease->payments()
-            ->whereDate('due_date', '<=', today())
+        [, $yearEnd] = $lease->currentChequeYear();
+
+        $lease->cheques()
+            ->whereNull('replaces_id')
+            ->whereDate('cheque_date', '<=', $yearEnd)
+            ->orderBy('cheque_date')
             ->get()
-            ->each(fn (HeadLeasePayment $payment) => $payment->update([
-                'status' => 'paid',
-                'paid_on' => $payment->due_date,
-                'payment_method' => 'cheque',
-                'cheque_number' => sprintf('%06d', 400000 + $lease->start_date->year % 100 * 100 + $payment->installment_number),
-                'bank_name' => 'Emirates NBD',
-                'reference' => "{$lease->lease_number}/{$payment->installment_number}",
-            ]));
+            ->filter(fn (Cheque $cheque) => $cheque->isEditable())
+            ->each(function (Cheque $cheque) use ($lease) {
+                $cheque->applyEntry([
+                    'cheque_number' => sprintf('%06d', 400000 + $lease->start_date->year % 100 * 100 + ($cheque->purpose === 'rent' ? $cheque->sequence : 0)),
+                    'bank_name' => 'Emirates NBD',
+                    'account_holder' => LandlordSeeder::AL_MARSA,
+                ]);
+                ChequeSeeder::attachDemoPhoto($cheque);
+
+                if ($cheque->cheque_date->lte(today())) {
+                    $cheque->clear($cheque->cheque_date);
+                }
+            });
     }
 
     /**

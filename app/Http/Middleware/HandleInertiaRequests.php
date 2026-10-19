@@ -2,11 +2,16 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Cheque;
 use App\Models\Company;
+use App\Models\Contract;
+use App\Models\HeadLease;
 use App\Models\Property;
 use App\Models\PropertyDocument;
 use App\Models\Room;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -21,6 +26,11 @@ class HandleInertiaRequests extends Middleware
      * Leases and the trade license raise a notification this many days ahead.
      */
     private const CONTRACT_WARNING_DAYS = 90;
+
+    /**
+     * Cheques raise a notification this many days before their date.
+     */
+    private const CHEQUE_WARNING_DAYS = 7;
 
     /**
      * The root template that is loaded on the first page visit.
@@ -61,6 +71,59 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
             ],
         ];
+    }
+
+    /**
+     * Cheques that need someone to act: bounced ones without a replacement,
+     * client cheques to deposit or still to collect, and landlord cheques to
+     * write or about to clear (so the account has the funds).
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function chequeNotifications(Company $company): Collection
+    {
+        $today = today();
+
+        return $company->cheques()
+            ->where(fn (Builder $query) => $query
+                ->where(fn (Builder $query) => $query->where('status', 'bounced')->whereDoesntHave('replacement'))
+                ->orWhere(fn (Builder $query) => $query->whereIn('status', ['pending', 'received'])->whereDate('cheque_date', '<=', $today->copy()->addDays(self::CHEQUE_WARNING_DAYS)))
+                ->orWhere(fn (Builder $query) => $query->where('status', 'issued')->whereBetween('cheque_date', [$today, $today->copy()->addDays(self::CHEQUE_WARNING_DAYS)])))
+            ->with(['chequeable' => fn (MorphTo $morph) => $morph->morphWith([
+                Contract::class => ['client:id,name'],
+                HeadLease::class => ['landlord:id,name'],
+            ])])
+            ->orderBy('cheque_date')
+            ->limit(30)
+            ->get()
+            ->filter(fn (Cheque $cheque) => $cheque->chequeable !== null)
+            ->map(function (Cheque $cheque) use ($today): array {
+                $agreement = $cheque->chequeable;
+                $isContract = $agreement instanceof Contract;
+                $days = (int) $today->diffInDays($cheque->status === 'bounced' ? $cheque->bounced_on : $cheque->cheque_date, false);
+
+                $type = match ($cheque->status) {
+                    'bounced' => 'cheque_bounced',
+                    'received' => 'cheque_deposit_due',
+                    'issued' => 'cheque_clearing',
+                    default => $isContract ? 'cheque_to_collect' : 'cheque_to_write',
+                };
+
+                return [
+                    'id' => "cheque-{$cheque->id}",
+                    'type' => $type,
+                    'severity' => match (true) {
+                        $type === 'cheque_bounced', $days < 0 => 'critical',
+                        $type === 'cheque_clearing' => 'info',
+                        default => 'warning',
+                    },
+                    'title' => $cheque->cheque_number ?? "{$cheque->sequence} · ".($isContract ? $agreement->contract_number : $agreement->lease_number),
+                    'subject' => $isContract ? $agreement->client?->name : $agreement->landlord?->name,
+                    'days' => $days,
+                    'url' => $isContract ? route('contracts.show', $agreement->id) : route('head-leases.show', $agreement->id),
+                ];
+            })
+            ->values();
     }
 
     /**
@@ -147,6 +210,7 @@ class HandleInertiaRequests extends Middleware
         $severityOrder = ['critical' => 0, 'warning' => 1, 'info' => 2];
 
         return $license
+            ->concat($this->chequeNotifications($company))
             ->concat($documents)
             ->concat($leases)
             ->concat($rooms)

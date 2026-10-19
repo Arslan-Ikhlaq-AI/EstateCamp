@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\ClientRequest;
+use App\Models\Cheque;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\Contract;
@@ -120,6 +121,17 @@ class ClientController extends Controller
             ->orderBy('property_id')
             ->orderBy('id')
             ->get();
+        $cheques = fn () => Cheque::query()
+            ->where('chequeable_type', (new Contract)->getMorphClass())
+            ->whereIn('chequeable_id', $contracts->modelKeys());
+        $upcomingCheques = $cheques()
+            ->whereIn('status', ['pending', 'received', 'deposited', 'bounced'])
+            ->whereDoesntHave('replacement')
+            ->with(ChequeController::detailRelations())
+            ->orderByRaw("case status when 'bounced' then 0 when 'deposited' then 1 when 'received' then 2 else 3 end")
+            ->orderBy('cheque_date')
+            ->limit(10)
+            ->get();
         $documents = ContractDocument::query()
             ->whereHas('contract', fn (Builder $contracts) => $contracts->where('client_id', $client->id))
             ->with('contract:id,contract_number')
@@ -159,6 +171,13 @@ class ClientController extends Controller
                 'checkInDate' => $stay->check_in_date->toDateString(),
             ]),
             'invoices' => $invoices->map(fn (Invoice $invoice) => InvoiceController::listDetails($invoice)),
+            'cheques' => $upcomingCheques->map(fn (Cheque $cheque) => ChequeController::details($cheque)),
+            'chequeTotals' => [
+                'inHand' => round((float) $cheques()->whereIn('status', ['received', 'deposited'])->sum('amount'), 2),
+                'clearedThisYear' => round((float) $cheques()->where('status', 'cleared')->whereYear('cleared_on', today()->year)->sum('amount'), 2),
+                'toCollect' => $cheques()->where('status', 'pending')->whereDate('cheque_date', '<=', today()->addDays(30))->count(),
+                'bounced' => $cheques()->where('status', 'bounced')->whereDoesntHave('replacement')->count(),
+            ],
             'payments' => $payments->map(fn (Payment $payment) => [
                 'id' => $payment->id,
                 'number' => $payment->payment_number,

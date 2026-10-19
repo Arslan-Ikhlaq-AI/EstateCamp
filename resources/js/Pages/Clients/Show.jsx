@@ -1,3 +1,4 @@
+import { ChequeList } from '@/Components/ChequeSchedule';
 import DataTable from '@/Components/DataTable';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
@@ -19,7 +20,7 @@ function EmptyLine({ children }) {
     return <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{children}</p>;
 }
 
-export default function Show({ client, contracts, stays, invoices, payments, holdings, documents, currency }) {
+export default function Show({ client, contracts, stays, invoices, cheques, chequeTotals, payments, holdings, documents, currency }) {
     const { t, formatMoney, formatCurrency, formatDate, formatNumber } = useTranslation();
     const { period, unitsSummary } = useLeasingFormat();
     const isCompany = client.client_type === 'company';
@@ -242,6 +243,40 @@ export default function Show({ client, contracts, stays, invoices, payments, hol
                                 { label: t('leasing.clients.form.fields.address'), value: client.address },
                             ]}
                         />
+                    </SectionCard>
+
+                    <SectionCard
+                        title={t('leasing.cheques.title')}
+                        description={t('leasing.cheques.upcoming.description')}
+                        action={
+                            <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={route('cheques.index', { direction: ['received'], search: client.name })} />}>
+                                {t('leasing.cheques.upcoming.viewAll')}
+                            </Button>
+                        }
+                    >
+                        <div className="flex flex-col gap-4">
+                            <dl className="grid grid-cols-2 gap-2.5">
+                                <div className="flex flex-col gap-0.5 rounded-xl bg-muted/50 px-3 py-2.5 ring-1 ring-foreground/[0.06]">
+                                    <dt className="text-xs text-muted-foreground">{t('leasing.cheques.party.inHand')}</dt>
+                                    <dd className="font-heading text-base font-bold tabular-nums">{formatCurrency(chequeTotals.inHand, currency)}</dd>
+                                </div>
+                                <div className="flex flex-col gap-0.5 rounded-xl bg-success/[0.06] px-3 py-2.5 ring-1 ring-success/20">
+                                    <dt className="text-xs text-muted-foreground">{t('leasing.cheques.party.clearedThisYear')}</dt>
+                                    <dd className="font-heading text-base font-bold tabular-nums">{formatCurrency(chequeTotals.clearedThisYear, currency)}</dd>
+                                </div>
+                            </dl>
+                            {(chequeTotals.toCollect > 0 || chequeTotals.bounced > 0) && (
+                                <p className="text-[0.8125rem] font-medium text-warning">
+                                    {[
+                                        chequeTotals.toCollect > 0 && t('leasing.cheques.party.toCollect', { count: chequeTotals.toCollect }),
+                                        chequeTotals.bounced > 0 && t('leasing.cheques.party.bounced', { count: chequeTotals.bounced }),
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                </p>
+                            )}
+                            <ChequeList cheques={cheques} currency={currency} empty={t('leasing.cheques.schedule.none')} />
+                        </div>
                     </SectionCard>
 
                     <SectionCard title={t('leasing.payments.title')} description={t('leasing.clients.show.paymentsDescription')}>

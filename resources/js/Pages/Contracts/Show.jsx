@@ -1,4 +1,5 @@
 import ActionDialog from '@/Components/ActionDialog';
+import ChequeSchedule from '@/Components/ChequeSchedule';
 import DataTable from '@/Components/DataTable';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
@@ -26,6 +27,7 @@ import {
     LogOutIcon,
     PencilIcon,
     RefreshCwIcon,
+    WalletCardsIcon,
     WalletIcon,
     XCircleIcon,
 } from 'lucide-react';
@@ -77,7 +79,27 @@ function TerminateDialog({ contract, open, onOpenChange }) {
     );
 }
 
-export default function Show({ contract, lines, stays, invoices, documents, totals, nextPeriod, can, currency }) {
+/**
+ * A count at the top of the cheques section, such as "4 / 9 in hand".
+ */
+function ChequeFigure({ label, value, tone = 'muted' }) {
+    return (
+        <div
+            className={cn(
+                'flex min-w-0 flex-col gap-0.5 rounded-xl px-3.5 py-2.5 ring-1',
+                tone === 'warning' && 'bg-warning/[0.07] ring-warning/25',
+                tone === 'danger' && 'bg-destructive/[0.06] ring-destructive/25',
+                tone === 'success' && 'bg-success/[0.06] ring-success/20',
+                tone === 'muted' && 'bg-muted/50 ring-foreground/[0.06]',
+            )}
+        >
+            <span className="truncate text-xs text-muted-foreground">{label}</span>
+            <span className="font-heading text-lg font-bold tabular-nums">{value}</span>
+        </div>
+    );
+}
+
+export default function Show({ contract, lines, stays, invoices, documents, totals, nextPeriod, cheques, chequeStats, banks, can, currency }) {
     const { t, formatCurrency, formatMoney, formatDate, formatNumber } = useTranslation();
     const { period, lineLabel } = useLeasingFormat();
     const [isTerminating, setIsTerminating] = useState(false);
@@ -173,7 +195,7 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
                 }
             />
 
-            <FlashMessages errorKeys={['status', 'lines', 'invoice']} />
+            <FlashMessages errorKeys={['status', 'lines', 'invoice', 'cheques', 'action']} />
 
             <section aria-label={t('leasing.contracts.stats.label')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 <StatCard
@@ -207,6 +229,46 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
 
             <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
                 <div className="flex min-w-0 flex-col gap-6">
+                    <SectionCard
+                        title={t('leasing.cheques.schedule.title')}
+                        description={t('leasing.cheques.schedule.description.received')}
+                        flush
+                        action={
+                            can.edit && cheques.length > 0 ? (
+                                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('contracts.edit', contract.id)} />}>
+                                    <PencilIcon data-icon="inline-start" />
+                                    {t('leasing.cheques.actions.record')}
+                                </Button>
+                            ) : null
+                        }
+                    >
+                        {cheques.length === 0 ? (
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-5 lg:px-6">
+                                <p className="max-w-xl text-sm text-muted-foreground">{t('leasing.cheques.schedule.setUpDescription')}</p>
+                                {can.scheduleCheques && (
+                                    <PostButton href={route('contracts.cheques.store', contract.id)} icon={WalletCardsIcon}>
+                                        {t('leasing.cheques.schedule.setUp')}
+                                    </PostButton>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-2 gap-2.5 border-b px-4 py-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-5 lg:px-6">
+                                    <ChequeFigure
+                                        label={t('leasing.cheques.status.received')}
+                                        value={`${formatNumber(chequeStats.inHand)} / ${formatNumber(chequeStats.expected)}`}
+                                        tone={chequeStats.inHand === chequeStats.expected ? 'success' : 'muted'}
+                                    />
+                                    <ChequeFigure label={t('leasing.cheques.status.cleared')} value={formatCurrency(chequeStats.cleared, currency)} tone="success" />
+                                    <ChequeFigure label={t('leasing.cheques.stats.toDeposit')} value={formatNumber(chequeStats.toDeposit)} tone={chequeStats.toDeposit > 0 ? 'warning' : 'muted'} />
+                                    <ChequeFigure label={t('leasing.cheques.status.pending_received')} value={formatNumber(chequeStats.toCollect)} tone={chequeStats.toCollect > 0 ? 'warning' : 'muted'} />
+                                    <ChequeFigure label={t('leasing.cheques.stats.bounced')} value={formatNumber(chequeStats.bounced)} tone={chequeStats.bounced > 0 ? 'danger' : 'muted'} />
+                                </div>
+                                <ChequeSchedule cheques={cheques} currency={currency} banks={banks} />
+                            </>
+                        )}
+                    </SectionCard>
+
                     <SectionCard title={t('leasing.holdings.title')} description={t('leasing.holdings.contractDescription')}>
                         <PropertyHoldings lines={lines} currency={currency} />
                     </SectionCard>

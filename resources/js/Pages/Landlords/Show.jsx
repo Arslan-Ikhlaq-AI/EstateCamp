@@ -1,7 +1,8 @@
+import { ChequeList } from '@/Components/ChequeSchedule';
 import DataTable from '@/Components/DataTable';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
-import { InstalmentStatusBadge, LeaseStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
+import { LeaseStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -10,8 +11,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import { FileSignatureIcon, PencilIcon } from 'lucide-react';
 
-export default function Show({ landlord, leases, upcomingPayments, currency }) {
-    const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
+export default function Show({ landlord, leases, upcomingCheques, chequeTotals, currency }) {
+    const { t, formatCurrency } = useTranslation();
     const { period } = useLeasingFormat();
     const isCompany = landlord.landlord_type === 'company';
 
@@ -95,27 +96,38 @@ export default function Show({ landlord, leases, upcomingPayments, currency }) {
                 </div>
 
                 <div className="flex flex-col gap-6">
-                    <SectionCard title={t('leasing.landlords.show.upcoming')} description={t('leasing.landlords.show.upcomingDescription')}>
-                        {upcomingPayments.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">{t('leasing.landlords.stats.nothingDue')}</p>
-                        ) : (
-                            <ul className="flex flex-col divide-y">
-                                {upcomingPayments.map((payment) => (
-                                    <li key={payment.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-                                        <div className="flex min-w-0 flex-col">
-                                            <span className="text-sm font-medium tabular-nums">{formatMoney(payment.amount, currency)}</span>
-                                            <span className="text-xs text-muted-foreground">
-                                                {t('leasing.landlordPayments.instalmentOf', { number: payment.installmentNumber, lease: payment.leaseNumber })}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-1">
-                                            <span className="text-xs tabular-nums">{formatDate(payment.dueDate)}</span>
-                                            {payment.isOverdue && <InstalmentStatusBadge status="scheduled" isOverdue />}
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                    <SectionCard
+                        title={t('leasing.landlords.show.upcoming')}
+                        description={t('leasing.landlords.show.upcomingDescription')}
+                        action={
+                            <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={route('cheques.index', { direction: ['issued'], search: landlord.name })} />}>
+                                {t('leasing.cheques.upcoming.viewAll')}
+                            </Button>
+                        }
+                    >
+                        <div className="flex flex-col gap-4">
+                            <dl className="grid grid-cols-2 gap-2.5">
+                                <div className="flex flex-col gap-0.5 rounded-xl bg-success/[0.06] px-3 py-2.5 ring-1 ring-success/20">
+                                    <dt className="text-xs text-muted-foreground">{t('leasing.cheques.party.paidThisYear')}</dt>
+                                    <dd className="font-heading text-base font-bold tabular-nums">{formatCurrency(chequeTotals.paidThisYear, currency)}</dd>
+                                </div>
+                                <div className="flex flex-col gap-0.5 rounded-xl bg-muted/50 px-3 py-2.5 ring-1 ring-foreground/[0.06]">
+                                    <dt className="text-xs text-muted-foreground">{t('leasing.cheques.party.toPay')}</dt>
+                                    <dd className="font-heading text-base font-bold tabular-nums">{formatCurrency(chequeTotals.toPay, currency)}</dd>
+                                </div>
+                            </dl>
+                            {(chequeTotals.toWrite > 0 || chequeTotals.bounced > 0) && (
+                                <p className="text-[0.8125rem] font-medium text-warning">
+                                    {[
+                                        chequeTotals.toWrite > 0 && t('leasing.cheques.party.toWrite', { count: chequeTotals.toWrite }),
+                                        chequeTotals.bounced > 0 && t('leasing.cheques.party.bounced', { count: chequeTotals.bounced }),
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                </p>
+                            )}
+                            <ChequeList cheques={upcomingCheques} currency={currency} empty={t('leasing.landlords.stats.nothingDue')} />
+                        </div>
                     </SectionCard>
 
                     <SectionCard title={t('leasing.landlords.form.bank.title')}>

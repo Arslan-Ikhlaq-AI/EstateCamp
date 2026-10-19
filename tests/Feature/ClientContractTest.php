@@ -240,12 +240,29 @@ describe('contracts', function () {
             ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $apartment, ['start_date' => '2026-10-17']));
 
         $contract = Contract::where('contract_number', 'CTR-2026-0012')->sole();
+        Storage::fake('local');
+        collectChequesDueThisYear($contract);
 
         $this->actingAs($this->superAdmin)->post(route('contracts.activate', $contract))->assertSessionHasNoErrors();
 
         expect($contract->refresh()->status)->toBe('active')
             ->and($contract->signed_on->toDateString())->toBe('2026-10-17')
             ->and($apartment->refresh()->status)->toBe('occupied');
+    });
+
+    test('refuses to activate a contract until this year\'s cheques are collected', function () {
+        $apartment = $this->alQuoz->apartments()->where('apartment_number', 'C-102')->sole();
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $apartment, ['start_date' => '2026-10-17']));
+
+        $contract = Contract::where('contract_number', 'CTR-2026-0012')->sole();
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('contracts.activate', $contract))
+            ->assertSessionHasErrors(['cheques' => "Collect this year's cheques before activating: 12 still need their number, bank and a photo of the front."]);
+
+        expect($contract->refresh()->status)->toBe('draft');
     });
 
     test('activating a contract that starts later keeps its shop reserved', function () {

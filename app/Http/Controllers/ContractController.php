@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\ContractRequest;
 use App\Http\Requests\ContractTerminationRequest;
 use App\Models\Apartment;
+use App\Models\Cheque;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\Contract;
@@ -90,7 +91,7 @@ class ContractController extends Controller
     }
 
     /**
-     * Save a new draft contract with its lines.
+     * Save a new draft contract with its lines and cheque schedule.
      */
     public function store(ContractRequest $request): RedirectResponse
     {
@@ -108,6 +109,7 @@ class ContractController extends Controller
             $this->syncLines($contract, $request->validated('lines'));
             $contract->syncUnitStatuses();
             $this->syncDocuments($contract, $request);
+            $contract->syncCheques($request->chequeEntries(), $request->user());
 
             return $contract;
         });
@@ -141,6 +143,13 @@ class ContractController extends Controller
         $current = $stays->whereNull('check_out_date');
         $invoices = $contract->invoices()->orderByDesc('period_start')->orderByDesc('id')->get();
         $period = $contract->status === 'active' ? $contract->nextBillingPeriod() : null;
+        $cheques = $contract->cheques()
+            ->with(['replacement:id,replaces_id', 'payment:id,cheque_id,payment_number'])
+            ->orderByRaw("case when purpose = 'security_deposit' then 0 else 1 end")
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get()
+            ->each(fn (Cheque $cheque) => $cheque->setRelation('chequeable', $contract));
 
         return Inertia::render('Contracts/Show', [
             'currency' => $contract->company->default_currency,
@@ -183,6 +192,16 @@ class ContractController extends Controller
                 'paid' => round((float) $invoices->where('status', '!=', 'void')->sum('amount_paid'), 2),
             ],
             'nextPeriod' => $period ? ['start' => $period[0]->toDateString(), 'end' => $period[1]->toDateString()] : null,
+            'cheques' => $cheques->map(fn (Cheque $cheque) => ChequeController::details($cheque)),
+            'banks' => ChequeController::knownBanks($contract->company),
+            'chequeStats' => [
+                'expected' => $cheques->whereNull('replaces_id')->whereNotIn('status', ['cancelled'])->count(),
+                'inHand' => $cheques->whereIn('status', ['received', 'deposited', 'cleared'])->count(),
+                'cleared' => (float) $cheques->where('status', 'cleared')->sum('amount'),
+                'toDeposit' => $cheques->filter(fn (Cheque $cheque) => $cheque->status === 'received' && $cheque->cheque_date->lte(today()))->count(),
+                'toCollect' => $cheques->filter(fn (Cheque $cheque) => $cheque->isDueNow())->count(),
+                'bounced' => $cheques->filter(fn (Cheque $cheque) => $cheque->status === 'bounced' && $cheque->replacement === null)->count(),
+            ],
             'can' => [
                 'edit' => $contract->isEditable(),
                 'activate' => $contract->status === 'draft' && $contract->lines->isNotEmpty(),
@@ -190,6 +209,7 @@ class ContractController extends Controller
                 'renew' => in_array($contract->status, ['active', 'ended'], true) && $contract->renewal === null,
                 'invoice' => $period !== null,
                 'checkIn' => $contract->status === 'active' && $contract->lines->contains(fn (ContractLine $line) => $line->housesOccupants()),
+                'scheduleCheques' => $contract->isEditable() && $cheques->isEmpty() && $contract->lines->isNotEmpty(),
             ],
         ]);
     }
@@ -233,6 +253,8 @@ class ContractController extends Controller
                 ]),
                 'staying' => $contract->occupancies()->whereNull('check_out_date')->count(),
                 'balance' => (float) $contract->invoices()->whereNot('status', 'void')->sum(DB::raw('total - amount_paid')),
+                'hasLockedCheques' => $contract->cheques()->whereNotIn('status', Cheque::EDITABLE_STATUSES)->exists(),
+                'cheques' => $contract->cheques()->whereNull('replaces_id')->get()->map(fn (Cheque $cheque) => ChequeController::formDetails($cheque)),
             ],
             'clientId' => null,
             ...$this->formOptions($contract->company, $contract),
@@ -240,7 +262,7 @@ class ContractController extends Controller
     }
 
     /**
-     * Save changes to a contract and its lines.
+     * Save changes to a contract, its lines and its cheques.
      *
      * @throws ValidationException When the contract has ended, or a removed line has stays.
      */
@@ -250,16 +272,20 @@ class ContractController extends Controller
             throw ValidationException::withMessages(['status' => 'An ended or terminated contract can no longer be changed.']);
         }
 
-        DB::transaction(function () use ($request, $contract) {
+        $rebuilt = DB::transaction(function () use ($request, $contract) {
             $contract->fill($request->safe()->except(self::RELATION_FIELDS));
             $contract->forceFill(['client_id' => $this->clientId($request, $contract->company)])->save();
 
             $this->syncLines($contract, $request->validated('lines'));
             $contract->syncUnitStatuses();
             $this->syncDocuments($contract, $request);
+
+            return $contract->syncCheques($request->chequeEntries(), $request->user());
         });
 
-        return to_route('contracts.show', $contract)->with('success', "Contract {$contract->contract_number} was updated.");
+        return to_route('contracts.show', $contract)->with('success', $rebuilt
+            ? "Contract {$contract->contract_number} was updated."
+            : "Contract {$contract->contract_number} was updated. Its cheque schedule was kept because cheques have already been deposited; adjust them on the contract page.");
     }
 
     /**
@@ -296,6 +322,7 @@ class ContractController extends Controller
         }
 
         $renewal = $contract->startRenewal();
+        $renewal->syncCheques([], $request->user());
 
         return to_route('contracts.edit', $renewal)
             ->with('success', "Draft renewal {$renewal->contract_number} was created from {$contract->contract_number}. Check the dates and rates, then save.");
@@ -525,6 +552,7 @@ class ContractController extends Controller
                     ]),
                 ]),
             'billingCycles' => array_keys(Contract::BILLING_CYCLES),
+            'banks' => ChequeController::knownBanks($company),
             'unitTypes' => ContractLine::UNIT_TYPES,
             'billingBases' => ContractLine::BILLING_BASES,
         ];

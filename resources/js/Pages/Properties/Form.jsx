@@ -1,3 +1,4 @@
+import { ChequePlanCard } from '@/Components/ChequeScheduleFields';
 import { ChoiceField, MoneyField, TextareaField, TextField } from '@/Components/FormFields';
 import { FormActions } from '@/Components/FormShell';
 import PageHeader from '@/Components/PageHeader';
@@ -13,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { FieldGroup } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import { planLeaseCheques, scheduleRows } from '@/lib/cheques';
 import { Head, Link, useForm } from '@inertiajs/react';
 import {
     Building2Icon,
@@ -41,7 +43,6 @@ import { ChoiceCards, StepBar, StepSection, useCurrentStep } from './Partials/Fo
 import LandlordPicker, { emptyLandlord } from './Partials/LandlordPicker';
 import PropertyPreview from './Partials/PropertyPreview';
 import RequiredDocuments, { hasFile } from './Partials/RequiredDocuments';
-import SchedulePreview, { useSchedule } from '../HeadLeases/Partials/SchedulePreview';
 import UnitBatches, { emptyUnits, unitCount, unitNumbers } from './Partials/UnitBatches';
 
 const PROPERTY_FIELDS = {
@@ -242,12 +243,16 @@ export default function Form({
     const title = isEditing ? t('propertyForm.editTitle') : t('propertyForm.addTitle');
     const months = leaseMonths(data.lease_start_date, data.lease_end_date);
     const isLeased = data.ownership_type === 'leased';
-    const schedule = useSchedule({
-        start_date: data.lease_start_date,
-        end_date: data.lease_end_date,
-        annual_rent: data.annual_rent,
-        payments_per_year: data.payments_per_year,
-    });
+    const chequeRows = scheduleRows(
+        planLeaseCheques({
+            start_date: data.lease_start_date,
+            end_date: data.lease_end_date,
+            annual_rent: data.annual_rent,
+            payments_per_year: data.payments_per_year,
+            security_deposit: data.security_deposit,
+        }),
+        {},
+    );
 
     const slots = requiredDocumentTypes.map((type) => {
         const index = data.documents.findIndex((document) => document.document_type === type);
@@ -605,7 +610,15 @@ export default function Form({
 
                     <aside className="hidden flex-col gap-6 xl:sticky xl:top-40 xl:flex xl:max-h-[calc(100svh-11rem)] xl:overflow-y-auto xl:pb-1 [&>*]:shrink-0">
                         <PropertyPreview data={data} coverUrl={coverUrl} propertyTypes={propertyTypes} landlords={landlords} savedUnits={savedUnits} />
-                        {isLeased && <SchedulePreview schedule={schedule} currency={currency} />}
+                        {isLeased && (
+                            <ChequePlanCard
+                                rows={chequeRows}
+                                startDate={data.lease_start_date}
+                                endDate={data.lease_end_date}
+                                perYear={Number(data.payments_per_year)}
+                                currency={currency}
+                            />
+                        )}
                     </aside>
                 </div>
 

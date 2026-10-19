@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540" viewBox="0 0 1200 540" role="img" aria-label="Sample cheque">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4fbfe"/>
+      <stop offset="1" stop-color="#e3f3fa"/>
+    </linearGradient>
+    <pattern id="guilloche" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M0 18 Q9 0 18 18 T36 18" fill="none" stroke="#1cb5e0" stroke-opacity="0.12" stroke-width="1.2"/>
+      <path d="M0 18 Q9 36 18 18 T36 18" fill="none" stroke="#000851" stroke-opacity="0.06" stroke-width="1.2"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="540" rx="28" fill="url(#paper)"/>
+  <rect width="1200" height="540" rx="28" fill="url(#guilloche)"/>
+  <rect x="14" y="14" width="1172" height="512" rx="20" fill="none" stroke="#000851" stroke-opacity="0.18" stroke-width="2"/>
+
+  <rect x="56" y="52" width="60" height="60" rx="14" fill="#000851"/>
+  <path d="M72 96 L86 68 L100 96 Z" fill="#1cb5e0"/>
+  <text x="134" y="78" font-family="Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#000851">EMIRATES BANK</text>
+  <text x="134" y="104" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#000851" fill-opacity="0.6">Dubai Main Branch · Sample cheque</text>
+
+  <text x="820" y="80" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#000851" fill-opacity="0.65">Date</text>
+  <rect x="880" y="56" width="264" height="40" rx="8" fill="#ffffff" fill-opacity="0.75" stroke="#000851" stroke-opacity="0.2"/>
+  <text x="900" y="84" font-family="Courier New, monospace" font-size="22" letter-spacing="6" fill="#000851">DD MM YYYY</text>
+
+  <text x="56" y="190" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#000851" fill-opacity="0.65">Pay</text>
+  <line x1="110" y1="192" x2="1144" y2="192" stroke="#000851" stroke-opacity="0.3" stroke-width="2"/>
+  <text x="124" y="182" font-family="Brush Script MT, cursive" font-size="34" fill="#000851" fill-opacity="0.85">Horizon Facilities Management L.L.C.</text>
+
+  <text x="56" y="262" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#000851" fill-opacity="0.65">Dirhams</text>
+  <line x1="150" y1="264" x2="840" y2="264" stroke="#000851" stroke-opacity="0.3" stroke-width="2"/>
+  <line x1="56" y1="324" x2="840" y2="324" stroke="#000851" stroke-opacity="0.3" stroke-width="2"/>
+
+  <rect x="880" y="226" width="264" height="56" rx="10" fill="#ffffff" fill-opacity="0.85" stroke="#000851" stroke-opacity="0.25"/>
+  <text x="900" y="263" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#000851">AED ✱✱✱✱✱✱</text>
+
+  <line x1="820" y1="420" x2="1144" y2="420" stroke="#000851" stroke-opacity="0.3" stroke-width="2"/>
+  <text x="900" y="448" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#000851" fill-opacity="0.55">Authorised signature</text>
+  <path d="M860 410 C900 360 930 430 960 392 S1030 360 1060 400" fill="none" stroke="#000851" stroke-opacity="0.7" stroke-width="3"/>
+
+  <text x="56" y="490" font-family="Courier New, monospace" font-size="26" letter-spacing="4" fill="#000851" fill-opacity="0.75">⑈000000⑈ 0330000123⑆ 1012345678901⑈</text>
+</svg>

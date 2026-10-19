@@ -1,7 +1,6 @@
 import {
     AirVentIcon,
     ArrowUpDownIcon,
-    BanknoteIcon,
     BedDoubleIcon,
     BriefcaseBusinessIcon,
     BugIcon,
@@ -30,6 +29,7 @@ import {
     UserCogIcon,
     UserPlusIcon,
     UsersIcon,
+    WalletCardsIcon,
     WalletIcon,
     WavesIcon,
     WrenchIcon,
@@ -103,7 +103,7 @@ export const navigation = [
                 children: [
                     { title: 'nav.invoices', icon: ReceiptTextIcon, routeName: 'invoices.index', activeFor: ['invoices.*'] },
                     { title: 'nav.paymentsReceived', icon: HandCoinsIcon, routeName: 'payments.index', activeFor: ['payments.*'] },
-                    { title: 'nav.landlordPayments', icon: BanknoteIcon, routeName: 'landlord-payments.index', activeFor: ['landlord-payments.*'] },
+                    { title: 'nav.cheques', icon: WalletCardsIcon, routeName: 'cheques.index', activeFor: ['cheques.*'] },
                 ],
             },
             {

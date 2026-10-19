@@ -2,11 +2,11 @@
 
 use App\Models\Apartment;
 use App\Models\Bed;
+use App\Models\Cheque;
 use App\Models\Client;
 use App\Models\Contract;
 use App\Models\ContractLine;
 use App\Models\HeadLease;
-use App\Models\HeadLeasePayment;
 use App\Models\Invoice;
 use App\Models\Landlord;
 use App\Models\Occupancy;
@@ -30,7 +30,7 @@ it('seeds landlords, clients, contracts, stays, invoices and payments for the de
     expect(Bed::count())->toBe(37)
         ->and(Landlord::count())->toBe(2)
         ->and(HeadLease::count())->toBe(2)
-        ->and(HeadLeasePayment::count())->toBe(16)
+        ->and(Cheque::where('direction', 'issued')->count())->toBe(18)
         ->and(Client::count())->toBe(10)
         ->and(Contract::count())->toBe(11)
         ->and(ContractLine::count())->toBe(16)
@@ -92,15 +92,18 @@ it('bills the first invoice with the deposit and VAT only on shop rent', functio
         ->and($second->items()->where('item_type', 'deposit')->count())->toBe(0);
 });
 
-it('pays the landlord cheques already due and copies the running lease onto the property', function () {
+it('clears the landlord cheques already due and copies the running lease onto the property', function () {
     $this->seed(DatabaseSeeder::class);
 
     $current = HeadLease::where('lease_number', 'HL-2026-0001')->sole();
     $property = Property::where('code', PropertySeeder::JEBEL_ALI)->sole();
 
-    expect($current->payments()->where('status', 'paid')->count())->toBe(4)
-        ->and($current->payments()->where('status', 'scheduled')->count())->toBe(8)
-        ->and((float) $current->payments()->value('amount'))->toBe(195000.0)
+    $rent = fn () => $current->cheques()->where('purpose', 'rent');
+
+    expect($rent()->where('status', 'cleared')->count())->toBe(4)
+        ->and($rent()->where('status', 'pending')->count())->toBe(8)
+        ->and((float) $rent()->value('amount'))->toBe(195000.0)
+        ->and($current->cheques()->where('purpose', 'security_deposit')->value('status'))->toBe('cleared')
         ->and($current->renewedFrom->lease_number)->toBe('HL-2025-0001')
         ->and($property->ownership_type)->toBe('leased')
         ->and($property->landlord->name)->toBe('Al Marsa Properties L.L.C.');
@@ -108,10 +111,12 @@ it('pays the landlord cheques already due and copies the running lease onto the 
 
 it('can be run again without duplicating leasing records', function () {
     $this->seed(DatabaseSeeder::class);
+    $cheques = Cheque::count();
     $this->seed(DatabaseSeeder::class);
 
     expect(Landlord::count())->toBe(2)
-        ->and(HeadLeasePayment::count())->toBe(16)
+        ->and(Cheque::where('direction', 'issued')->count())->toBe(18)
+        ->and(Cheque::count())->toBe($cheques)
         ->and(Contract::count())->toBe(11)
         ->and(Occupancy::count())->toBe(28)
         ->and(Invoice::count())->toBe(50)

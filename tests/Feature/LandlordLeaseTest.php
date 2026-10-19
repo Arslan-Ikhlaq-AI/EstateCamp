@@ -82,11 +82,15 @@ test('adds a head lease, builds its cheque schedule and marks the property as le
 
     $lease = HeadLease::where('property_id', $this->alQuoz->id)->sole();
 
+    $rent = $lease->cheques()->where('purpose', 'rent');
+
     expect($lease->lease_number)->toBe('HL-2026-0002')
-        ->and($lease->payments()->count())->toBe(12)
-        ->and((float) $lease->payments()->sum('amount'))->toBe(120000.0)
-        ->and($lease->payments()->orderBy('installment_number')->pluck('due_date')->map->toDateString()->take(3)->all())
-        ->toBe(['2026-11-01', '2026-12-01', '2027-01-01']);
+        ->and((clone $rent)->count())->toBe(12)
+        ->and((float) (clone $rent)->sum('amount'))->toBe(120000.0)
+        ->and((clone $rent)->orderBy('sequence')->pluck('cheque_date')->map->toDateString()->take(3)->all())
+        ->toBe(['2026-11-01', '2026-12-01', '2027-01-01'])
+        ->and((float) $lease->cheques()->where('purpose', 'security_deposit')->sole()->amount)->toBe(10000.0)
+        ->and($lease->cheques()->distinct()->pluck('direction')->all())->toBe(['issued']);
 
     $this->alQuoz->refresh();
 
@@ -123,28 +127,25 @@ test('refuses a lease that overlaps another live lease on the same property', fu
     expect(HeadLease::where('property_id', $this->jebelAli->id)->count())->toBe(2);
 });
 
-test('records a cheque paid to the landlord', function () {
-    $instalment = $this->currentLease->payments()->where('status', 'scheduled')->orderBy('installment_number')->first();
+test('records a cheque to the landlord as cleared', function () {
+    $cheque = $this->currentLease->cheques()->where('status', 'pending')->orderBy('cheque_date')->first();
+    $cheque->applyEntry(['cheque_number' => '402605', 'bank_name' => 'Emirates NBD']);
 
     $this->actingAs($this->superAdmin)
-        ->patch(route('landlord-payments.update', $instalment), [
-            'status' => 'paid',
-            'paid_on' => '2026-10-17',
-            'payment_method' => 'cheque',
-            'cheque_number' => '402605',
-        ])
+        ->post(route('cheques.transition', $cheque), ['action' => 'clear', 'date' => '2026-10-17'])
         ->assertSessionHasNoErrors();
 
-    expect($instalment->refresh()->status)->toBe('paid')
-        ->and($instalment->paid_on->toDateString())->toBe('2026-10-17');
+    expect($cheque->refresh()->status)->toBe('cleared')
+        ->and($cheque->cleared_on->toDateString())->toBe('2026-10-17');
 });
 
-test('needs a payment date to mark an instalment paid', function () {
-    $instalment = $this->currentLease->payments()->where('status', 'scheduled')->first();
+test('needs a date to mark a cheque cleared', function () {
+    $cheque = $this->currentLease->cheques()->where('status', 'pending')->first();
+    $cheque->applyEntry(['cheque_number' => '402606', 'bank_name' => 'Emirates NBD']);
 
     $this->actingAs($this->superAdmin)
-        ->patch(route('landlord-payments.update', $instalment), ['status' => 'paid', 'payment_method' => 'bank_transfer'])
-        ->assertSessionHasErrors('paid_on');
+        ->post(route('cheques.transition', $cheque), ['action' => 'clear'])
+        ->assertSessionHasErrors('date');
 });
 
 test('keeps a schedule that already has paid cheques when the rent changes', function () {
@@ -158,8 +159,8 @@ test('keeps a schedule that already has paid cheques when the rent changes', fun
         ->assertSessionHasNoErrors()
         ->assertSessionHas('success', fn (string $message) => str_contains($message, 'schedule was kept'));
 
-    expect($this->currentLease->payments()->count())->toBe(12)
-        ->and((float) $this->currentLease->payments()->max('amount'))->toBe(195000.0);
+    expect($this->currentLease->cheques()->where('purpose', 'rent')->count())->toBe(12)
+        ->and((float) $this->currentLease->cheques()->where('purpose', 'rent')->max('amount'))->toBe(195000.0);
 });
 
 test('starts a renewal with the next term prefilled', function () {
@@ -175,16 +176,22 @@ test('starts a renewal with the next term prefilled', function () {
         );
 });
 
-test('lists landlord payments with what is still scheduled', function () {
+test('lists the cheques still to write for landlords', function () {
     $this->actingAs($this->superAdmin)
-        ->get(route('landlord-payments.index', ['status' => ['scheduled']]))
+        ->get(route('cheques.index', ['direction' => ['issued'], 'status' => ['pending']]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('LandlordPayments/Index')
-            ->where('payments.total', 8)
-            ->where('summary.overdue.count', 0)
-            ->where('summary.remaining', 1560000)
+            ->component('Cheques/Index')
+            ->where('cheques.total', 8)
+            ->where('cheques.data.0.chequeDate', '2027-01-01')
+            ->where('cheques.data.0.party.name', LandlordSeeder::AL_MARSA)
         );
+});
+
+test('sends the old landlord payments address to the cheques landlords hold', function () {
+    $this->actingAs($this->superAdmin)
+        ->get(route('landlord-payments.index'))
+        ->assertRedirect('/cheques?direction%5B%5D=issued');
 });
 
 test('hides other companies\' landlords and leases', function () {
@@ -194,10 +201,10 @@ test('hides other companies\' landlords and leases', function () {
     $this->actingAs($this->superAdmin)->get(route('head-leases.show', $otherLease))->assertNotFound();
     $this->actingAs($this->superAdmin)->get(route('head-leases.edit', $otherLease))->assertNotFound();
 
-    $otherLease->rebuildSchedule();
+    $otherLease->syncCheques();
 
     $this->actingAs($this->superAdmin)
-        ->patch(route('landlord-payments.update', $otherLease->payments()->first()), ['status' => 'cancelled', 'payment_method' => 'cash'])
+        ->post(route('cheques.transition', $otherLease->cheques()->first()), ['action' => 'cancel'])
         ->assertNotFound();
 });
 

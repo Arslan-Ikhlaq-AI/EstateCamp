@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCheques;
 use App\Models\Concerns\HasDocumentNumber;
+use Carbon\CarbonImmutable;
 use Database\Factories\HeadLeaseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,7 +16,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * The operator renting a property from a landlord. Its terms produce a
- * schedule of HeadLeasePayment instalments.
+ * schedule of cheques issued to the landlord: one per instalment, plus one
+ * for the security deposit.
  */
 #[Fillable([
     'ejari_number',
@@ -30,7 +33,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class HeadLease extends Model
 {
     /** @use HasFactory<HeadLeaseFactory> */
-    use HasDocumentNumber, HasFactory, SoftDeletes;
+    use HasCheques, HasDocumentNumber, HasFactory, SoftDeletes;
 
     public const NUMBER_PREFIX = 'HL';
 
@@ -39,7 +42,7 @@ class HeadLease extends Model
     public const STATUSES = ['draft', 'active', 'expired', 'terminated'];
 
     /**
-     * How many instalments a year the rent can be split into; each divides twelve months evenly.
+     * How many cheques a year the rent can be split into; each divides twelve months evenly.
      */
     public const PAYMENTS_PER_YEAR = [1, 2, 3, 4, 6, 12];
 
@@ -61,44 +64,32 @@ class HeadLease extends Model
     }
 
     /**
-     * The instalments the lease's terms produce: one every 12 / payments_per_year
-     * months from the start date for as long as the lease runs, each an equal
-     * share of the annual rent.
-     *
-     * @return list<array{installment_number: int, due_date: string, amount: float}>
+     * Rent cheques go to the landlord.
      */
-    public function plannedInstallments(): array
+    public function chequeDirection(): string
     {
-        $monthsApart = intdiv(12, $this->payments_per_year);
-        $amount = round((float) $this->annual_rent / $this->payments_per_year, 2);
-        $start = $this->start_date->toImmutable();
-        $installments = [];
+        return 'issued';
+    }
 
-        for ($number = 1; ($due = $start->addMonthsNoOverflow($monthsApart * ($number - 1)))->lte($this->end_date); $number++) {
-            $installments[] = ['installment_number' => $number, 'due_date' => $due->toDateString(), 'amount' => $amount];
-        }
-
-        return $installments;
+    public function monthsPerCheque(): int
+    {
+        return intdiv(12, $this->payments_per_year);
     }
 
     /**
-     * Replace the payment schedule with the one the current terms produce.
-     * Refused once any instalment is no longer just scheduled, because a paid
-     * or bounced instalment records a real cheque.
+     * Each rent cheque is an equal share of the annual rent.
      */
-    public function rebuildSchedule(): bool
+    public function plannedChequeAmount(CarbonImmutable $from, CarbonImmutable $to): float
     {
-        if ($this->payments()->whereNot('status', 'scheduled')->exists()) {
-            return false;
-        }
+        return round((float) $this->annual_rent / $this->payments_per_year, 2);
+    }
 
-        $this->payments()->delete();
-
-        foreach ($this->plannedInstallments() as $installment) {
-            $this->payments()->forceCreate([...$installment, 'company_id' => $this->company_id]);
-        }
-
-        return true;
+    /**
+     * Instalments fall a fixed number of months from the start date.
+     */
+    protected function chainsChequePeriods(): bool
+    {
+        return false;
     }
 
     /**
@@ -149,14 +140,6 @@ class HeadLease extends Model
     public function landlord(): BelongsTo
     {
         return $this->belongsTo(Landlord::class);
-    }
-
-    /**
-     * @return HasMany<HeadLeasePayment, $this>
-     */
-    public function payments(): HasMany
-    {
-        return $this->hasMany(HeadLeasePayment::class);
     }
 
     /**

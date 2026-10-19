@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidatesChequeSchedule;
 use App\Models\HeadLease;
 use App\Models\Landlord;
 use App\Models\PropertyDocument;
@@ -11,6 +12,8 @@ use Illuminate\Validation\Validator;
 
 class HeadLeaseRequest extends CompanyScopedRequest
 {
+    use ValidatesChequeSchedule;
+
     protected ?string $recordParameter = 'head_lease';
 
     /**
@@ -61,6 +64,7 @@ class HeadLeaseRequest extends CompanyScopedRequest
             'documents.*.issued_on' => ['nullable', 'date'],
             'documents.*.expires_on' => ['nullable', 'date', 'after_or_equal:documents.*.issued_on'],
             'documents.*.notes' => ['nullable', 'string', 'max:2000'],
+            ...$this->chequeRules(),
         ];
     }
 
@@ -90,6 +94,16 @@ class HeadLeaseRequest extends CompanyScopedRequest
                     $validator->errors()->add('start_date', "This property is already under lease {$overlapping->lease_number} from {$overlapping->start_date->format('j M Y')} to {$overlapping->end_date->format('j M Y')}.");
                 }
             },
+            function (Validator $validator) {
+                // A draft lease is saved before the cheques are written; an active one needs this year's.
+                if ($validator->errors()->isEmpty() && $this->input('status') === 'active') {
+                    $this->checkChequesDueNow(
+                        $validator,
+                        new HeadLease($this->only(['start_date', 'end_date', 'annual_rent', 'payments_per_year', 'security_deposit'])),
+                        $this->route('head_lease'),
+                    );
+                }
+            },
         ];
     }
 
@@ -109,6 +123,7 @@ class HeadLeaseRequest extends CompanyScopedRequest
             'documents.*.expires_on' => 'expiry date',
             'payments_per_year' => 'payments a year',
             'notice_period_days' => 'notice period',
+            ...$this->chequeAttributes(),
         ];
     }
 }

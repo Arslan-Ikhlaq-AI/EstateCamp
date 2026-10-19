@@ -108,11 +108,13 @@ class Company extends Model
     }
 
     /**
-     * @return HasMany<HeadLeasePayment, $this>
+     * Every cheque the company receives or issues.
+     *
+     * @return HasMany<Cheque, $this>
      */
-    public function headLeasePayments(): HasMany
+    public function cheques(): HasMany
     {
-        return $this->hasMany(HeadLeasePayment::class);
+        return $this->hasMany(Cheque::class);
     }
 
     /**
