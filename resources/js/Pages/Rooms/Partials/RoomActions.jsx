@@ -11,7 +11,7 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { Building2Icon, ListFilterIcon, MoreHorizontalIcon, PencilIcon } from 'lucide-react';
+import { Building2Icon, ListFilterIcon, MoreHorizontalIcon, PencilIcon, WrenchIcon } from 'lucide-react';
 
 /**
  * The "more" menu for one room. `onImage` styles the trigger for use on top
@@ -45,6 +45,10 @@ export default function RoomActions({ room, onImage = false }) {
                     <DropdownMenuItem render={<Link href={route('rooms.edit', room.id)} />}>
                         <PencilIcon />
                         {t('roomList.actions.edit')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem render={<Link href={route('maintenance.create', { property: room.property.id, room: room.id })} />}>
+                        <WrenchIcon />
+                        {t('maintenance.reportProblem')}
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />

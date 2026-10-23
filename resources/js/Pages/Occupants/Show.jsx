@@ -77,14 +77,23 @@ export default function Show({ occupant, stays }) {
                                     { label: t('leasing.occupants.columns.bed'), value: t('leasing.common.roomBed', { room: current.roomNumber, bed: current.bedLabel }) },
                                     { label: t('leasing.occupants.columns.since'), value: formatDate(current.checkInDate) },
                                     { label: t('leasing.occupants.show.nights'), value: formatNumber(current.nights) },
-                                    {
-                                        label: t('leasing.contracts.columns.contract'),
-                                        value: (
-                                            <Link href={route('contracts.show', current.contract.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
-                                                {current.contract.number}
-                                            </Link>
-                                        ),
-                                    },
+                                    current.contract
+                                        ? {
+                                              label: t('leasing.contracts.columns.contract'),
+                                              value: (
+                                                  <Link href={route('contracts.show', current.contract.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
+                                                      {current.contract.number}
+                                                  </Link>
+                                              ),
+                                          }
+                                        : {
+                                              label: t('finance.rentals.show.rental'),
+                                              value: (
+                                                  <Link href={route('rentals.show', current.rental.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
+                                                      {current.rental.rental_number}
+                                                  </Link>
+                                              ),
+                                          },
                                 ]}
                             />
                         ) : (
@@ -126,11 +135,16 @@ export default function Show({ occupant, stays }) {
                                     {
                                         id: 'contract',
                                         header: t('leasing.contracts.columns.contract'),
-                                        cell: (stay) => (
-                                            <Link href={route('contracts.show', stay.contract.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
-                                                {stay.contract.number}
-                                            </Link>
-                                        ),
+                                        cell: (stay) =>
+                                            stay.contract ? (
+                                                <Link href={route('contracts.show', stay.contract.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
+                                                    {stay.contract.number}
+                                                </Link>
+                                            ) : (
+                                                <Link href={route('rentals.show', stay.rental.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
+                                                    {stay.rental.rental_number}
+                                                </Link>
+                                            ),
                                     },
                                     { id: 'dates', header: t('leasing.occupants.columns.stayed'), cell: (stay) => <span className="text-sm">{period(stay.checkInDate, stay.checkOutDate)}</span> },
                                     { id: 'nights', header: t('leasing.occupants.show.nights'), align: 'end', cell: (stay) => <span className="tabular-nums">{formatNumber(stay.nights)}</span> },

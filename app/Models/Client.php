@@ -88,4 +88,14 @@ class Client extends Model
     {
         return $this->hasMany(Payment::class);
     }
+
+    /**
+     * Beds or rooms the client rents without a contract.
+     *
+     * @return HasMany<RoomRental, $this>
+     */
+    public function roomRentals(): HasMany
+    {
+        return $this->hasMany(RoomRental::class);
+    }
 }

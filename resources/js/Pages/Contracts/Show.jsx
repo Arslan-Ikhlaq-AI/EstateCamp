@@ -255,7 +255,7 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
                             <>
                                 <div className="grid grid-cols-2 gap-2.5 border-b px-4 py-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-5 lg:px-6">
                                     <ChequeFigure
-                                        label={t('leasing.cheques.status.received')}
+                                        label={t('leasing.cheques.schedule.collected')}
                                         value={`${formatNumber(chequeStats.inHand)} / ${formatNumber(chequeStats.expected)}`}
                                         tone={chequeStats.inHand === chequeStats.expected ? 'success' : 'muted'}
                                     />

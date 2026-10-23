@@ -18,7 +18,7 @@ export default function AppHeader() {
     const { t } = useTranslation();
 
     return (
-        <header className="sticky top-0 z-20 flex h-[4.25rem] shrink-0 items-center gap-3 border-b bg-background px-4 md:px-6 xl:px-10">
+        <header data-slot="app-header" className="sticky top-0 z-20 flex h-[4.25rem] shrink-0 items-center gap-3 border-b bg-background px-4 md:px-6 xl:px-10">
             <SidebarTrigger
                 className="-ms-1.5 size-9 text-muted-foreground hover:text-foreground rtl:rotate-180"
                 aria-label={t('header.toggleSidebar')}

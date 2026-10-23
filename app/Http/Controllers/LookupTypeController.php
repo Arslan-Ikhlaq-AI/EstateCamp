@@ -14,16 +14,26 @@ use Inertia\Response;
 
 /**
  * The configuration pages for a list of types shared by every company, such
- * as property and room types. Anyone can see them; only admins change them.
- * A type's slug is set once from its name, since translations and filters
- * refer to it.
+ * as property and room types, maintenance statuses or staff roles. Anyone
+ * can see them; only admins change them. A type's slug is set once from its
+ * name, since translations and filters refer to it.
  */
 abstract class LookupTypeController extends Controller
 {
     /**
-     * Which list this is: `property` or `room`.
+     * Which list this is: `property`, `room`, `maintenanceStatus`, `maintenanceCategory` or `staffRole`.
      */
     abstract protected function kind(): string;
+
+    /**
+     * The columns each type is listed with; a list with extra settings adds them.
+     *
+     * @return list<string>
+     */
+    protected function listedFields(): array
+    {
+        return ['id', 'name', 'slug', 'description', 'sort_order', 'is_active'];
+    }
 
     /**
      * @return class-string<Model>
@@ -53,7 +63,7 @@ abstract class LookupTypeController extends Controller
             'kind' => $this->kind(),
             'canManage' => Gate::allows('manage-configuration'),
             'types' => $types->map(fn (Model $type) => [
-                ...$type->only(['id', 'name', 'slug', 'description', 'sort_order', 'is_active']),
+                ...$type->only($this->listedFields()),
                 'usage' => $companyId ? $this->usageInCompany($type, $companyId) : 0,
                 'inUse' => $this->isInUse($type),
             ]),
@@ -90,7 +100,7 @@ abstract class LookupTypeController extends Controller
     /**
      * Delete a type nothing uses; a type in use can be switched off instead.
      *
-     * @throws ValidationException When a property or room still uses the type.
+     * @throws ValidationException When a record still uses the type.
      */
     public function destroy(Model $type): RedirectResponse
     {

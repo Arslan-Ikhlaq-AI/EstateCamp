@@ -24,11 +24,9 @@ import {
     WavesIcon,
     LifeBuoyIcon,
     SparklesIcon,
-    WrenchIcon,
 } from 'lucide-react';
 
 const SECTIONS = {
-    'maintenance.index': { icon: WrenchIcon },
     'amcs.fire-safety': { icon: FlameIcon, parent: 'nav.contractsMenu' },
     'amcs.lifts': { icon: ArrowUpDownIcon, parent: 'nav.contractsMenu' },
     'amcs.garbage': { icon: Trash2Icon, parent: 'nav.contractsMenu' },

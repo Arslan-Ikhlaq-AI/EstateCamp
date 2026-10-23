@@ -21,12 +21,14 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * One cheque, the main record of money moving under an agreement: received
- * from a client under a Contract, or issued to a landlord under a HeadLease
- * (vendors' service contracts will issue them too).
+ * from a client under a Contract or from an individual under a RoomRental,
+ * or issued to a landlord under a HeadLease (vendors' service contracts
+ * will issue them too).
  *
  * A received cheque goes pending (expected, not collected yet) → received
  * (in hand) → deposited → cleared, or bounces. Clearing it records a client
- * Payment and settles the contract's invoices. An issued cheque goes pending
+ * Payment and settles the contract's invoices, or gives the tenant of a
+ * room rental their receipt. An issued cheque goes pending
  * (not written yet) → issued (handed over) → cleared, or bounces. A bounced
  * cheque is replaced by a new one for the same period.
  *
@@ -191,10 +193,11 @@ class Cheque extends Model
 
     /**
      * Still waiting for its details although its agreement year has come.
+     * A room rental's cheques have no schedule, so they are never due this way.
      */
     public function isDueNow(): bool
     {
-        if ($this->status !== 'pending' || ! $this->chequeable) {
+        if ($this->status !== 'pending' || ! $this->chequeable || $this->chequeable instanceof RoomRental) {
             return false;
         }
 
@@ -343,7 +346,7 @@ class Cheque extends Model
      * Record that the money moved. A client's cheque becomes a cleared
      * Payment on the contract, applied to the invoice for the period it
      * covers (billing that period first if needed) and then to the oldest
-     * unpaid invoices.
+     * unpaid invoices. A tenant's cheque becomes a receipt on their rental.
      *
      * @throws ValidationException When the cheque cannot clear now.
      */
@@ -354,15 +357,22 @@ class Cheque extends Model
         DB::transaction(function () use ($on) {
             $this->forceFill(['status' => 'cleared', 'cleared_on' => $on])->save();
 
-            if ($this->direction === 'received' && $this->chequeable instanceof Contract) {
+            if ($this->direction !== 'received') {
+                return;
+            }
+
+            if ($this->chequeable instanceof Contract) {
                 $this->settleContract($this->chequeable, $on);
+            } elseif ($this->chequeable instanceof RoomRental) {
+                $this->chequeable->settleCheque($this, $on);
             }
         });
     }
 
     /**
      * Record that the cheque was returned unpaid; a client payment made from
-     * it no longer counts towards its invoices.
+     * it no longer counts towards its invoices, and a tenant's receipt from
+     * it is voided.
      *
      * @throws ValidationException When the cheque cannot bounce now.
      */
@@ -373,6 +383,7 @@ class Cheque extends Model
         DB::transaction(function () use ($on, $reason) {
             $this->forceFill(['status' => 'bounced', 'bounced_on' => $on, 'bounce_reason' => $reason])->save();
             $this->payment?->changeStatus('bounced');
+            $this->rentalPayment?->void($on, 'The cheque bounced.');
         });
     }
 
@@ -516,7 +527,7 @@ class Cheque extends Model
     }
 
     /**
-     * The agreement the cheque pays under: a Contract or a HeadLease.
+     * The agreement the cheque pays under: a Contract, a HeadLease or a RoomRental.
      *
      * @return MorphTo<Model, $this>
      */
@@ -549,6 +560,16 @@ class Cheque extends Model
     public function payment(): HasOne
     {
         return $this->hasOne(Payment::class);
+    }
+
+    /**
+     * The tenant's receipt made by clearing this cheque, under a room rental.
+     *
+     * @return HasOne<RentalPayment, $this>
+     */
+    public function rentalPayment(): HasOne
+    {
+        return $this->hasOne(RentalPayment::class);
     }
 
     /**

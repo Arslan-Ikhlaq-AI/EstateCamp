@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, FilePlusIcon, PencilIcon, StoreIcon } from 'lucide-react';
+import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, FilePlusIcon, PencilIcon, StoreIcon, WrenchIcon } from 'lucide-react';
 import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 import ClientShares from './Partials/ClientShares';
 import { LeaseNote, OwnershipBadge, StatusBadge } from './Partials/PropertyBadges';
@@ -37,6 +37,10 @@ export default function Show({ property, clients, documents, currency }) {
                         <Button variant="outline" nativeButton={false} render={<Link href={route('properties.edit', property.id)} />}>
                             <PencilIcon data-icon="inline-start" />
                             {t('propertyShow.edit')}
+                        </Button>
+                        <Button variant="outline" nativeButton={false} render={<Link href={route('maintenance.create', { property: property.id })} />}>
+                            <WrenchIcon data-icon="inline-start" />
+                            {t('maintenance.reportProblem')}
                         </Button>
                         <Button variant="brand" nativeButton={false} render={<Link href={route('contracts.create')} />}>
                             <FilePlusIcon data-icon="inline-start" />

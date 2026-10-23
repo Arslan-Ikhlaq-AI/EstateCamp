@@ -20,11 +20,12 @@ function toQueryString(query, defaults, page) {
 /**
  * Keeps a list's search, filters, sorting and paging in the URL. Changes
  * apply straight away in the UI and reload only `only` from the server; the
- * search box waits for a pause in typing.
+ * search box waits for a pause in typing. "Clear all" empties the search
+ * and facets, and sets any other key in `resetTo` (such as the period).
  *
- * @param {{ routeName: string, filters: object, defaults: object, facetKeys: string[], only: string[] }} options
+ * @param {{ routeName: string, filters: object, defaults: object, facetKeys: string[], only: string[], resetTo?: object }} options
  */
-export function useListQuery({ routeName, filters, defaults, facetKeys, only }) {
+export function useListQuery({ routeName, filters, defaults, facetKeys, only, resetTo = {} }) {
     const [query, setQuery] = useState(filters);
     const [search, setSearch] = useState(filters.search);
     const [isLoading, setIsLoading] = useState(false);
@@ -74,7 +75,7 @@ export function useListQuery({ routeName, filters, defaults, facetKeys, only }) 
 
     const reset = () => {
         setSearch('');
-        visit({ search: '', ...Object.fromEntries(facetKeys.map((key) => [key, []])) });
+        visit({ search: '', ...Object.fromEntries(facetKeys.map((key) => [key, []])), ...resetTo });
     };
 
     /**

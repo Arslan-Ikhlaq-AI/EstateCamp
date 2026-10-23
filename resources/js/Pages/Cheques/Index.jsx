@@ -1,6 +1,7 @@
 import ChequeSchedule from '@/Components/ChequeSchedule';
 import FlashMessages from '@/Components/FlashMessages';
 import PageHeader from '@/Components/PageHeader';
+import { usePeriodLabel } from '@/Components/PeriodFilter';
 import RecordList, { ListEmpty, NoCompany } from '@/Components/RecordList';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
@@ -24,6 +25,7 @@ import {
     ShieldCheckIcon,
     Undo2Icon,
     UndoIcon,
+    UserIcon,
     WalletCardsIcon,
 } from 'lucide-react';
 
@@ -75,7 +77,32 @@ function DirectionTabs({ direction }) {
     );
 }
 
-export default function Index({ company, filters, facets, summary, cheques }) {
+/**
+ * The money in and out on the cheques dated in the chosen period.
+ */
+function PeriodTotals({ totals, period, currency }) {
+    const { t, formatMoney } = useTranslation();
+    const { full } = usePeriodLabel();
+
+    return (
+        <dl className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm">
+            <dt className="sr-only">{full(period)}</dt>
+            {[
+                { key: 'received', icon: ArrowDownLeftIcon, className: 'text-success' },
+                { key: 'issued', icon: ArrowUpRightIcon, className: 'text-gold-ink' },
+            ].map(({ key, icon: Icon, className }) => (
+                <dd key={key} className="flex items-center gap-2">
+                    <Icon className={cn('size-4', className)} />
+                    <span className="text-muted-foreground">{t(`finance.cheques.periodTotals.${key}`, { count: totals[key].count })}</span>
+                    <span className="font-semibold tabular-nums">{formatMoney(totals[key].amount, currency)}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{t('finance.cheques.periodTotals.cleared', { amount: formatMoney(totals[key].cleared, currency) })}</span>
+                </dd>
+            ))}
+        </dl>
+    );
+}
+
+export default function Index({ company, filters, period, facets, summary, periodTotals, cheques }) {
     const { t, formatCurrency } = useTranslation();
     const title = t('leasing.cheques.title');
     const direction = filters?.direction?.length === 1 ? filters.direction[0] : null;
@@ -146,13 +173,17 @@ export default function Index({ company, filters, facets, summary, cheques }) {
                             status: facets.status.map((option) => ({ ...option, label: statusLabel(option.value), icon: STATUS_ICONS[option.value] })),
                             due: facets.due.map((option) => ({ ...option, label: t(`leasing.cheques.due.${option.value}`), icon: DUE_ICONS[option.value] })),
                             purpose: facets.purpose.map((option) => ({ ...option, label: t(`leasing.cheques.purposes.${option.value}`), icon: PURPOSE_ICONS[option.value] })),
+                            party: facets.party.map((option) => ({ ...option, icon: option.value.startsWith('landlord:') ? LandmarkIcon : UserIcon })),
                         }}
                         labels={{
                             status: t('leasing.cheques.filters.status'),
                             due: t('leasing.cheques.filters.due'),
                             purpose: t('leasing.cheques.filters.purpose'),
+                            party: t('finance.cheques.party'),
                         }}
-                        only={['cheques', 'facets', 'summary']}
+                        only={['cheques', 'facets', 'summary', 'periodTotals']}
+                        period={period}
+                        summary={periodTotals && <PeriodTotals totals={periodTotals} period={period} currency={company.currency} />}
                         paginator={cheques}
                         searchLabel={t('leasing.cheques.searchLabel')}
                         searchPlaceholder={t('leasing.cheques.searchPlaceholder')}

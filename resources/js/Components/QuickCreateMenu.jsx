@@ -9,22 +9,24 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useTranslation } from '@/hooks/use-translation';
-import { createActions } from '@/lib/navigation';
+import { createActions, useCanOpen } from '@/lib/navigation';
 import { Link, usePage } from '@inertiajs/react';
 import { PlusIcon } from 'lucide-react';
 import { Fragment } from 'react';
 
-const groups = [...new Set(createActions.map((action) => action.group))];
-
 /**
- * The header's "Create" menu: a shortcut to every add page, grouped like the
- * sidebar. Hidden for users without a company, who cannot add records.
+ * The header's "Create" menu: a shortcut to every add page the user may
+ * open, grouped like the sidebar. Hidden for users without a company, who
+ * cannot add records, and for staff who may add nothing.
  */
 export default function QuickCreateMenu() {
     const { t } = useTranslation();
     const { company } = usePage().props.auth;
+    const canOpenLink = useCanOpen();
+    const actions = createActions.filter(canOpenLink);
+    const groups = [...new Set(actions.map((action) => action.group))];
 
-    if (!company) {
+    if (!company || actions.length === 0) {
         return null;
     }
 
@@ -48,7 +50,7 @@ export default function QuickCreateMenu() {
                         {index > 0 && <DropdownMenuSeparator />}
                         <DropdownMenuGroup>
                             <DropdownMenuLabel>{t(group)}</DropdownMenuLabel>
-                            {createActions
+                            {actions
                                 .filter((action) => action.group === group)
                                 .map((action) => (
                                     <DropdownMenuItem key={action.routeName} render={<Link href={route(action.routeName)} />}>

@@ -3,7 +3,6 @@ import { ChequePhotoInput } from '@/Components/ChequeScheduleFields';
 import DataTable from '@/Components/DataTable';
 import { MoneyField, TextareaField, TextField } from '@/Components/FormFields';
 import { ChequeStatusBadge } from '@/Components/LeasingBadges';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -55,7 +54,14 @@ export function useChequeLabel() {
 }
 
 function agreementHref(agreement) {
-    return agreement.type === 'contract' ? route('contracts.show', agreement.id) : route('head-leases.show', agreement.id);
+    switch (agreement.type) {
+        case 'contract':
+            return route('contracts.show', agreement.id);
+        case 'room_rental':
+            return route('rentals.show', agreement.id);
+        default:
+            return route('head-leases.show', agreement.id);
+    }
 }
 
 function partyHref(party) {
@@ -79,7 +85,7 @@ function StatusDate({ cheque }) {
         text = t(`leasing.cheques.handedOverOn.${cheque.status === 'returned' ? 'returned' : cheque.direction}`, { date: formatDate(cheque.handedOverOn) });
     }
 
-    return text ? <span className="max-w-44 truncate text-xs text-muted-foreground">{text}</span> : null;
+    return text ? <span className="max-w-36 text-xs text-pretty text-muted-foreground">{text}</span> : null;
 }
 
 function ChequeActions({ cheque, onOpen }) {
@@ -139,7 +145,7 @@ function ChequeActions({ cheque, onOpen }) {
                         <DropdownMenuSeparator />
                         <DropdownMenuGroup>
                             {cheque.payment && (
-                                <DropdownMenuItem render={<Link href={route('payments.show', cheque.payment.id)} />}>
+                                <DropdownMenuItem render={<Link href={cheque.payment.url} />}>
                                     <ReceiptIcon />
                                     {t('leasing.cheques.actions.viewPayment')}
                                 </DropdownMenuItem>
@@ -240,7 +246,7 @@ function ChequeDetailsDialog({ cheque, banks, currency, open, onOpenChange }) {
 }
 
 function ChequeTransitionDialog({ cheque, action, currency, open, onOpenChange }) {
-    const { t, formatMoney } = useTranslation();
+    const { t, formatMoney, formatDate } = useTranslation();
     const label = useChequeLabel()(cheque);
     const form = useForm({ action, date: todayIso(), reason: '', note: '' });
     const { data, setData, errors, processing } = form;
@@ -269,6 +275,11 @@ function ChequeTransitionDialog({ cheque, action, currency, open, onOpenChange }
                         error={errors.date}
                         max={todayIso()}
                     />
+                )}
+                {action === 'deposit' && data.date && data.date < cheque.chequeDate && (
+                    <p className="rounded-lg bg-warning/[0.08] px-3 py-2 text-[0.8125rem] text-warning ring-1 ring-warning/25">
+                        {t('leasing.cheques.dialogs.postDated', { date: formatDate(cheque.chequeDate) })}
+                    </p>
                 )}
                 {action === 'bounce' && (
                     <TextField
@@ -398,32 +409,51 @@ export default function ChequeSchedule({ cheques, currency, showParty = false, b
     const [dialog, setDialog] = useState(null);
     const close = (open) => !open && setDialog(null);
 
+    const name = (cheque) =>
+        cheque.purpose === 'security_deposit' ? t('leasing.cheques.purposes.security_deposit') : t('leasing.cheques.schedule.chequeNumber', { number: cheque.sequence });
+
+    // What the cheque is for, under its date: the schedule place and period end here, the agreement in the register.
+    const describe = (cheque) => {
+        if (showParty) {
+            return [name(cheque), cheque.agreement?.number].filter(Boolean).join(' · ');
+        }
+
+        if (cheque.replacesId) {
+            return `${name(cheque)} · ${t('leasing.cheques.replacementFor')}`;
+        }
+
+        return cheque.periodEnd ? `${name(cheque)} · ${t('leasing.cheques.schedule.until', { date: formatDate(cheque.periodEnd) })}` : name(cheque);
+    };
+
     const columns = [
         {
             id: 'cheque',
             header: t('leasing.cheques.columns.cheque'),
             cell: (cheque) => (
                 <div className="flex items-center gap-3">
-                    <span
-                        className={cn(
-                            'flex size-9 shrink-0 items-center justify-center rounded-xl',
-                            cheque.direction === 'received' ? 'bg-success/10 text-success' : 'bg-brand-cyan/12 text-brand-ink',
-                        )}
-                        title={t(`leasing.cheques.direction.${cheque.direction}`)}
-                    >
-                        {cheque.direction === 'received' ? <ArrowDownLeftIcon className="size-4" /> : <ArrowUpRightIcon className="size-4" />}
-                    </span>
+                    {cheque.frontImageUrl ? (
+                        <button
+                            type="button"
+                            onClick={() => setDialog({ type: 'photo', cheque })}
+                            className="h-9 w-14 shrink-0 overflow-hidden rounded-lg bg-muted ring-1 ring-foreground/10 transition hover:ring-brand-cyan focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                            aria-label={t('leasing.cheques.photo.view', { label: label(cheque) })}
+                        >
+                            <img src={cheque.frontImageUrl} alt="" className="size-full object-cover" loading="lazy" />
+                        </button>
+                    ) : (
+                        <span
+                            className={cn(
+                                'flex h-9 w-14 shrink-0 items-center justify-center rounded-lg',
+                                cheque.direction === 'received' ? 'bg-success/10 text-success' : 'bg-brand-cyan/12 text-brand-ink',
+                            )}
+                            title={t(`leasing.cheques.direction.${cheque.direction}`)}
+                        >
+                            {cheque.direction === 'received' ? <ArrowDownLeftIcon className="size-4" /> : <ArrowUpRightIcon className="size-4" />}
+                        </span>
+                    )}
                     <div className="flex min-w-0 flex-col">
-                        <span className="font-medium">
-                            {cheque.purpose === 'security_deposit' ? t('leasing.cheques.purposes.security_deposit') : t('leasing.cheques.schedule.chequeNumber', { number: cheque.sequence })}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                            {cheque.replacesId
-                                ? t('leasing.cheques.replacementFor')
-                                : cheque.periodStart
-                                  ? t('leasing.cheques.schedule.covers', { start: formatDate(cheque.periodStart), end: formatDate(cheque.periodEnd) })
-                                  : t('leasing.cheques.purposes.security_deposit')}
-                        </span>
+                        <span className="font-semibold tabular-nums">{formatDate(cheque.chequeDate)}</span>
+                        <span className="max-w-56 truncate text-xs text-muted-foreground">{describe(cheque)}</span>
                     </div>
                 </div>
             ),
@@ -435,23 +465,18 @@ export default function ChequeSchedule({ cheques, currency, showParty = false, b
                       header: t('leasing.cheques.columns.party'),
                       cell: (cheque) =>
                           cheque.party ? (
-                              <div className="flex max-w-56 flex-col">
-                                  <Link href={partyHref(cheque.party)} dir="auto" className="truncate underline-offset-4 hover:text-brand-ink hover:underline">
+                              <div className="flex max-w-52 flex-col">
+                                  <Link href={partyHref(cheque.party)} dir="auto" className="truncate font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                                       {cheque.party.name}
                                   </Link>
-                                  <Link href={agreementHref(cheque.agreement)} className="truncate text-xs text-muted-foreground underline-offset-4 hover:text-brand-ink hover:underline">
-                                      {[cheque.agreement.number, cheque.property?.name].filter(Boolean).join(' · ')}
+                                  <Link href={agreementHref(cheque.agreement)} dir="auto" className="truncate text-xs text-muted-foreground underline-offset-4 hover:text-brand-ink hover:underline">
+                                      {cheque.property?.name ?? t(`leasing.cheques.direction.${cheque.direction}`)}
                                   </Link>
                               </div>
                           ) : null,
                   },
               ]
             : []),
-        {
-            id: 'date',
-            header: t('leasing.cheques.columns.date'),
-            cell: (cheque) => <span className="font-medium tabular-nums">{formatDate(cheque.chequeDate)}</span>,
-        },
         {
             id: 'amount',
             header: t('leasing.common.amount'),
@@ -465,7 +490,7 @@ export default function ChequeSchedule({ cheques, currency, showParty = false, b
                 cheque.chequeNumber ? (
                     <div className="flex flex-col">
                         <span className="font-mono text-sm">{cheque.chequeNumber}</span>
-                        <span className="max-w-40 truncate text-xs text-muted-foreground">{cheque.bankName}</span>
+                        <span dir="auto" className="max-w-32 truncate text-xs text-muted-foreground">{cheque.bankName}</span>
                     </div>
                 ) : (
                     <span className={cn('text-xs', cheque.isDueNow ? 'font-medium text-warning' : 'text-muted-foreground')}>
@@ -474,36 +499,17 @@ export default function ChequeSchedule({ cheques, currency, showParty = false, b
                 ),
         },
         {
-            id: 'photo',
-            header: t('leasing.cheques.columns.photo'),
-            cell: (cheque) =>
-                cheque.frontImageUrl ? (
-                    <button
-                        type="button"
-                        onClick={() => setDialog({ type: 'photo', cheque })}
-                        className="block h-9 w-16 overflow-hidden rounded-md bg-muted ring-1 ring-foreground/10 transition hover:ring-brand-cyan focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                        aria-label={t('leasing.cheques.photo.view', { label: label(cheque) })}
-                    >
-                        <img src={cheque.frontImageUrl} alt="" className="size-full object-cover" loading="lazy" />
-                    </button>
-                ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                ),
-        },
-        {
             id: 'status',
             header: t('leasing.common.status'),
             cell: (cheque) => (
                 <div className="flex flex-col items-start gap-1">
-                    <span className="flex items-center gap-1.5">
-                        <ChequeStatusBadge status={cheque.status} direction={cheque.direction} isOverdue={cheque.isOverdue} />
-                        {cheque.payment && (
-                            <Badge variant="outline" render={<Link href={route('payments.show', cheque.payment.id)} />}>
-                                {cheque.payment.payment_number}
-                            </Badge>
-                        )}
-                    </span>
+                    <ChequeStatusBadge status={cheque.status} direction={cheque.direction} isOverdue={cheque.isOverdue} />
                     <StatusDate cheque={cheque} />
+                    {cheque.payment && (
+                        <Link href={cheque.payment.url} className="text-xs font-medium text-brand-ink underline-offset-4 hover:underline">
+                            {cheque.payment.payment_number}
+                        </Link>
+                    )}
                 </div>
             ),
         },

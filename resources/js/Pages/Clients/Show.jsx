@@ -1,6 +1,7 @@
 import { ChequeList } from '@/Components/ChequeSchedule';
 import DataTable from '@/Components/DataTable';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
+import { RentalStatusBadge, RentStandingBadge, StandingDetail, useRentalPlace } from '@/Components/FinanceBadges';
 import FlashMessages from '@/Components/FlashMessages';
 import { ClientStatusBadge, ContractStatusBadge, InvoiceStatusBadge, PartyTypeBadge, PaymentStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
@@ -13,20 +14,21 @@ import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, Building2Icon, FileSignatureIcon, PencilIcon, ReceiptIcon, UserPlusIcon } from 'lucide-react';
+import { BanknoteIcon, BedDoubleIcon, Building2Icon, FileSignatureIcon, KeyRoundIcon, PencilIcon, ReceiptIcon, UserPlusIcon } from 'lucide-react';
 import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 
 function EmptyLine({ children }) {
     return <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 lg:px-6">{children}</p>;
 }
 
-export default function Show({ client, contracts, stays, invoices, cheques, chequeTotals, payments, holdings, documents, currency }) {
+export default function Show({ client, contracts, stays, invoices, cheques, chequeTotals, payments, holdings, documents, rentals = [], currency }) {
     const { t, formatMoney, formatCurrency, formatDate, formatNumber } = useTranslation();
     const { period, unitsSummary } = useLeasingFormat();
     const isCompany = client.client_type === 'company';
     const activeContracts = contracts.filter((contract) => contract.status === 'active').length;
     const totals = holdingTotals(holdings);
     const holdingSummary = useHoldingSummary();
+    const rentalPlace = useRentalPlace();
 
     return (
         <DashboardLayout>
@@ -56,6 +58,12 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
                             <ReceiptIcon data-icon="inline-start" />
                             {t('leasing.payments.add')}
                         </Button>
+                        {!isCompany && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { client: client.id })} />}>
+                                <KeyRoundIcon data-icon="inline-start" />
+                                {t('finance.rentals.add')}
+                            </Button>
+                        )}
                         <Button nativeButton={false} render={<Link href={route('contracts.create', { client: client.id })} />}>
                             <FileSignatureIcon data-icon="inline-start" />
                             {t('leasing.contracts.add')}
@@ -96,6 +104,40 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
                     <SectionCard title={t('leasing.holdings.clientTitle')} description={t('leasing.holdings.clientDescription')}>
                         <PropertyHoldings lines={holdings} currency={currency} showContract />
                     </SectionCard>
+
+                    {rentals.length > 0 && (
+                        <SectionCard title={t('finance.rentals.title')} description={t('finance.rentals.clientDescription')} flush>
+                            <DataTable
+                                rows={rentals}
+                                columns={[
+                                    {
+                                        id: 'rental',
+                                        header: t('finance.rentals.columns.rental'),
+                                        cell: (rental) => (
+                                            <div className="flex flex-col">
+                                                <Link href={route('rentals.show', rental.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
+                                                    {rental.number}
+                                                </Link>
+                                                <span className="text-xs text-muted-foreground">{[rentalPlace(rental), rental.property?.name].filter(Boolean).join(' · ')}</span>
+                                            </div>
+                                        ),
+                                    },
+                                    { id: 'rent', header: t('finance.rentals.columns.rent'), align: 'end', cell: (rental) => <span className="tabular-nums">{formatMoney(rental.monthlyRent, currency)}</span> },
+                                    {
+                                        id: 'standing',
+                                        header: t('finance.rentals.columns.standing'),
+                                        cell: (rental) => (
+                                            <div className="flex flex-col items-start gap-0.5">
+                                                <RentStandingBadge standing={rental.standing.standing} />
+                                                <StandingDetail standing={rental.standing} currency={currency} />
+                                            </div>
+                                        ),
+                                    },
+                                    { id: 'status', header: t('leasing.common.status'), cell: (rental) => <RentalStatusBadge status={rental.status} /> },
+                                ]}
+                            />
+                        </SectionCard>
+                    )}
 
                     <SectionCard title={t('leasing.contracts.title')} flush>
                         {contracts.length === 0 ? (

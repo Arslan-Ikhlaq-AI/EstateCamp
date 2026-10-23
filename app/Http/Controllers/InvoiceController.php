@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\FiltersByPeriod;
 use App\Http\Controllers\Concerns\ListsRecords;
 use App\Models\Company;
 use App\Models\Contract;
@@ -18,10 +19,10 @@ use Inertia\Response;
 
 class InvoiceController extends Controller
 {
-    use ListsRecords;
+    use FiltersByPeriod, ListsRecords;
 
     /**
-     * List the company's invoices, newest first.
+     * List the company's invoices, newest first, issued in a period when one is chosen.
      */
     public function index(Request $request): Response
     {
@@ -31,17 +32,19 @@ class InvoiceController extends Controller
             return Inertia::render('Invoices/Index', ['company' => null]);
         }
 
-        $filters = $this->listFilters($request, ['status' => Invoice::STATUSES, 'due' => ['overdue']]);
+        $period = $this->periodFilter($request);
+        $filters = [...$this->listFilters($request, ['status' => Invoice::STATUSES, 'due' => ['overdue']]), 'period' => $period['value']];
 
         return Inertia::render('Invoices/Index', [
             'company' => ['currency' => $company->default_currency],
             'filters' => $filters,
+            'period' => $period,
             'facets' => [
-                'status' => $this->facetOptions(Invoice::STATUSES, $this->countBy($this->filteredQuery($company, $filters, except: 'status'), 'status')),
-                'due' => [['value' => 'overdue', 'count' => $this->overdue($this->filteredQuery($company, $filters, except: 'due'))->count()]],
+                'status' => $this->facetOptions(Invoice::STATUSES, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'status'), 'status')),
+                'due' => [['value' => 'overdue', 'count' => $this->overdue($this->filteredQuery($company, $filters, $period, except: 'due'))->count()]],
             ],
-            'summary' => $this->summary($company),
-            'invoices' => $this->filteredQuery($company, $filters)
+            'summary' => $this->summary($company, $period),
+            'invoices' => $this->filteredQuery($company, $filters, $period)
                 ->with(['client:id,name', 'contract:id,contract_number'])
                 ->orderByDesc('issue_date')
                 ->orderByDesc('id')
@@ -165,13 +168,14 @@ class InvoiceController extends Controller
 
     /**
      * @param  array<string, mixed>  $filters
+     * @param  array{from: ?string, to: ?string}  $period
      * @return HasMany<Invoice, Company>
      */
-    private function filteredQuery(Company $company, array $filters, ?string $except = null): HasMany
+    private function filteredQuery(Company $company, array $filters, array $period, ?string $except = null): HasMany
     {
         $search = $filters['search'];
 
-        $query = $company->invoices()
+        $query = $this->wherePeriod($company->invoices(), 'issue_date', $period)
             ->when($search !== '', fn (Builder $query) => $query->where(fn (Builder $query) => $query
                 ->whereLike('invoice_number', "%{$search}%")
                 ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%"))
@@ -182,12 +186,17 @@ class InvoiceController extends Controller
     }
 
     /**
+     * Headline figures. What is outstanding and overdue stands as of today;
+     * what was invoiced and collected covers the chosen period, or this
+     * month when the list shows all time.
+     *
+     * @param  array{kind: string, from: ?string, to: ?string}  $period
      * @return array<string, mixed>
      */
-    private function summary(Company $company): array
+    private function summary(Company $company, array $period): array
     {
         $open = fn () => $company->invoices()->whereIn('status', ['issued', 'partially_paid']);
-        $month = [today()->startOfMonth(), today()->endOfMonth()];
+        $range = $period['kind'] === 'all' ? ['from' => today()->startOfMonth()->toDateString(), 'to' => today()->endOfMonth()->toDateString()] : $period;
 
         return [
             'outstanding' => round((float) $open()->sum(DB::raw('total - amount_paid')), 2),
@@ -195,8 +204,9 @@ class InvoiceController extends Controller
                 'count' => $this->overdue($open())->count(),
                 'amount' => round((float) $this->overdue($open())->sum(DB::raw('total - amount_paid')), 2),
             ],
-            'invoicedThisMonth' => round((float) $company->invoices()->whereNot('status', 'void')->whereBetween('issue_date', $month)->sum('total'), 2),
-            'collectedThisMonth' => round((float) $company->payments()->where('status', 'cleared')->whereBetween('received_on', $month)->sum('amount'), 2),
+            'invoiced' => round((float) $this->wherePeriod($company->invoices()->whereNot('status', 'void'), 'issue_date', $range)->sum('total'), 2),
+            'collected' => round((float) $this->wherePeriod($company->payments()->where('status', 'cleared'), 'received_on', $range)->sum('amount'), 2),
+            'inPeriod' => $period['kind'] !== 'all',
         ];
     }
 }

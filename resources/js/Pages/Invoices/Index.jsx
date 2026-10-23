@@ -2,6 +2,7 @@ import DataTable from '@/Components/DataTable';
 import FlashMessages from '@/Components/FlashMessages';
 import { InvoiceStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
+import { usePeriodLabel } from '@/Components/PeriodFilter';
 import RecordList, { ListEmpty, NoCompany } from '@/Components/RecordList';
 import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
@@ -26,9 +27,10 @@ import {
 
 const STATUS_ICONS = { issued: CircleDashedIcon, partially_paid: WalletIcon, paid: CircleCheckIcon, void: CircleSlashIcon };
 
-export default function Index({ company, filters, facets, summary, invoices }) {
+export default function Index({ company, filters, period: listPeriod, facets, summary, invoices }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
     const { period } = useLeasingFormat();
+    const { full } = usePeriodLabel();
     const title = t('leasing.invoices.title');
 
     const columns = [
@@ -105,15 +107,15 @@ export default function Index({ company, filters, facets, summary, invoices }) {
                         <StatCard
                             icon={FileTextIcon}
                             label={t('leasing.invoices.stats.invoiced')}
-                            value={formatCurrency(summary.invoicedThisMonth, company.currency)}
-                            detail={t('leasing.invoices.stats.thisMonth')}
+                            value={formatCurrency(summary.invoiced, company.currency)}
+                            detail={summary.inPeriod ? full(listPeriod) : t('leasing.invoices.stats.thisMonth')}
                         />
                         <StatCard
                             icon={BanknoteIcon}
                             tone="success"
                             label={t('leasing.invoices.stats.collected')}
-                            value={formatCurrency(summary.collectedThisMonth, company.currency)}
-                            detail={t('leasing.invoices.stats.collectedDetail')}
+                            value={formatCurrency(summary.collected, company.currency)}
+                            detail={summary.inPeriod ? full(listPeriod) : t('leasing.invoices.stats.collectedDetail')}
                         />
                     </section>
 
@@ -125,7 +127,8 @@ export default function Index({ company, filters, facets, summary, invoices }) {
                             due: facets.due.map((option) => ({ ...option, label: t('leasing.status.invoice.overdue'), icon: CircleAlertIcon })),
                         }}
                         labels={{ status: t('leasing.common.status'), due: t('leasing.invoices.filters.due') }}
-                        only={['invoices', 'facets']}
+                        only={['invoices', 'facets', 'summary']}
+                        period={listPeriod}
                         paginator={invoices}
                         searchLabel={t('leasing.invoices.searchLabel')}
                         searchPlaceholder={t('leasing.invoices.searchPlaceholder')}

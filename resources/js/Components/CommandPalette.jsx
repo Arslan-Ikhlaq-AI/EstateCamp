@@ -1,7 +1,7 @@
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { setAppearance } from '@/hooks/use-appearance';
 import { LOCALES, setLocale, useTranslation } from '@/hooks/use-translation';
-import { createActions, pageLinks } from '@/lib/navigation';
+import { createActions, pageLinks, useCanOpen } from '@/lib/navigation';
 import { Autocomplete } from '@base-ui/react/autocomplete';
 import { router, usePage } from '@inertiajs/react';
 import {
@@ -24,17 +24,18 @@ const THEMES = [
 
 /**
  * The command menu's entries, grouped: every page the user can open, the
- * "add" shortcuts (with a company), and theme and language switches. Each
+ * "add" shortcuts they may use (with a company), and theme and language switches. Each
  * entry is matched on its label, its section and its route name.
  */
 function useCommandGroups() {
     const { t } = useTranslation();
     const { auth } = usePage().props;
+    const canOpenLink = useCanOpen();
 
     return useMemo(() => {
         const entry = (item) => ({ ...item, search: `${item.label} ${item.hint ?? ''} ${item.routeName ?? ''}`.toLowerCase() });
 
-        const pages = pageLinks(Boolean(auth.user.is_admin)).map((link) =>
+        const pages = pageLinks(canOpenLink).map((link) =>
             entry({
                 id: `page:${link.routeName}`,
                 label: t(link.title),
@@ -45,7 +46,7 @@ function useCommandGroups() {
         );
 
         const creates = auth.company
-            ? createActions.map((action) =>
+            ? createActions.filter(canOpenLink).map((action) =>
                   entry({
                       id: `create:${action.routeName}`,
                       label: t(action.title),
@@ -82,7 +83,8 @@ function useCommandGroups() {
             { value: t('command.groups.create'), items: creates },
             { value: t('command.groups.preferences'), items: preferences },
         ].filter((group) => group.items.length > 0);
-    }, [t, auth.user.is_admin, auth.company]);
+        // canOpenLink follows auth.access and the admin flag.
+    }, [t, auth.user.is_admin, auth.company, auth.access]);
 }
 
 const matches = (item, query) => query.trim().toLowerCase().split(/\s+/).every((word) => item.search.includes(word));

@@ -150,7 +150,8 @@ class ContractLine extends Model
     /**
      * Beds someone could check into under this line today: active beds in
      * active rooms of the line's property (or of its room) with nobody in them.
-     * A bed line never offers a room that another contract rents whole.
+     * A bed line never offers a room that another contract, or an
+     * individual's room rental, rents whole.
      *
      * @return Collection<int, Bed>
      */
@@ -161,7 +162,8 @@ class ContractLine extends Model
             ->whereKeyNot($this->id)
             ->whereDate('end_date', '>=', today())
             ->whereHas('contract', fn (Builder $contracts) => $contracts->whereIn('status', ['draft', 'active']))
-            ->pluck('room_id');
+            ->pluck('room_id')
+            ->concat(RoomRental::query()->active()->where('unit_type', 'room')->pluck('room_id'));
 
         return Bed::query()
             ->where('is_active', true)

@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One stay: an occupant in a bed from check-in up to, but not including,
- * the check-out date, under a contract line. An open stay has no check-out.
+ * the check-out date, under a contract line or an individual's room
+ * rental. An open stay has no check-out.
  */
 #[Fillable(['check_in_date', 'check_out_date', 'notes'])]
 class Occupancy extends Model
@@ -44,10 +45,17 @@ class Occupancy extends Model
     }
 
     /**
-     * End the stay. The occupant leaves on `$on`, so the bed is free that night.
+     * End the stay. The occupant leaves on `$on`, so the bed is free that
+     * night. A tenant renting without a contract moving out ends their rental.
      */
     public function checkOut(CarbonInterface $on): void
     {
+        if ($this->roomRental?->isActive()) {
+            $this->roomRental->end($on);
+
+            return;
+        }
+
         $this->update(['check_out_date' => $on]);
         $this->bed->room->recalculateOccupancy();
     }
@@ -66,6 +74,16 @@ class Occupancy extends Model
     public function contractLine(): BelongsTo
     {
         return $this->belongsTo(ContractLine::class);
+    }
+
+    /**
+     * The individual's rental this stay is under, when it is not under a contract.
+     *
+     * @return BelongsTo<RoomRental, $this>
+     */
+    public function roomRental(): BelongsTo
+    {
+        return $this->belongsTo(RoomRental::class);
     }
 
     /**

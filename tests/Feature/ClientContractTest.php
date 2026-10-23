@@ -86,9 +86,9 @@ describe('clients', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Clients/Index')
-                ->where('clients.total', 10)
+                ->where('clients.total', 12)
                 ->where('summary.companies', 6)
-                ->where('summary.staying', 27)
+                ->where('summary.staying', 28)
                 ->where('summary.receivable', 39500)
                 ->where('summary.overdue', 37800)
             );
@@ -97,7 +97,7 @@ describe('clients', function () {
     test('narrows clients by type', function () {
         $this->actingAs($this->superAdmin)
             ->get(route('clients.index', ['types' => ['individual']]))
-            ->assertInertia(fn (Assert $page) => $page->where('clients.total', 4));
+            ->assertInertia(fn (Assert $page) => $page->where('clients.total', 6));
     });
 
     test('shows a client with their contracts, the people staying and their invoices', function () {

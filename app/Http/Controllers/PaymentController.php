@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\FiltersByPeriod;
 use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\PaymentRequest;
 use App\Http\Requests\PaymentStatusRequest;
@@ -22,10 +23,10 @@ use Inertia\Response;
  */
 class PaymentController extends Controller
 {
-    use ListsRecords;
+    use FiltersByPeriod, ListsRecords;
 
     /**
-     * List payments received, newest first.
+     * List payments received, newest first, over a period when one is chosen.
      */
     public function index(Request $request): Response
     {
@@ -35,17 +36,19 @@ class PaymentController extends Controller
             return Inertia::render('Payments/Index', ['company' => null]);
         }
 
-        $filters = $this->listFilters($request, ['method' => Payment::METHODS, 'status' => Payment::STATUSES]);
+        $period = $this->periodFilter($request);
+        $filters = [...$this->listFilters($request, ['method' => Payment::METHODS, 'status' => Payment::STATUSES]), 'period' => $period['value']];
 
         return Inertia::render('Payments/Index', [
             'company' => ['currency' => $company->default_currency],
             'filters' => $filters,
+            'period' => $period,
             'facets' => [
-                'method' => $this->facetOptions(Payment::METHODS, $this->countBy($this->filteredQuery($company, $filters, except: 'method'), 'method')),
-                'status' => $this->facetOptions(Payment::STATUSES, $this->countBy($this->filteredQuery($company, $filters, except: 'status'), 'status')),
+                'method' => $this->facetOptions(Payment::METHODS, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'method'), 'method')),
+                'status' => $this->facetOptions(Payment::STATUSES, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'status'), 'status')),
             ],
-            'summary' => $this->summary($company),
-            'payments' => $this->filteredQuery($company, $filters)
+            'summary' => $this->summary($company, $period),
+            'payments' => $this->filteredQuery($company, $filters, $period)
                 ->with('client:id,name')
                 ->withSum('allocations as allocated', 'amount')
                 ->orderByDesc('received_on')
@@ -167,13 +170,14 @@ class PaymentController extends Controller
 
     /**
      * @param  array<string, mixed>  $filters
+     * @param  array{from: ?string, to: ?string}  $period
      * @return HasMany<Payment, Company>
      */
-    private function filteredQuery(Company $company, array $filters, ?string $except = null): HasMany
+    private function filteredQuery(Company $company, array $filters, array $period, ?string $except = null): HasMany
     {
         $search = $filters['search'];
 
-        return $company->payments()
+        return $this->wherePeriod($company->payments(), 'received_on', $period)
             ->when($search !== '', fn (Builder $query) => $query->where(fn (Builder $query) => $query
                 ->whereLike('payment_number', "%{$search}%")
                 ->orWhereLike('cheque_number', "%{$search}%")
@@ -184,18 +188,23 @@ class PaymentController extends Controller
     }
 
     /**
+     * Headline figures. What was received covers the chosen period, or this
+     * month when the list shows all time; the rest stand as of today.
+     *
+     * @param  array{kind: string, from: ?string, to: ?string}  $period
      * @return array<string, mixed>
      */
-    private function summary(Company $company): array
+    private function summary(Company $company, array $period): array
     {
-        $month = [today()->startOfMonth(), today()->endOfMonth()];
+        $receivedPeriod = $period['kind'] === 'all' ? ['from' => today()->startOfMonth()->toDateString(), 'to' => today()->endOfMonth()->toDateString()] : $period;
         $withStatus = fn (string $status) => $company->payments()->where('status', $status);
         $allocated = (float) PaymentAllocation::query()
             ->whereHas('payment', fn (Builder $payments) => $payments->where('company_id', $company->id)->whereNot('status', 'bounced'))
             ->sum('amount');
+        $received = $this->wherePeriod($withStatus('cleared'), 'received_on', $receivedPeriod);
 
         return [
-            'receivedThisMonth' => round((float) $withStatus('cleared')->whereBetween('received_on', $month)->sum('amount'), 2),
+            'received' => ['amount' => round((float) (clone $received)->sum('amount'), 2), 'count' => (clone $received)->count(), 'inPeriod' => $period['kind'] !== 'all'],
             'pending' => ['count' => $withStatus('pending')->count(), 'amount' => round((float) $withStatus('pending')->sum('amount'), 2)],
             'bounced' => ['count' => $withStatus('bounced')->count(), 'amount' => round((float) $withStatus('bounced')->sum('amount'), 2)],
             'unallocated' => round(max(0, (float) $company->payments()->whereNot('status', 'bounced')->sum('amount') - $allocated), 2),

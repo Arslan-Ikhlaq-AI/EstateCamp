@@ -590,7 +590,8 @@ class ContractController extends Controller
             'contractedBeds' => (int) $active->sum(fn (Contract $contract) => $contract->lines
                 ->filter(fn (ContractLine $line) => $line->covers(today()))
                 ->sum(fn (ContractLine $line) => $line->bedCapacity())),
-            'staying' => $company->occupancies()->whereNull('check_out_date')->count(),
+            // People staying under contracts, as a share of the contracted beds; tenants renting without one are left out.
+            'staying' => $company->occupancies()->whereNotNull('contract_line_id')->whereNull('check_out_date')->count(),
             'expiringSoon' => $active->filter(fn (Contract $contract) => $contract->end_date->lte(today()->addDays(60)))->count(),
         ];
     }

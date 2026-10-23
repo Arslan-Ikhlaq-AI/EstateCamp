@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -52,12 +53,12 @@ trait ListsRecords
     /**
      * How many records in `$query` have each value of `$column`.
      *
-     * @param  Builder<*>|Relation<*, *, *>  $query
+     * @param  Builder<*>|Relation<*, *, *>|QueryBuilder  $query
      * @return Collection<array-key, int>
      */
-    protected function countBy(Builder|Relation $query, string $column): Collection
+    protected function countBy(Builder|Relation|QueryBuilder $query, string $column): Collection
     {
-        return $query->toBase()
+        return ($query instanceof QueryBuilder ? $query : $query->toBase())
             ->whereNotNull($column)
             ->groupBy($column)
             ->selectRaw("{$column} as value, count(*) as aggregate")

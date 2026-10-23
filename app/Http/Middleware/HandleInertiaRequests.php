@@ -9,10 +9,12 @@ use App\Models\HeadLease;
 use App\Models\Property;
 use App\Models\PropertyDocument;
 use App\Models\Room;
+use App\Models\RoomRental;
+use App\Models\StaffMember;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -59,14 +61,21 @@ class HandleInertiaRequests extends Middleware
         // Queried rather than loaded as relations, so they never end up inside `auth.user`.
         $company = $user?->company_id ? Company::find($user->company_id) : null;
 
+        $member = $user?->staffMember;
+        $canUseApp = $user?->can('use-app') ?? false;
+
         return [
             ...parent::share($request),
             'auth' => [
                 'user' => $user,
-                'role' => $user?->role()->value('name'),
+                // A staff member's sign-in shows their job.
+                'role' => $user?->role()->value('name') ?? $member?->role()->value('name'),
                 'company' => $company?->only(['id', 'name', 'short_name', 'logo_url']),
+                // What the navigation offers: the rest of the app, the staff pages, and the user's own page.
+                'access' => $user ? ['app' => $canUseApp, 'staff' => $user->staffAccess(), 'self' => $member !== null] : null,
             ],
-            'notifications' => fn () => $company ? $this->notifications($company) : [],
+            // The company's alerts are for those who work in the rest of the app.
+            'notifications' => fn () => $company && $canUseApp ? $this->notifications($company) : [],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
             ],
@@ -92,6 +101,7 @@ class HandleInertiaRequests extends Middleware
             ->with(['chequeable' => fn (MorphTo $morph) => $morph->morphWith([
                 Contract::class => ['client:id,name'],
                 HeadLease::class => ['landlord:id,name'],
+                RoomRental::class => ['client:id,name'],
             ])])
             ->orderBy('cheque_date')
             ->limit(30)
@@ -99,14 +109,14 @@ class HandleInertiaRequests extends Middleware
             ->filter(fn (Cheque $cheque) => $cheque->chequeable !== null)
             ->map(function (Cheque $cheque) use ($today): array {
                 $agreement = $cheque->chequeable;
-                $isContract = $agreement instanceof Contract;
+                $isLease = $agreement instanceof HeadLease;
                 $days = (int) $today->diffInDays($cheque->status === 'bounced' ? $cheque->bounced_on : $cheque->cheque_date, false);
 
                 $type = match ($cheque->status) {
                     'bounced' => 'cheque_bounced',
                     'received' => 'cheque_deposit_due',
                     'issued' => 'cheque_clearing',
-                    default => $isContract ? 'cheque_to_collect' : 'cheque_to_write',
+                    default => $isLease ? 'cheque_to_write' : 'cheque_to_collect',
                 };
 
                 return [
@@ -117,12 +127,47 @@ class HandleInertiaRequests extends Middleware
                         $type === 'cheque_clearing' => 'info',
                         default => 'warning',
                     },
-                    'title' => $cheque->cheque_number ?? "{$cheque->sequence} · ".($isContract ? $agreement->contract_number : $agreement->lease_number),
-                    'subject' => $isContract ? $agreement->client?->name : $agreement->landlord?->name,
+                    'title' => $cheque->cheque_number ?? "{$cheque->sequence} · ".match (true) {
+                        $agreement instanceof Contract => $agreement->contract_number,
+                        $agreement instanceof RoomRental => $agreement->rental_number,
+                        default => $agreement->lease_number,
+                    },
+                    'subject' => $isLease ? $agreement->landlord?->name : $agreement->client?->name,
                     'days' => $days,
-                    'url' => $isContract ? route('contracts.show', $agreement->id) : route('head-leases.show', $agreement->id),
+                    'url' => match (true) {
+                        $agreement instanceof Contract => route('contracts.show', $agreement->id),
+                        $agreement instanceof RoomRental => route('rentals.show', $agreement->id),
+                        default => route('head-leases.show', $agreement->id),
+                    },
                 ];
             })
+            ->values();
+    }
+
+    /**
+     * Identity documents of staff still employed that have run out or run
+     * out soon, one notification per document.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function staffDocumentNotifications(Company $company): Collection
+    {
+        return $company->staffMembers()
+            ->current()
+            ->documentsExpiring(null, today()->addDays(StaffMember::DOCUMENT_WARNING_DAYS))
+            ->limit(50)
+            ->get()
+            ->flatMap(fn (StaffMember $member) => collect($member->identityDocuments())
+                ->filter(fn (array $document) => $document['days'] !== null && $document['days'] <= StaffMember::DOCUMENT_WARNING_DAYS)
+                ->map(fn (array $document): array => [
+                    'id' => "staff-{$member->id}-{$document['type']}",
+                    'type' => $document['days'] < 0 ? 'staff_document_expired' : 'staff_document_expiring',
+                    'severity' => $document['days'] < 0 ? 'critical' : ($document['days'] <= 30 ? 'warning' : 'info'),
+                    'title' => $member->full_name,
+                    'subject' => $document['type'],
+                    'days' => $document['days'],
+                    'url' => route('staff.show', $member->id),
+                ]))
             ->values();
     }
 
@@ -212,6 +257,7 @@ class HandleInertiaRequests extends Middleware
         return $license
             ->concat($this->chequeNotifications($company))
             ->concat($documents)
+            ->concat($this->staffDocumentNotifications($company))
             ->concat($leases)
             ->concat($rooms)
             ->sortBy([

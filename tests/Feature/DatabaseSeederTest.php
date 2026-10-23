@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\UserRole;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\PropertySeeder;
+use Database\Seeders\StaffSeeder;
 use Database\Seeders\UserSeeder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -34,13 +35,17 @@ it('seeds one company with two super admins and two properties of five rooms eac
 
     $company = Company::sole();
     $superAdminRole = UserRole::query()->where('slug', UserRole::SUPER_ADMIN)->sole();
+    $admins = $company->users()->whereDoesntHave('staffMember')->get();
 
-    expect($company->users)->toHaveCount(2);
+    expect($admins)->toHaveCount(2);
 
-    $company->users->each(function (User $user) use ($superAdminRole) {
+    $admins->each(function (User $user) use ($superAdminRole) {
         expect($user->user_role_id)->toBe($superAdminRole->id)
             ->and($user->is_admin)->toBeTrue();
     });
+
+    // The demo staff who can sign in are not admins; their staff records say what they can do.
+    expect($company->users()->whereHas('staffMember')->where('is_admin', false)->count())->toBe(count(StaffSeeder::SIGN_INS));
 
     expect($company->properties)->toHaveCount(2);
 
@@ -88,7 +93,7 @@ it('can be run again without duplicating records', function () {
 
     expect(UserRole::count())->toBe(1)
         ->and(Company::count())->toBe(1)
-        ->and(User::count())->toBe(2)
+        ->and(User::count())->toBe(2 + count(StaffSeeder::SIGN_INS))
         ->and(Property::count())->toBe(2)
         ->and(Room::count())->toBe(10)
         ->and(Apartment::count())->toBe(7)
@@ -108,8 +113,8 @@ it('fills every column except those that do not apply', function () {
     Apartment::all()->each(fn (Apartment $apartment) => expect(blankColumns($apartment))->toBe([]));
     Shop::all()->each(fn (Shop $shop) => expect(blankColumns($shop))->toBe([]));
 
-    // A user's remember token is only set when they sign in.
-    User::all()->each(fn (User $user) => expect(blankColumns($user))->toBe(['remember_token']));
+    // A user's remember token is only set when they sign in; a staff member's sign-in has no user role.
+    User::all()->each(fn (User $user) => expect(blankColumns($user))->toBe($user->staffMember ? ['remember_token', 'user_role_id'] : ['remember_token']));
 
     // Landlord and lease details do not apply to a property the company owns.
     expect(blankColumns(Property::where('code', PropertySeeder::AL_QUOZ)->sole()))

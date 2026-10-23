@@ -10,6 +10,9 @@ import { useMemo } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 /**
+ * Each month's total is drawn as a flat step: cheques land on set dates, so a
+ * smooth curve would suggest money between them that is not there.
+ *
  * Money in (client cheques) in the brand blue, money out (landlord cheques)
  * in gold: different hues and lightness, so they stay apart for colour-blind
  * readers, and each is named in the legend and totals.
@@ -36,7 +39,7 @@ function Figure({ icon: Icon, label, value, detail, tone, href }) {
                 <span className="truncate">{label}</span>
             </span>
             <span className="font-heading text-lg font-bold tracking-tight tabular-nums">{value}</span>
-            <span className="truncate text-xs text-muted-foreground">{detail}</span>
+            <span className="text-xs text-pretty text-muted-foreground">{detail}</span>
         </Link>
     );
 }
@@ -79,7 +82,7 @@ export default function ChequesOverview({ cheques, currency }) {
             </CardHeader>
 
             <CardContent className="flex flex-col gap-6">
-                <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2.5 2xl:grid-cols-4">
                     <Figure
                         icon={LandmarkIcon}
                         label={t('leasing.cheques.stats.toDeposit')}
@@ -114,7 +117,7 @@ export default function ChequesOverview({ cheques, currency }) {
                     />
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_20rem]">
                     <div className="flex min-w-0 flex-col gap-4">
                         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
                             <div className="flex flex-col gap-0.5">
@@ -170,7 +173,7 @@ export default function ChequesOverview({ cheques, currency }) {
                                 />
                                 <Area
                                     dataKey="outgoing"
-                                    type="monotone"
+                                    type="step"
                                     stroke="var(--color-outgoing)"
                                     strokeWidth={2}
                                     fill="url(#cheques-outgoing)"
@@ -179,7 +182,7 @@ export default function ChequesOverview({ cheques, currency }) {
                                 />
                                 <Area
                                     dataKey="incoming"
-                                    type="monotone"
+                                    type="step"
                                     stroke="var(--color-incoming)"
                                     strokeWidth={2.5}
                                     fill="url(#cheques-incoming)"
@@ -190,7 +193,7 @@ export default function ChequesOverview({ cheques, currency }) {
                         </ChartContainer>
                     </div>
 
-                    <div className="flex min-w-0 flex-col gap-3 lg:border-s lg:ps-6">
+                    <div className="flex min-w-0 flex-col gap-3 border-t pt-5 2xl:border-t-0 2xl:border-s 2xl:pt-0 2xl:ps-6">
                         <div className="flex flex-col gap-0.5">
                             <h3 className="text-sm font-bold">{t('leasing.cheques.upcoming.title')}</h3>
                             <p className="text-xs text-muted-foreground">{t('leasing.cheques.upcoming.description')}</p>

@@ -7,6 +7,7 @@ import {
     FileClockIcon,
     FileWarningIcon,
     HandCoinsIcon,
+    IdCardIcon,
     LandmarkIcon,
     PenLineIcon,
     TicketXIcon,
@@ -27,6 +28,8 @@ const ICONS = {
     cheque_to_collect: HandCoinsIcon,
     cheque_to_write: PenLineIcon,
     cheque_clearing: WalletCardsIcon,
+    staff_document_expiring: IdCardIcon,
+    staff_document_expired: IdCardIcon,
 };
 
 const CHEQUE_HEADINGS = {
@@ -77,6 +80,12 @@ function describe({ type, title, subject, days }, t) {
             return {
                 heading: t('alerts.license', { title }),
                 details: [timing('alerts.expiredAgo', 'alerts.expiresIn'), subject],
+            };
+        case 'staff_document_expiring':
+        case 'staff_document_expired':
+            return {
+                heading: t('alerts.staffDocument', { document: t(`staff.documents.${subject}`), name: title }),
+                details: [timing('alerts.expiredAgo', 'alerts.expiresIn')],
             };
         case 'cheque_bounced':
             return {

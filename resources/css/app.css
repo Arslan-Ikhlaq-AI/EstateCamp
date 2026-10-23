@@ -228,6 +228,14 @@
     --chart-5: #1cb5e0;
     /* Context series beside chart-1 (same hue, validated as an ordinal pair). */
     --chart-context: #6cb8e2;
+    /* Money by where it comes from or goes, validated together for colour-blind readers (light surface). */
+    --cash-in: #0e7fb8;
+    --cash-out: #eda100;
+    --cash-clients: #2a78d6;
+    --cash-rentals: #1baf7a;
+    --cash-landlords: #eda100;
+    --cash-maintenance: #6250d6;
+    --cash-salaries: #e87ba4;
     /* Categorical series: cyan, yellow, aqua, validated all-pairs in both themes; a fourth+ series folds into chart-3 grey. */
     --cat-1: #1a9fd9;
     --cat-2: #eda100;
@@ -282,6 +290,13 @@
     --chart-4: #5cc2ec;
     --chart-5: #1cb5e0;
     --chart-context: #25557f;
+    --cash-in: #2897cb;
+    --cash-out: #c98500;
+    --cash-clients: #3987e5;
+    --cash-rentals: #199e70;
+    --cash-landlords: #c98500;
+    --cash-maintenance: #9085e9;
+    --cash-salaries: #d55181;
     --cat-1: #2196d1;
     --cat-2: #c98500;
     --cat-3: #199e70;
@@ -340,5 +355,25 @@
   h2,
   h3 {
     text-wrap: balance;
+  }
+}
+/*
+ * Printing a receipt or voucher prints the document alone: the app's
+ * sidebar, top bar and anything marked print:hidden stay off the paper.
+ */
+@media print {
+  [data-slot='sidebar'],
+  [data-slot='sidebar-gap'],
+  [data-slot='sidebar-container'],
+  [data-slot='app-header'] {
+    display: none !important;
+  }
+  [data-slot='sidebar-wrapper'],
+  [data-slot='sidebar-inset'],
+  #main-content {
+    display: block !important;
+    max-width: none !important;
+    padding: 0 !important;
+    animation: none !important;
   }
 }

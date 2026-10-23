@@ -1,6 +1,8 @@
 import ActionDialog from '@/Components/ActionDialog';
 import FlashMessages from '@/Components/FlashMessages';
-import { TextareaField, TextField } from '@/Components/FormFields';
+import { ChoiceField, SelectField, TextareaField, TextField } from '@/Components/FormFields';
+import { MaintenanceStatusBadge } from '@/Components/MaintenanceBadges';
+import { LEVEL_ICONS } from '@/Components/StaffBadges';
 import PageHeader from '@/Components/PageHeader';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
@@ -23,39 +25,89 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
+    BadgeCheckIcon,
     BedDoubleIcon,
     CircleAlertIcon,
     CircleCheckIcon,
     CirclePauseIcon,
+    ListChecksIcon,
     LockIcon,
     MoreHorizontalIcon,
     PencilIcon,
     PlusIcon,
+    ShapesIcon,
     TagsIcon,
     Trash2Icon,
 } from 'lucide-react';
 import { useState } from 'react';
 
 /**
- * What differs between the property-type and room-type pages: icon, routes,
- * the list each type's usage links to and the translation group for names.
+ * What differs between the configuration lists: icon, routes, the list each
+ * entry's usage links to (and the filter it sets there), the translation
+ * group for names, and any extra settings with their defaults.
  */
 const KINDS = {
     property: {
         icon: TagsIcon,
         route: 'configuration.property-types',
         usageRoute: 'properties.index',
+        usageFilter: 'types',
         names: 'propertyTypes',
     },
     room: {
         icon: BedDoubleIcon,
         route: 'configuration.room-types',
         usageRoute: 'rooms.index',
+        usageFilter: 'types',
         names: 'roomTypes',
+    },
+    maintenanceStatus: {
+        icon: ListChecksIcon,
+        route: 'configuration.maintenance-statuses',
+        usageRoute: 'maintenance.index',
+        usageFilter: 'status',
+        names: 'maintenance.statusNames',
+        extras: { stage: 'open', color: 'cyan' },
+    },
+    maintenanceCategory: {
+        icon: ShapesIcon,
+        route: 'configuration.maintenance-categories',
+        usageRoute: 'maintenance.index',
+        usageFilter: 'category',
+        names: 'maintenance.categoryNames',
+    },
+    staffRole: {
+        icon: BadgeCheckIcon,
+        route: 'configuration.staff-roles',
+        usageRoute: 'staff.index',
+        usageFilter: 'roles',
+        names: 'staff.roleNames',
+        extras: { level: 'site', staff_access: 'self', app_access: false },
     },
 };
 
-const blankType = (order) => ({ name: '', description: '', sort_order: order, is_active: true });
+const STAGES = ['open', 'in_progress', 'completed', 'cancelled'];
+
+const LEVELS = ['head_office', 'regional', 'site'];
+
+const ACCESS_LEVELS = ['self', 'supervisor', 'admin'];
+
+// A dot of each colour a maintenance status can take, for the colour choice.
+const SWATCH_CLASSES = { cyan: 'bg-brand-cyan', navy: 'bg-primary', amber: 'bg-warning', green: 'bg-success', red: 'bg-destructive', grey: 'bg-muted-foreground/50' };
+const SWATCHES = Object.fromEntries(
+    Object.entries(SWATCH_CLASSES).map(([color, className]) => [color, () => <span aria-hidden="true" data-icon="inline-start" className={cn('size-3 rounded-full', className)} />]),
+);
+
+const blankType = (kind, order) => ({ name: '', description: '', sort_order: order, is_active: true, ...KINDS[kind].extras });
+
+// What a type's form sends: the shared fields plus its kind's extra settings.
+const typeValues = (kind, type) => ({
+    name: type.name,
+    description: type.description ?? '',
+    sort_order: type.sort_order,
+    is_active: type.is_active,
+    ...Object.fromEntries(Object.keys(KINDS[kind].extras ?? {}).map((field) => [field, type[field]])),
+});
 
 /**
  * The add/edit dialog for one type.
@@ -64,7 +116,7 @@ function TypeDialog({ kind, type, nextOrder, open, onOpenChange }) {
     const { t } = useTranslation();
     const config = KINDS[kind];
     const isEditing = Boolean(type);
-    const form = useForm(isEditing ? { name: type.name, description: type.description ?? '', sort_order: type.sort_order, is_active: type.is_active } : blankType(nextOrder));
+    const form = useForm(isEditing ? typeValues(kind, type) : blankType(kind, nextOrder));
     const { data, setData, errors, processing } = form;
 
     const submit = () => {
@@ -98,6 +150,57 @@ function TypeDialog({ kind, type, nextOrder, open, onOpenChange }) {
                     rows={2}
                     optional
                 />
+                {kind === 'maintenanceStatus' && (
+                    <>
+                        <SelectField
+                            id="type-stage"
+                            label={t('configuration.types.fields.stage')}
+                            value={data.stage}
+                            onChange={(value) => setData('stage', value)}
+                            items={STAGES.map((stage) => ({ value: stage, label: t(`configuration.types.stages.${stage}`) }))}
+                            description={t('configuration.types.fields.stageHint')}
+                            error={errors.stage}
+                        />
+                        <ChoiceField
+                            id="type-color"
+                            label={t('configuration.types.fields.color')}
+                            value={data.color}
+                            onChange={(value) => setData('color', value)}
+                            options={Object.keys(SWATCHES).map((color) => ({ value: color, label: t(`configuration.types.colors.${color}`), icon: SWATCHES[color] }))}
+                            error={errors.color}
+                        />
+                    </>
+                )}
+                {kind === 'staffRole' && (
+                    <ChoiceField
+                        id="type-level"
+                        label={t('configuration.types.fields.level')}
+                        value={data.level}
+                        onChange={(value) => setData('level', value)}
+                        options={LEVELS.map((level) => ({ value: level, label: t(`staff.levels.${level}`), icon: LEVEL_ICONS[level] }))}
+                        description={t('configuration.types.fields.levelHint')}
+                        error={errors.level}
+                    />
+                )}
+                {kind === 'staffRole' && (
+                    <>
+                        <SelectField
+                            id="type-staff-access"
+                            label={t('configuration.types.fields.staffAccess')}
+                            value={data.staff_access}
+                            onChange={(value) => setData('staff_access', value)}
+                            items={ACCESS_LEVELS.map((level) => ({ value: level, label: t(`staff.access.levels.${level}`) }))}
+                            description={`${t(`staff.access.descriptions.${data.staff_access}`)} ${t('configuration.types.fields.staffAccessHint')}`}
+                            error={errors.staff_access}
+                        />
+                        <Field orientation="horizontal">
+                            <Checkbox id="type-app-access" checked={data.app_access} onCheckedChange={(checked) => setData('app_access', Boolean(checked))} />
+                            <FieldLabel htmlFor="type-app-access" className="font-normal">
+                                {t('staff.access.app')}
+                            </FieldLabel>
+                        </Field>
+                    </>
+                )}
                 <div className="grid grid-cols-[8rem_1fr] items-end gap-4">
                     <TextField
                         id="type-order"
@@ -130,6 +233,7 @@ function TypeRow({ kind, type, canManage, onEdit, onDelete }) {
     const { t, tOr, formatNumber } = useTranslation();
     const config = KINDS[kind];
     const translated = tOr(`${config.names}.${type.slug}`, type.name);
+    const LevelIcon = kind === 'staffRole' ? LEVEL_ICONS[type.level] : null;
 
     return (
         <li className={cn('flex flex-wrap items-center gap-4 px-4 py-4 sm:px-5 lg:px-6', !type.is_active && 'bg-muted/30')}>
@@ -152,8 +256,26 @@ function TypeRow({ kind, type, canManage, onEdit, onDelete }) {
                 </span>
                 {type.description && <span className="text-[0.8125rem] text-muted-foreground">{type.description}</span>}
             </div>
+            {kind === 'maintenanceStatus' && (
+                <span className="flex flex-col items-start gap-1">
+                    <MaintenanceStatusBadge status={type} />
+                    <span className="text-xs text-muted-foreground">{t(`configuration.types.stages.${type.stage}`)}</span>
+                </span>
+            )}
+            {LevelIcon && (
+                <span className="flex flex-col items-start gap-1">
+                    <Badge variant="secondary">
+                        <LevelIcon data-icon="inline-start" />
+                        {t(`staff.levels.${type.level}`)}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                        {t(`staff.access.levels.${type.staff_access}`)}
+                        {type.app_access && ` · ${t('staff.access.appShort')}`}
+                    </span>
+                </span>
+            )}
             <Link
-                href={route(config.usageRoute, { types: [type.slug] })}
+                href={route(config.usageRoute, { [config.usageFilter]: [type.slug] })}
                 className="text-[0.8125rem] font-medium text-brand-ink tabular-nums underline-offset-4 hover:underline"
             >
                 {t(`configuration.types.${kind}.usage`, { count: type.usage })}
@@ -182,11 +304,7 @@ function TypeRow({ kind, type, canManage, onEdit, onDelete }) {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={() =>
-                                    router.put(
-                                        route(`${config.route}.update`, type.id),
-                                        { name: type.name, description: type.description, sort_order: type.sort_order, is_active: !type.is_active },
-                                        { preserveScroll: true },
-                                    )
+                                    router.put(route(`${config.route}.update`, type.id), { ...typeValues(kind, type), is_active: !type.is_active }, { preserveScroll: true })
                                 }
                             >
                                 {type.is_active ? <CirclePauseIcon /> : <CircleCheckIcon />}
@@ -206,8 +324,9 @@ function TypeRow({ kind, type, canManage, onEdit, onDelete }) {
 }
 
 /**
- * A configuration page for property or room types: the figures, the list in
- * its order, and (for admins) adding, editing, switching off and deleting.
+ * A configuration page for property or room types, maintenance statuses or
+ * categories, or staff roles: the figures, the list in its order, and (for
+ * admins) adding, editing, switching off and deleting.
  */
 export default function Types({ kind, types, canManage, errors }) {
     const { t, formatNumber } = useTranslation();

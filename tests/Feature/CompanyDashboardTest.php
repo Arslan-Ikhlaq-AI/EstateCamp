@@ -167,7 +167,7 @@ test('breaks down invoices, payments, balances, stays and recent activity', func
             ->where('finance.topDebtors.4.name', 'Daniel Okafor')
             ->where('finance.topDebtors.4.overdue', 0)
             ->has('occupancyTrend', 6)
-            ->where('occupancyTrend.5', ['month' => '2026-10', 'staying' => 27])
+            ->where('occupancyTrend.5', ['month' => '2026-10', 'staying' => 28])
             ->has('activity', 10)
             ->where('activity.0.type', 'payment')
             ->where('activity.0.status', 'pending')
@@ -190,7 +190,6 @@ test('sidebar sections without a module yet show a coming soon page', function (
             ->where('section', $routeName)
         );
 })->with([
-    'maintenance.index',
     'amcs.fire-safety',
     'amcs.lifts',
     'amcs.garbage',
@@ -203,5 +202,5 @@ test('sidebar sections without a module yet show a coming soon page', function (
 ]);
 
 test('coming soon pages require signing in', function () {
-    $this->get(route('maintenance.index'))->assertRedirect(route('login'));
+    $this->get(route('amcs.lifts'))->assertRedirect(route('login'));
 });

@@ -7,8 +7,8 @@ use Illuminate\Database\Seeder;
 
 /**
  * The demo company's leasing: beds, landlords and head leases, clients and
- * their contracts, the people staying, the invoices and payments, and the
- * cheques behind them.
+ * their contracts, the people staying, the invoices and payments, the
+ * cheques behind them, and individuals renting a room without a contract.
  * Requires PortfolioSeeder.
  */
 class LeasingSeeder extends Seeder
@@ -31,6 +31,7 @@ class LeasingSeeder extends Seeder
             InvoiceSeeder::class,
             PaymentSeeder::class,
             ChequeSeeder::class,
+            RoomRentalSeeder::class,
         ]);
     }
 }

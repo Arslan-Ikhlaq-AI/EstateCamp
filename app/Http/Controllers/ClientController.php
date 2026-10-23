@@ -13,6 +13,7 @@ use App\Models\ContractLine;
 use App\Models\Invoice;
 use App\Models\Occupancy;
 use App\Models\Payment;
+use App\Models\RoomRental;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
@@ -108,7 +109,7 @@ class ClientController extends Controller
         $stays = Occupancy::query()
             ->whereNull('check_out_date')
             ->whereHas('occupant', fn (Builder $occupants) => $occupants->where('client_id', $client->id))
-            ->with(['occupant:id,full_name,employee_number', 'bed.room.property:id,name,code', 'contractLine.contract:id,contract_number'])
+            ->with(['occupant:id,full_name,employee_number', 'bed.room.property:id,name,code', 'contractLine.contract:id,contract_number', 'roomRental:id,rental_number'])
             ->orderBy('check_in_date')
             ->get();
         $invoices = $client->invoices()->with('contract:id,contract_number')->orderByDesc('issue_date')->orderByDesc('id')->limit(12)->get();
@@ -167,7 +168,7 @@ class ClientController extends Controller
                 'property' => $stay->bed->room->property->only(['id', 'name', 'code']),
                 'roomNumber' => $stay->bed->room->room_number,
                 'bedLabel' => $stay->bed->label,
-                'contractNumber' => $stay->contractLine->contract->contract_number,
+                'contractNumber' => $stay->contractLine?->contract->contract_number ?? $stay->roomRental?->rental_number,
                 'checkInDate' => $stay->check_in_date->toDateString(),
             ]),
             'invoices' => $invoices->map(fn (Invoice $invoice) => InvoiceController::listDetails($invoice)),
@@ -186,6 +187,14 @@ class ClientController extends Controller
                 'status' => $payment->status,
                 'amount' => (float) $payment->amount,
             ]),
+            // Beds or rooms an individual rents without a contract.
+            'rentals' => $client->roomRentals()
+                ->with(RoomRentalController::listRelations())
+                ->withSum(['payments as rent_paid' => fn (Builder $payments) => $payments->where('status', 'cleared')->where('purpose', 'rent')], 'amount')
+                ->orderByRaw("case when status = 'active' then 0 else 1 end")
+                ->orderByDesc('start_date')
+                ->get()
+                ->map(fn (RoomRental $rental) => RoomRentalController::listDetails($rental, $rental->rentStanding())),
         ]);
     }
 

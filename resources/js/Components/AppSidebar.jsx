@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useTranslation } from '@/hooks/use-translation';
 import { getInitials } from '@/lib/format';
-import { footerNavigation, isCurrentRoute, navigation } from '@/lib/navigation';
+import { footerNavigation, isCurrentRoute, navigation, useCanOpen } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { Link, usePage } from '@inertiajs/react';
 import { Building2Icon, CheckIcon, ChevronRightIcon } from 'lucide-react';
@@ -35,7 +35,7 @@ import { Fragment } from 'react';
 
 function NavLink({ item }) {
     const { t } = useTranslation();
-    const isActive = isCurrentRoute(item.routeName);
+    const isActive = isCurrentRoute(item.routeName, item.activeFor);
 
     return (
         <SidebarMenuItem>
@@ -103,9 +103,9 @@ function NavFlyout({ item, children, isActive }) {
 function NavSection({ item }) {
     const { t } = useTranslation();
     const { state, isMobile } = useSidebar();
-    const isAdmin = Boolean(usePage().props.auth.user.is_admin);
+    const canOpenLink = useCanOpen();
 
-    const children = item.children.filter((child) => !child.adminOnly || isAdmin);
+    const children = item.children.filter(canOpenLink);
     const isActive = children.some((child) => isCurrentRoute(child.routeName, child.activeFor));
 
     if (state === 'collapsed' && !isMobile) {
@@ -218,14 +218,24 @@ export default function AppSidebar(props) {
     );
 }
 
+/**
+ * One labelled group of the sidebar, with only the links the user may open;
+ * a group or section left empty is not shown.
+ */
 function NavGroup({ group }) {
     const { t } = useTranslation();
+    const canOpenLink = useCanOpen();
+    const items = group.items.filter((item) => (item.children ? item.children.some(canOpenLink) : canOpenLink(item)));
+
+    if (items.length === 0) {
+        return null;
+    }
 
     return (
         <SidebarGroup>
             <SidebarGroupLabel className="mb-1">{t(group.label)}</SidebarGroupLabel>
             <SidebarMenu className="gap-1">
-                {group.items.map((item) =>
+                {items.map((item) =>
                     item.children ? <NavSection key={item.title} item={item} /> : <NavLink key={item.title} item={item} />,
                 )}
             </SidebarMenu>

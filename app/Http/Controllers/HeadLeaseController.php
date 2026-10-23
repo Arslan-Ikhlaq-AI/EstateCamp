@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\HeadLeaseRequest;
-use App\Models\Company;
 use App\Models\Cheque;
+use App\Models\Company;
 use App\Models\HeadLease;
 use App\Models\Property;
 use App\Models\PropertyDocument;

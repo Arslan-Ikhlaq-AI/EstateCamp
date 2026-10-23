@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\LandlordRequest;
+use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\HeadLease;
-use App\Models\Cheque;
 use App\Models\Landlord;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;

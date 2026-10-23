@@ -2,6 +2,7 @@ import DataTable from '@/Components/DataTable';
 import FlashMessages from '@/Components/FlashMessages';
 import { PaymentStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
+import { usePeriodLabel } from '@/Components/PeriodFilter';
 import RecordList, { ListEmpty, NoCompany } from '@/Components/RecordList';
 import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
@@ -28,8 +29,9 @@ import {
 const METHOD_ICONS = { cash: BanknoteIcon, bank_transfer: LandmarkIcon, cheque: ScrollTextIcon, card: CreditCardIcon };
 const STATUS_ICONS = { pending: ClockIcon, cleared: CircleCheckIcon, bounced: UndoIcon };
 
-export default function Index({ company, filters, facets, summary, payments }) {
+export default function Index({ company, filters, period, facets, summary, payments }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
+    const { full } = usePeriodLabel();
     const title = t('leasing.payments.title');
 
     const addButton = (
@@ -117,9 +119,9 @@ export default function Index({ company, filters, facets, summary, payments }) {
                         <StatCard
                             icon={BanknoteIcon}
                             tone="success"
-                            label={t('leasing.payments.stats.received')}
-                            value={formatCurrency(summary.receivedThisMonth, company.currency)}
-                            detail={t('leasing.payments.stats.receivedDetail')}
+                            label={summary.received.inPeriod ? t('finance.lists.receivedIn', { period: full(period) }) : t('leasing.payments.stats.received')}
+                            value={formatCurrency(summary.received.amount, company.currency)}
+                            detail={t('finance.lists.clearedPayments', { count: summary.received.count })}
                         />
                         <StatCard
                             icon={ClockIcon}
@@ -151,7 +153,8 @@ export default function Index({ company, filters, facets, summary, payments }) {
                             status: facets.status.map((option) => ({ ...option, label: t(`leasing.status.payment.${option.value}`), icon: STATUS_ICONS[option.value] })),
                         }}
                         labels={{ method: t('leasing.payments.columns.method'), status: t('leasing.common.status') }}
-                        only={['payments', 'facets']}
+                        only={['payments', 'facets', 'summary']}
+                        period={period}
                         paginator={payments}
                         searchLabel={t('leasing.payments.searchLabel')}
                         searchPlaceholder={t('leasing.payments.searchPlaceholder')}

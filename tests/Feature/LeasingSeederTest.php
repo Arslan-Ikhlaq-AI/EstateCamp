@@ -31,11 +31,11 @@ it('seeds landlords, clients, contracts, stays, invoices and payments for the de
         ->and(Landlord::count())->toBe(2)
         ->and(HeadLease::count())->toBe(2)
         ->and(Cheque::where('direction', 'issued')->count())->toBe(18)
-        ->and(Client::count())->toBe(10)
+        ->and(Client::count())->toBe(12)
         ->and(Contract::count())->toBe(11)
         ->and(ContractLine::count())->toBe(16)
-        ->and(Occupant::count())->toBe(28)
-        ->and(Occupancy::whereNull('check_out_date')->count())->toBe(27)
+        ->and(Occupant::count())->toBe(30)
+        ->and(Occupancy::whereNull('check_out_date')->count())->toBe(28)
         ->and(Invoice::count())->toBe(50)
         ->and(Payment::count())->toBe(47);
 });
@@ -118,7 +118,7 @@ it('can be run again without duplicating leasing records', function () {
         ->and(Cheque::where('direction', 'issued')->count())->toBe(18)
         ->and(Cheque::count())->toBe($cheques)
         ->and(Contract::count())->toBe(11)
-        ->and(Occupancy::count())->toBe(28)
+        ->and(Occupancy::count())->toBe(30)
         ->and(Invoice::count())->toBe(50)
         ->and(Payment::count())->toBe(47);
 });

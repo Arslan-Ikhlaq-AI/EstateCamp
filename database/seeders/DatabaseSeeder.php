@@ -11,13 +11,15 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Seed the application's database: the demo portfolio first, then the
-     * leasing data that builds on it.
+     * leasing data, maintenance jobs and staff that build on it.
      */
     public function run(): void
     {
         $this->call([
             PortfolioSeeder::class,
             LeasingSeeder::class,
+            MaintenanceJobSeeder::class,
+            StaffSeeder::class,
         ]);
     }
 }

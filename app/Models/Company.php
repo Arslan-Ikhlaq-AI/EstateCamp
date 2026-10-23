@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Database\Factories\CompanyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -49,6 +50,15 @@ class Company extends Model
         return [
             'expiry_date' => 'date',
         ];
+    }
+
+    /**
+     * The date and time where the company works, in its own time zone, so a
+     * day's attendance starts at the company's midnight rather than the server's.
+     */
+    public function localNow(): CarbonImmutable
+    {
+        return CarbonImmutable::now($this->timezone ?: config('app.timezone'));
     }
 
     /**
@@ -118,6 +128,54 @@ class Company extends Model
     }
 
     /**
+     * Every problem reported at the company's properties.
+     *
+     * @return HasMany<MaintenanceJob, $this>
+     */
+    public function maintenanceJobs(): HasMany
+    {
+        return $this->hasMany(MaintenanceJob::class);
+    }
+
+    /**
+     * Everyone the company employs or has employed.
+     *
+     * @return HasMany<StaffMember, $this>
+     */
+    public function staffMembers(): HasMany
+    {
+        return $this->hasMany(StaffMember::class);
+    }
+
+    /**
+     * The company's regional sub-offices.
+     *
+     * @return HasMany<RegionalOffice, $this>
+     */
+    public function regionalOffices(): HasMany
+    {
+        return $this->hasMany(RegionalOffice::class);
+    }
+
+    /**
+     * @return HasMany<StaffAttendance, $this>
+     */
+    public function staffAttendances(): HasMany
+    {
+        return $this->hasMany(StaffAttendance::class);
+    }
+
+    /**
+     * Every staff salary the payroll has worked out, paid or not.
+     *
+     * @return HasMany<SalaryPayment, $this>
+     */
+    public function salaryPayments(): HasMany
+    {
+        return $this->hasMany(SalaryPayment::class);
+    }
+
+    /**
      * @return HasMany<Client, $this>
      */
     public function clients(): HasMany
@@ -147,6 +205,26 @@ class Company extends Model
     public function occupancies(): HasMany
     {
         return $this->hasMany(Occupancy::class);
+    }
+
+    /**
+     * Beds and rooms rented to individuals without a contract.
+     *
+     * @return HasMany<RoomRental, $this>
+     */
+    public function roomRentals(): HasMany
+    {
+        return $this->hasMany(RoomRental::class);
+    }
+
+    /**
+     * Receipts for what individuals paid towards their room rentals.
+     *
+     * @return HasMany<RentalPayment, $this>
+     */
+    public function rentalPayments(): HasMany
+    {
+        return $this->hasMany(RentalPayment::class);
     }
 
     /**

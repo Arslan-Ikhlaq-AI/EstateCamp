@@ -1,14 +1,23 @@
+import { finance } from './translations-finance';
 import { leasing } from './translations-leasing';
+import { maintenance } from './translations-maintenance';
+import { staff } from './translations-staff';
 
 /**
  * UI strings for the app shell, dashboard and settings. English is the
  * fallback for any key missing from another language. An object value holds
  * plural forms chosen with Intl.PluralRules (Arabic uses all six). The
- * leasing pages' strings live in translations-leasing.js.
+ * leasing pages' strings live in translations-leasing.js, the maintenance
+ * pages' in translations-maintenance.js, the staff pages' in
+ * translations-staff.js and the payments section's in
+ * translations-finance.js.
  */
 export const translations = {
     en: {
         leasing: leasing.en,
+        finance: finance.en,
+        maintenance: maintenance.en,
+        staff: staff.en,
         common: {
             tagline: 'Camp management',
             dismiss: 'Dismiss',
@@ -36,6 +45,12 @@ export const translations = {
             companyProfile: 'Company profile',
             propertyTypes: 'Property types',
             roomTypes: 'Room types',
+            maintenanceStatuses: 'Maintenance statuses',
+            maintenanceCategories: 'Maintenance categories',
+            staffRoles: 'Staff roles',
+            regionalOffices: 'Regional offices',
+            mySection: 'My work',
+            myPage: 'My attendance & pay',
             users: 'Users & roles',
             contracts: 'Client contracts',
             contractsMenu: 'Contracts',
@@ -53,9 +68,18 @@ export const translations = {
             headLeases: 'Head leases',
             invoices: 'Invoices',
             paymentsReceived: 'Payments received',
+            paymentsOverview: 'Overview',
+            rentCollections: 'Rent collections',
+            maintenanceBills: 'Maintenance bills',
+            salaries: 'Salaries',
+            rentals: 'Individual rentals',
             landlordPayments: 'Landlord payments',
             cheques: 'Cheques',
             maintenance: 'Maintenance',
+            staffMenu: 'Staff',
+            allStaff: 'All staff',
+            attendance: 'Attendance',
+            payroll: 'Payroll',
             settings: 'Settings',
             help: 'Help & support',
             soon: 'Soon',
@@ -117,6 +141,7 @@ export const translations = {
             dueAgo: { one: 'Dated {count} day ago', other: 'Dated {count} days ago' },
             bouncedAgo: { one: 'Bounced {count} day ago', other: 'Bounced {count} days ago' },
             bouncedToday: 'Bounced today',
+            staffDocument: '{document} of {name}',
         },
         dashboard: {
             title: 'Dashboard',
@@ -436,8 +461,51 @@ export const translations = {
                     usage: { one: '{count} room', other: '{count} rooms' },
                     empty: 'No room types yet',
                 },
+                maintenanceStatus: {
+                    title: 'Maintenance statuses',
+                    description: 'The steps a maintenance job moves through, in order. A job reaching a finished status asks for its invoice and the amount charged.',
+                    addTitle: 'Add maintenance status',
+                    editTitle: 'Edit maintenance status',
+                    usage: { one: '{count} job', other: '{count} jobs' },
+                    empty: 'No maintenance statuses yet',
+                },
+                maintenanceCategory: {
+                    title: 'Maintenance categories',
+                    description: 'The kinds of problem you log, such as plumbing, the water motor or broken beds.',
+                    addTitle: 'Add maintenance category',
+                    editTitle: 'Edit maintenance category',
+                    usage: { one: '{count} job', other: '{count} jobs' },
+                    empty: 'No maintenance categories yet',
+                },
+                staffRole: {
+                    title: 'Staff roles',
+                    description: 'The jobs your staff hold, each at the level it usually works at: the head office, a regional office, or a camp or building.',
+                    addTitle: 'Add staff role',
+                    editTitle: 'Edit staff role',
+                    usage: { one: '{count} person', other: '{count} people' },
+                    empty: 'No staff roles yet',
+                },
                 dialogDescription: 'Types switched off stay on existing records but are no longer offered.',
-                fields: { name: 'Name', description: 'Description', order: 'Order', active: 'Offered when adding records' },
+                fields: {
+                    name: 'Name',
+                    description: 'Description',
+                    order: 'Order',
+                    active: 'Offered when adding records',
+                    stage: 'What this status means',
+                    stageHint: 'Lets the app count open and finished jobs whatever you call the status.',
+                    color: 'Colour',
+                    level: 'Level',
+                    levelHint: 'Where someone in this role usually works. Each staff member’s own workplace is set on their record.',
+                    staffAccess: 'What they can do when they sign in',
+                    staffAccessHint: 'The starting point for each person in this role who is given a sign-in; it can be changed on their record.',
+                },
+                stages: {
+                    open: 'Not started',
+                    in_progress: 'Work in progress',
+                    completed: 'Finished (asks for the invoice)',
+                    cancelled: 'Cancelled',
+                },
+                colors: { cyan: 'Cyan', navy: 'Navy', amber: 'Amber', green: 'Green', red: 'Red', grey: 'Grey' },
                 add: 'Add type',
                 save: 'Save changes',
                 edit: 'Edit',
@@ -1273,10 +1341,6 @@ export const translations = {
                     title: 'Water tank cleaning AMC',
                     description: 'Water tank cleaning and disinfection contracts with their certificates.',
                 },
-                'maintenance.index': {
-                    title: 'Maintenance',
-                    description: 'Log work orders, schedule preventive maintenance and track every repair to completion.',
-                },
                 help: {
                     title: 'Help & support',
                     description: 'Guides, answers to common questions and a direct line to our support team will live here.',
@@ -1321,6 +1385,9 @@ export const translations = {
     },
     ar: {
         leasing: leasing.ar,
+        finance: finance.ar,
+        maintenance: maintenance.ar,
+        staff: staff.ar,
         common: {
             dismiss: 'إغلاق',
             tagline: 'إدارة المخيمات',
@@ -1348,6 +1415,12 @@ export const translations = {
             companyProfile: 'ملف الشركة',
             propertyTypes: 'أنواع العقارات',
             roomTypes: 'أنواع الغرف',
+            maintenanceStatuses: 'حالات الصيانة',
+            maintenanceCategories: 'فئات الصيانة',
+            staffRoles: 'وظائف الموظفين',
+            regionalOffices: 'المكاتب الإقليمية',
+            mySection: 'عملي',
+            myPage: 'حضوري وراتبي',
             users: 'المستخدمون والأدوار',
             contracts: 'عقود العملاء',
             contractsMenu: 'العقود',
@@ -1365,9 +1438,18 @@ export const translations = {
             headLeases: 'عقود الإيجار الرئيسية',
             invoices: 'الفواتير',
             paymentsReceived: 'المدفوعات المستلمة',
+            paymentsOverview: 'نظرة عامة',
+            rentCollections: 'تحصيل الإيجارات',
+            maintenanceBills: 'فواتير الصيانة',
+            salaries: 'الرواتب المدفوعة',
+            rentals: 'الإيجارات الفردية',
             landlordPayments: 'دفعات الملاك',
             cheques: 'الشيكات',
             maintenance: 'الصيانة',
+            staffMenu: 'الموظفون',
+            allStaff: 'كل الموظفين',
+            attendance: 'الحضور',
+            payroll: 'الرواتب',
             settings: 'الإعدادات',
             help: 'المساعدة والدعم',
             soon: 'قريبًا',
@@ -1429,6 +1511,7 @@ export const translations = {
             dueAgo: { one: 'مؤرخ قبل يوم واحد', two: 'مؤرخ قبل يومين', few: 'مؤرخ قبل {count} أيام', many: 'مؤرخ قبل {count} يومًا', other: 'مؤرخ قبل {count} يوم' },
             bouncedAgo: { one: 'ارتد قبل يوم واحد', two: 'ارتد قبل يومين', few: 'ارتد قبل {count} أيام', many: 'ارتد قبل {count} يومًا', other: 'ارتد قبل {count} يوم' },
             bouncedToday: 'ارتد اليوم',
+            staffDocument: '{document} لـ {name}',
         },
         dashboard: {
             title: 'لوحة التحكم',
@@ -1635,8 +1718,51 @@ export const translations = {
                     usage: { one: 'غرفة واحدة', two: 'غرفتان', few: '{count} غرف', other: '{count} غرفة' },
                     empty: 'لا توجد أنواع غرف بعد',
                 },
+                maintenanceStatus: {
+                    title: 'حالات الصيانة',
+                    description: 'المراحل التي تمر بها أعمال الصيانة بالترتيب. عند وصول العمل إلى حالة منتهية تُطلب الفاتورة والمبلغ المدفوع.',
+                    addTitle: 'إضافة حالة صيانة',
+                    editTitle: 'تعديل حالة الصيانة',
+                    usage: { one: 'عمل واحد', two: 'عملان', few: '{count} أعمال', other: '{count} عملًا' },
+                    empty: 'لا توجد حالات صيانة بعد',
+                },
+                maintenanceCategory: {
+                    title: 'فئات الصيانة',
+                    description: 'أنواع الأعطال التي تسجّلها، مثل السباكة أو مضخة المياه أو الأسرّة المكسورة.',
+                    addTitle: 'إضافة فئة صيانة',
+                    editTitle: 'تعديل فئة الصيانة',
+                    usage: { one: 'عمل واحد', two: 'عملان', few: '{count} أعمال', other: '{count} عملًا' },
+                    empty: 'لا توجد فئات صيانة بعد',
+                },
+                staffRole: {
+                    title: 'وظائف الموظفين',
+                    description: 'الوظائف التي يشغلها موظفوك، كلٌّ في المستوى الذي يعمل فيه عادةً: المكتب الرئيسي أو مكتب إقليمي أو مخيم أو مبنى.',
+                    addTitle: 'إضافة وظيفة',
+                    editTitle: 'تعديل الوظيفة',
+                    usage: { one: 'شخص واحد', two: 'شخصان', few: '{count} أشخاص', many: '{count} شخصًا', other: '{count} شخص' },
+                    empty: 'لا توجد وظائف بعد',
+                },
                 dialogDescription: 'الأنواع الموقوفة تبقى على السجلات الحالية ولا تُعرض عند الإضافة.',
-                fields: { name: 'الاسم', description: 'الوصف', order: 'الترتيب', active: 'يُعرض عند إضافة السجلات' },
+                fields: {
+                    name: 'الاسم',
+                    description: 'الوصف',
+                    order: 'الترتيب',
+                    active: 'يُعرض عند إضافة السجلات',
+                    stage: 'معنى هذه الحالة',
+                    stageHint: 'يتيح للتطبيق عدّ الأعمال المفتوحة والمنتهية مهما كان اسم الحالة.',
+                    color: 'اللون',
+                    level: 'المستوى',
+                    levelHint: 'المكان الذي يعمل فيه صاحب هذه الوظيفة عادةً. يُحدَّد مكان عمل كل موظف في سجله.',
+                    staffAccess: 'ما يمكنه فعله عند تسجيل الدخول',
+                    staffAccessHint: 'نقطة البداية لكل من يُمنح تسجيل الدخول في هذه الوظيفة؛ ويمكن تغييرها في سجله.',
+                },
+                stages: {
+                    open: 'لم يبدأ',
+                    in_progress: 'العمل جارٍ',
+                    completed: 'منتهٍ (تُطلب الفاتورة)',
+                    cancelled: 'ملغى',
+                },
+                colors: { cyan: 'سماوي', navy: 'كحلي', amber: 'كهرماني', green: 'أخضر', red: 'أحمر', grey: 'رمادي' },
                 add: 'إضافة النوع',
                 save: 'حفظ التغييرات',
                 edit: 'تعديل',
@@ -2181,10 +2307,6 @@ export const translations = {
                 'amcs.water-tanks': {
                     title: 'عقد صيانة تنظيف خزانات المياه',
                     description: 'عقود تنظيف خزانات المياه وتعقيمها مع شهاداتها.',
-                },
-                'maintenance.index': {
-                    title: 'الصيانة',
-                    description: 'تسجيل أوامر العمل وجدولة الصيانة الوقائية ومتابعة كل إصلاح حتى اكتماله.',
                 },
                 help: {
                     title: 'المساعدة والدعم',

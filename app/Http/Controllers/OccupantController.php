@@ -99,6 +99,7 @@ class OccupantController extends Controller
             'occupancies.bed.room:id,room_number,property_id,gender_policy',
             'occupancies.bed.room.property:id,name,code',
             'occupancies.contractLine.contract:id,contract_number',
+            'occupancies.roomRental:id,rental_number',
         ]);
 
         return Inertia::render('Occupants/Show', [
@@ -110,7 +111,8 @@ class OccupantController extends Controller
             'stays' => $occupant->occupancies->map(fn (Occupancy $stay) => [
                 ...$this->stayDetails($stay),
                 'checkOutDate' => $stay->check_out_date?->toDateString(),
-                'contract' => ['id' => $stay->contractLine->contract->id, 'number' => $stay->contractLine->contract->contract_number],
+                'contract' => $stay->contractLine ? ['id' => $stay->contractLine->contract->id, 'number' => $stay->contractLine->contract->contract_number] : null,
+                'rental' => $stay->roomRental?->only(['id', 'rental_number']),
                 'nights' => (int) $stay->check_in_date->diffInDays($stay->check_out_date ?? today()),
             ]),
         ]);
