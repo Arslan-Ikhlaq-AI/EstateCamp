@@ -1,6 +1,7 @@
 import { finance } from './translations-finance';
 import { leasing } from './translations-leasing';
 import { maintenance } from './translations-maintenance';
+import { reports } from './translations-reports';
 import { staff } from './translations-staff';
 
 /**
@@ -9,13 +10,14 @@ import { staff } from './translations-staff';
  * plural forms chosen with Intl.PluralRules (Arabic uses all six). The
  * leasing pages' strings live in translations-leasing.js, the maintenance
  * pages' in translations-maintenance.js, the staff pages' in
- * translations-staff.js and the payments section's in
- * translations-finance.js.
+ * translations-staff.js, the payments section's in translations-finance.js
+ * and the reports' in translations-reports.js.
  */
 export const translations = {
     en: {
         leasing: leasing.en,
         finance: finance.en,
+        reports: reports.en,
         maintenance: maintenance.en,
         staff: staff.en,
         common: {
@@ -73,6 +75,15 @@ export const translations = {
             maintenanceBills: 'Maintenance bills',
             salaries: 'Salaries',
             rentals: 'Individual rentals',
+            insights: 'Insights',
+            reports: 'Reports',
+            allReports: 'All reports',
+            reportSummary: 'Company summary',
+            reportIncome: 'Income & expenditure',
+            reportReceivables: 'Receivables & aging',
+            reportOccupancy: 'Occupancy',
+            reportMaintenance: 'Maintenance',
+            reportStaff: 'Staff & payroll',
             landlordPayments: 'Landlord payments',
             cheques: 'Cheques',
             maintenance: 'Maintenance',
@@ -1386,6 +1397,7 @@ export const translations = {
     ar: {
         leasing: leasing.ar,
         finance: finance.ar,
+        reports: reports.ar,
         maintenance: maintenance.ar,
         staff: staff.ar,
         common: {
@@ -1443,6 +1455,15 @@ export const translations = {
             maintenanceBills: 'فواتير الصيانة',
             salaries: 'الرواتب المدفوعة',
             rentals: 'الإيجارات الفردية',
+            insights: 'التحليلات',
+            reports: 'التقارير',
+            allReports: 'جميع التقارير',
+            reportSummary: 'ملخص الشركة',
+            reportIncome: 'الإيرادات والمصروفات',
+            reportReceivables: 'المستحقات وأعمارها',
+            reportOccupancy: 'الإشغال',
+            reportMaintenance: 'الصيانة',
+            reportStaff: 'الموظفون والرواتب',
             landlordPayments: 'دفعات الملاك',
             cheques: 'الشيكات',
             maintenance: 'الصيانة',

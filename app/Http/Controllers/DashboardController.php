@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\MeasuresBeds;
 use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\Contract;
@@ -22,6 +23,8 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    use MeasuresBeds;
+
     /**
      * Documents expiring within this many days count as "expiring soon".
      */
@@ -122,7 +125,7 @@ class DashboardController extends Controller
                 ->values(),
             'finance' => $this->finance($company),
             'cheques' => $this->cheques($company),
-            'occupancyTrend' => $this->occupancyTrend($company),
+            'occupancyTrend' => $this->stayingTrend($company, today(), self::TREND_MONTHS),
             'activity' => $this->recentActivity($company),
             'rooms' => $rooms->map(fn (Room $room) => $this->roomDetails($room)),
             'documents' => $documents->map(fn (PropertyDocument $document) => $this->documentDetails($document)),
@@ -137,54 +140,6 @@ class DashboardController extends Controller
                     'role' => $user->role?->name,
                 ]),
         ]);
-    }
-
-    /**
-     * Beds split into occupied, available (free beds in active rooms) and out
-     * of service (free beds in rooms under maintenance or inactive).
-     *
-     * @param  Collection<int, Room>  $rooms
-     * @return array{total: int, occupied: int, available: int, outOfService: int, occupancyRate: float|null}
-     */
-    private function beds(Collection $rooms): array
-    {
-        $total = (int) $rooms->sum('capacity');
-        $occupied = (int) $rooms->sum('occupied_count');
-        $available = (int) $rooms->sum(fn (Room $room) => $this->availableBeds($room));
-        $inService = $occupied + $available;
-
-        return [
-            'total' => $total,
-            'occupied' => $occupied,
-            'available' => $available,
-            'outOfService' => $total - $inService,
-            'occupancyRate' => $inService > 0 ? round($occupied / $inService * 100, 1) : null,
-        ];
-    }
-
-    private function availableBeds(Room $room): int
-    {
-        return $room->status === 'active' ? $room->capacity - $room->occupied_count : 0;
-    }
-
-    /**
-     * Monthly rent currently billed: occupied beds at their room's bed rate.
-     *
-     * @param  Collection<int, Room>  $rooms
-     */
-    private function rentRoll(Collection $rooms): float
-    {
-        return (float) $rooms->sum(fn (Room $room) => $room->occupied_count * (float) $room->rent_per_bed);
-    }
-
-    /**
-     * Monthly rent if every bed in service were let.
-     *
-     * @param  Collection<int, Room>  $rooms
-     */
-    private function potentialRent(Collection $rooms): float
-    {
-        return (float) $rooms->sum(fn (Room $room) => ($room->occupied_count + $this->availableBeds($room)) * (float) $room->rent_per_bed);
     }
 
     /**
@@ -341,26 +296,6 @@ class DashboardController extends Controller
             ->sortByDesc('balance')
             ->take(self::TOP_DEBTORS)
             ->values()
-            ->all();
-    }
-
-    /**
-     * People staying at the end of each month in the trend window (today, for
-     * this month), from check-in and check-out dates.
-     *
-     * @return list<array{month: string, staying: int}>
-     */
-    private function occupancyTrend(Company $company): array
-    {
-        $start = today()->startOfMonth()->subMonths(self::TREND_MONTHS - 1);
-
-        return collect(range(0, self::TREND_MONTHS - 1))
-            ->map(function (int $offset) use ($company, $start) {
-                $month = $start->copy()->addMonths($offset);
-                $on = $month->isSameMonth(today()) ? today() : $month->copy()->endOfMonth();
-
-                return ['month' => $month->format('Y-m'), 'staying' => $company->occupancies()->current($on)->count()];
-            })
             ->all();
     }
 

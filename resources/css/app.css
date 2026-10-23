@@ -376,4 +376,24 @@
     padding: 0 !important;
     animation: none !important;
   }
+  /* A report prints on landscape pages, so its wide tables fit the paper. */
+  [data-slot='report'] {
+    page: report;
+  }
+  /*
+   * Charts keep the width they were drawn at on screen; on paper they shrink
+   * to the page. Recharts measures inside a zero-width box, which is widened
+   * so the chart's own max-width has something to resolve against.
+   */
+  .recharts-responsive-container > div {
+    width: 100% !important;
+  }
+  .recharts-wrapper {
+    max-width: 100% !important;
+  }
+}
+
+@page report {
+  size: A4 landscape;
+  margin: 12mm;
 }

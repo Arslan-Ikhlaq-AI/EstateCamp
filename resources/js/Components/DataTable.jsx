@@ -65,3 +65,19 @@ export default function DataTable({ columns, rows, rowKey = 'id', actions, foote
         </Table>
     );
 }
+
+/**
+ * A totals row for a DataTable's `footer`: `values` holds what each column
+ * shows by its id, the first usually naming the row.
+ */
+export function TotalsRow({ columns, values }) {
+    return (
+        <TableRow className="border-t-2 bg-muted/40 font-semibold hover:bg-muted/40">
+            {columns.map((column, index) => (
+                <TableCell key={column.id} className={cn('py-3', edgePadding(index, columns.length, false), column.align === 'end' && 'text-end', column.className)}>
+                    {values[column.id] ?? null}
+                </TableCell>
+            ))}
+        </TableRow>
+    );
+}

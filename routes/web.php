@@ -8,13 +8,16 @@ use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HeadLeaseController;
+use App\Http\Controllers\IncomeReportController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LandlordController;
 use App\Http\Controllers\MaintenanceBillController;
 use App\Http\Controllers\MaintenanceCategoryController;
 use App\Http\Controllers\MaintenanceJobController;
+use App\Http\Controllers\MaintenanceReportController;
 use App\Http\Controllers\MaintenanceStatusController;
 use App\Http\Controllers\OccupancyController;
+use App\Http\Controllers\OccupancyReportController;
 use App\Http\Controllers\OccupantController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentOverviewController;
@@ -22,8 +25,10 @@ use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyTypeController;
+use App\Http\Controllers\ReceivablesReportController;
 use App\Http\Controllers\RegionalOfficeController;
 use App\Http\Controllers\RentalPaymentController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\RoomRentalController;
 use App\Http\Controllers\RoomTypeController;
@@ -32,7 +37,9 @@ use App\Http\Controllers\ShopController;
 use App\Http\Controllers\StaffAttendanceController;
 use App\Http\Controllers\StaffMemberController;
 use App\Http\Controllers\StaffPortalController;
+use App\Http\Controllers\StaffReportController;
 use App\Http\Controllers\StaffRoleController;
+use App\Http\Controllers\SummaryReportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -58,6 +65,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
         // Salaries across months, as payments, for the payments section.
         Route::get('salaries', [SalaryPaymentController::class, 'index'])->name('salaries.index');
+        Route::get('reports/staff', StaffReportController::class)->name('reports.staff');
     });
 
     Route::middleware('can:manage-staff')->group(function () {
@@ -123,6 +131,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('cheques/{cheque}/transition', [ChequeController::class, 'transition'])->name('cheques.transition');
         Route::post('cheques/{cheque}/replace', [ChequeController::class, 'replace'])->name('cheques.replace');
         Route::get('cheques/{cheque}/images/{side}', [ChequeController::class, 'image'])->whereIn('side', ['front', 'back'])->name('cheques.image');
+
+        // Reports: the company's figures for a period, to read, print or export.
+        Route::get('reports', ReportController::class)->name('reports.index');
+        Route::get('reports/summary', SummaryReportController::class)->name('reports.summary');
+        Route::get('reports/income', IncomeReportController::class)->name('reports.income');
+        Route::get('reports/receivables', ReceivablesReportController::class)->name('reports.receivables');
+        Route::get('reports/occupancy', OccupancyReportController::class)->name('reports.occupancy');
+        Route::get('reports/maintenance', MaintenanceReportController::class)->name('reports.maintenance');
 
         // Maintenance: problems at the properties, tracked to completion with what each one cost.
         Route::resource('maintenance', MaintenanceJobController::class)->except(['destroy'])->parameters(['maintenance' => 'maintenanceJob']);
