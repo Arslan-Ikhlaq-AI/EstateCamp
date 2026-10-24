@@ -25,6 +25,10 @@ export default function PortfolioStats({ summary, currency }) {
                     leased: summary.leased,
                 })}
             />
+            <StatCard icon={DoorOpenIcon} tone="violet" label={t('properties.stats.rooms')} value={formatNumber(summary.rooms)}>
+                <RoomOccupancyBar rooms={summary.roomOccupancy} />
+                <RoomOccupancyLegend rooms={summary.roomOccupancy} />
+            </StatCard>
             <StatCard
                 icon={BedDoubleIcon}
                 tone="success"
@@ -43,10 +47,6 @@ export default function PortfolioStats({ summary, currency }) {
                 value={formatCurrency(summary.rentRoll, currency)}
                 detail={t('properties.stats.rentRollDetail', { count: summary.rooms })}
             />
-            <StatCard icon={DoorOpenIcon} label={t('properties.stats.rooms')} value={formatNumber(summary.rooms)}>
-                <RoomOccupancyBar rooms={summary.roomOccupancy} />
-                <RoomOccupancyLegend rooms={summary.roomOccupancy} />
-            </StatCard>
         </section>
     );
 }

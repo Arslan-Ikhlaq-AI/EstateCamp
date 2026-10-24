@@ -15,6 +15,7 @@ const TONES = {
     gold: 'from-brand-sun to-gold text-brand-navy shadow-gold/35',
     warning: 'from-warning/75 to-warning text-white shadow-warning/25',
     success: 'from-success/70 to-success text-white shadow-success/25',
+    violet: 'from-violet-400 to-violet-600 text-white shadow-violet-500/30',
 };
 
 /**
