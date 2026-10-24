@@ -7,6 +7,7 @@ use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\Invoice;
+use App\Models\MaintenanceVisit;
 use App\Models\Occupancy;
 use App\Models\Payment;
 use App\Models\Property;
@@ -125,6 +126,8 @@ class DashboardController extends Controller
                 ->values(),
             'finance' => $this->finance($company),
             'cheques' => $this->cheques($company),
+            'visitAlerts' => MaintenanceVisitController::needingAttention($company)
+                ->map(fn (MaintenanceVisit $visit) => MaintenanceVisitController::details($visit, withContract: true)),
             'occupancyTrend' => $this->stayingTrend($company, today(), self::TREND_MONTHS),
             'activity' => $this->recentActivity($company),
             'rooms' => $rooms->map(fn (Room $room) => $this->roomDetails($room)),

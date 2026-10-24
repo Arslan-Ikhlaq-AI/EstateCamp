@@ -89,7 +89,7 @@ export default function ChequesOverview({ cheques, currency }) {
                         value={formatCurrency(summary.toDeposit.amount, currency)}
                         detail={t('leasing.cheques.stats.toDepositDetail', { count: summary.toDeposit.count })}
                         tone={summary.toDeposit.count > 0 ? 'warning' : 'muted'}
-                        href={route('cheques.index', { direction: ['received'], status: ['received'], due: ['overdue'] })}
+                        href={route('cheques.index', { direction: ['received'], stage: ['received'], due: ['overdue'] })}
                     />
                     <Figure
                         icon={HandCoinsIcon}
@@ -97,7 +97,7 @@ export default function ChequesOverview({ cheques, currency }) {
                         value={formatCurrency(summary.inHand.amount, currency)}
                         detail={t('leasing.cheques.stats.inHandDetail', { count: summary.inHand.count })}
                         tone="muted"
-                        href={route('cheques.index', { direction: ['received'], status: ['received'] })}
+                        href={route('cheques.index', { direction: ['received'], stage: ['received'] })}
                     />
                     <Figure
                         icon={ArrowUpRightIcon}
@@ -113,7 +113,7 @@ export default function ChequesOverview({ cheques, currency }) {
                         value={formatCurrency(summary.bounced.amount, currency)}
                         detail={summary.bounced.count > 0 ? t('leasing.cheques.stats.bouncedDetail', { count: summary.bounced.count }) : t('leasing.cheques.stats.bouncedNone')}
                         tone={summary.bounced.count > 0 ? 'danger' : 'muted'}
-                        href={route('cheques.index', { status: ['bounced'] })}
+                        href={route('cheques.index', { stage: ['bounced'] })}
                     />
                 </div>
 

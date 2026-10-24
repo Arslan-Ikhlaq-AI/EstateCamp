@@ -11,6 +11,13 @@ export function todayIso() {
 }
 
 /**
+ * Whole days from today to a YYYY-MM-DD date: negative once it has passed.
+ */
+export function daysFromToday(isoDate) {
+    return Math.round((Date.parse(`${isoDate}T00:00:00Z`) - Date.parse(`${todayIso()}T00:00:00Z`)) / 86400000);
+}
+
+/**
  * `months` after a YYYY-MM-DD date, keeping the day but never spilling into
  * the next month (31 Jan + 1 month = 28 or 29 Feb), like Carbon's
  * addMonthsNoOverflow on the server.

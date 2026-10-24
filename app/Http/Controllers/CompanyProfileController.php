@@ -17,12 +17,12 @@ class CompanyProfileController extends Controller
     /**
      * Currencies offered first; any three-letter code is accepted.
      */
-    private const CURRENCIES = ['AED', 'SAR', 'QAR', 'OMR', 'BHD', 'KWD', 'USD', 'EUR', 'GBP', 'INR', 'PKR'];
+    public const CURRENCIES = ['AED', 'SAR', 'QAR', 'OMR', 'BHD', 'KWD', 'USD', 'EUR', 'GBP', 'INR', 'PKR'];
 
     /**
      * Time zones offered first; any valid zone is accepted.
      */
-    private const TIMEZONES = ['Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Muscat', 'Asia/Bahrain', 'Asia/Kuwait', 'Asia/Karachi', 'Asia/Kolkata', 'Europe/London', 'UTC'];
+    public const TIMEZONES = ['Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Muscat', 'Asia/Bahrain', 'Asia/Kuwait', 'Asia/Karachi', 'Asia/Kolkata', 'Europe/London', 'UTC'];
 
     /**
      * Show the company profile with its figures.

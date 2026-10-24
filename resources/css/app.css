@@ -35,6 +35,18 @@
   /* App-wide motion: content settles in with a short rise; kept subtle and gated by motion-safe. */
   --animate-enter: app-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   --animate-fade: app-fade 0.25s ease-out backwards;
+  /* Alerts that must be acted on (a contractor's visit due): a red ring that blinks on and off. */
+  --animate-alert-blink: alert-blink 1.2s ease-in-out infinite;
+
+  @keyframes alert-blink {
+    0%,
+    100% {
+      box-shadow: 0 0 0 1px color-mix(in oklab, var(--destructive) 35%, transparent), 0 0 0 0 color-mix(in oklab, var(--destructive) 0%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 2px var(--destructive), 0 0 0 6px color-mix(in oklab, var(--destructive) 18%, transparent);
+    }
+  }
 
   @keyframes app-enter {
     from {
@@ -232,9 +244,11 @@
     --cash-in: #0e7fb8;
     --cash-out: #eda100;
     --cash-clients: #2a78d6;
+    --cash-gas: #e8590c;
     --cash-rentals: #1baf7a;
     --cash-landlords: #eda100;
     --cash-maintenance: #6250d6;
+    --cash-contracts: #7f4315;
     --cash-salaries: #e87ba4;
     /* Categorical series: cyan, yellow, aqua, validated all-pairs in both themes; a fourth+ series folds into chart-3 grey. */
     --cat-1: #1a9fd9;
@@ -293,9 +307,11 @@
     --cash-in: #2897cb;
     --cash-out: #c98500;
     --cash-clients: #3987e5;
+    --cash-gas: #e8590c;
     --cash-rentals: #199e70;
     --cash-landlords: #c98500;
     --cash-maintenance: #9085e9;
+    --cash-contracts: #9c5010;
     --cash-salaries: #d55181;
     --cat-1: #2196d1;
     --cat-2: #c98500;

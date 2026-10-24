@@ -534,7 +534,10 @@ const NIGHT = {
     fencePosts: Array.from({ length: 39 }, (_, index) => 120 + index * 16),
 };
 
-export function NightScene() {
+/**
+ * `withMarker` adds the live camp pin; panels with their own content over the camp leave it out.
+ */
+export function NightScene({ withMarker = true }) {
     return (
         <SceneCanvas>
             <defs>
@@ -639,7 +642,7 @@ export function NightScene() {
                     stroke="#24569C"
                     strokeOpacity="0.5"
                 />
-                <CampMarker x={412} y={700} title="Desert Camp" meta="36 check-ins tonight" />
+                {withMarker && <CampMarker x={412} y={700} title="Desert Camp" meta="36 check-ins tonight" />}
             </Layer>
 
             <Layer depth={18}>

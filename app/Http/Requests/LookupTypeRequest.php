@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Models\ChequeStatus;
 use App\Models\MaintenanceStatus;
 use App\Models\StaffMember;
 use App\Models\StaffRole;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,8 +15,8 @@ use Illuminate\Validation\Rule;
 
 /**
  * A type added or changed on the configuration pages: a property or room
- * type, a maintenance status or category, or a staff role. These lists are
- * shared by every company, so only admins may change them.
+ * type, a maintenance status or category, a cheque status, or a staff role.
+ * These lists are shared by every company, so only admins may change them.
  */
 class LookupTypeRequest extends FormRequest
 {
@@ -26,6 +28,7 @@ class LookupTypeRequest extends FormRequest
         'configuration.room-types.*' => ['room_types', 'roomType'],
         'configuration.maintenance-statuses.*' => ['maintenance_statuses', 'maintenanceStatus'],
         'configuration.maintenance-categories.*' => ['maintenance_categories', 'maintenanceCategory'],
+        'configuration.cheque-statuses.*' => ['cheque_statuses', 'chequeStatus'],
         'configuration.staff-roles.*' => ['staff_roles', 'staffRole'],
     ];
 
@@ -68,6 +71,11 @@ class LookupTypeRequest extends FormRequest
             $rules['color'] = ['required', Rule::in(MaintenanceStatus::COLORS)];
         }
 
+        if ($table === 'cheque_statuses') {
+            $rules['stage'] = ['required', Rule::in(ChequeStatus::STAGES), $this->keepsChequeStage($type)];
+            $rules['color'] = ['required', Rule::in(ChequeStatus::COLORS)];
+        }
+
         if ($table === 'staff_roles') {
             $rules['level'] = ['required', Rule::in(StaffRole::LEVELS)];
             $rules['staff_access'] = ['required', Rule::in(StaffMember::ACCESS_LEVELS)];
@@ -75,5 +83,25 @@ class LookupTypeRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    /**
+     * A cheque status keeps its stage while cheques are in it, since a
+     * cheque's status must always be one of its stage, and while it is the
+     * only status cheques can enter its stage with.
+     */
+    private function keepsChequeStage(mixed $status): Closure
+    {
+        return function (string $attribute, mixed $stage, Closure $fail) use ($status) {
+            if (! $status instanceof ChequeStatus || $stage === $status->stage) {
+                return;
+            }
+
+            if ($status->cheques()->exists()) {
+                $fail('Cheques are in this status, so what it means cannot change. Add a new status instead.');
+            } elseif (! ChequeStatus::query()->where('stage', $status->stage)->whereKeyNot($status->id)->exists()) {
+                $fail('This is the only status for what it means now. Add another one for that first.');
+            }
+        };
     }
 }

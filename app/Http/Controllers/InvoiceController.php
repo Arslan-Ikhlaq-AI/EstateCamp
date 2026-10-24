@@ -33,7 +33,7 @@ class InvoiceController extends Controller
         }
 
         $period = $this->periodFilter($request);
-        $filters = [...$this->listFilters($request, ['status' => Invoice::STATUSES, 'due' => ['overdue']]), 'period' => $period['value']];
+        $filters = [...$this->listFilters($request, ['status' => Invoice::STATUSES, 'kind' => Invoice::KINDS, 'due' => ['overdue']]), 'period' => $period['value']];
 
         return Inertia::render('Invoices/Index', [
             'company' => ['currency' => $company->default_currency],
@@ -41,6 +41,7 @@ class InvoiceController extends Controller
             'period' => $period,
             'facets' => [
                 'status' => $this->facetOptions(Invoice::STATUSES, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'status'), 'status')),
+                'kind' => $this->facetOptions(Invoice::KINDS, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'kind'), 'kind')),
                 'due' => [['value' => 'overdue', 'count' => $this->overdue($this->filteredQuery($company, $filters, $period, except: 'due'))->count()]],
             ],
             'summary' => $this->summary($company, $period),
@@ -71,7 +72,8 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Show an invoice with its items and the payments allocated to it.
+     * Show an invoice with its items and the payments allocated to it, and
+     * the gas bill a gas invoice charges for.
      */
     public function show(Request $request, Invoice $invoice): Response
     {
@@ -82,6 +84,7 @@ class InvoiceController extends Controller
             'contract:id,contract_number,billing_cycle',
             'items' => fn (HasMany $items) => $items->orderBy('id'),
             'allocations.payment:id,payment_number,received_on,method,status',
+            'gasBill.property:id,name,code',
         ]);
 
         return Inertia::render('Invoices/Show', [
@@ -94,6 +97,11 @@ class InvoiceController extends Controller
                 'notes' => $invoice->notes,
                 'client' => $invoice->client->only(['id', 'name', 'client_type', 'email', 'phone', 'address', 'tax_registration_number']),
                 'canVoid' => $invoice->status !== 'void' && $invoice->allocations->isEmpty(),
+                'gasBill' => $invoice->gasBill ? [
+                    'id' => $invoice->gasBill->id,
+                    'property' => $invoice->gasBill->property->only(['id', 'name', 'code']),
+                    'canEdit' => $invoice->status === 'issued' && $invoice->allocations->isEmpty(),
+                ] : null,
             ],
             'items' => $invoice->items->map(fn (InvoiceItem $item) => [
                 'id' => $item->id,
@@ -141,6 +149,7 @@ class InvoiceController extends Controller
         return [
             'id' => $invoice->id,
             'number' => $invoice->invoice_number,
+            'kind' => $invoice->kind,
             'status' => $invoice->status,
             'isOverdue' => $invoice->isOverdue(),
             'client' => $invoice->relationLoaded('client') ? $invoice->client?->only(['id', 'name']) : null,
@@ -180,7 +189,8 @@ class InvoiceController extends Controller
                 ->whereLike('invoice_number', "%{$search}%")
                 ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%"))
                 ->orWhereHas('contract', fn (Builder $contracts) => $contracts->whereLike('contract_number', "%{$search}%"))))
-            ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('status', $filters['status']));
+            ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('status', $filters['status']))
+            ->when($except !== 'kind' && $filters['kind'] !== [], fn (Builder $query) => $query->whereIn('kind', $filters['kind']));
 
         return $except !== 'due' && $filters['due'] !== [] ? $this->overdue($query) : $query;
     }

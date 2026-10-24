@@ -12,7 +12,7 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600|plus-jakarta-sans:400,500,600,700,800|instrument-serif:400i|ibm-plex-sans-arabic:400,500,600,700&display=swap" rel="stylesheet" />
 
-        @unless (str_starts_with($page['component'], 'Auth/'))
+        @unless (Str::startsWith($page['component'], ['Auth/', 'Onboarding/']))
             {{-- Applies the saved theme and language before the first paint so app pages never flash. --}}
             <script>
                 (function () {

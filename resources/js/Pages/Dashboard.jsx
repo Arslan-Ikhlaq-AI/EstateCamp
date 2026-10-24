@@ -24,6 +24,7 @@ import RecentActivity from './Dashboard/Partials/RecentActivity';
 import RentCapture from './Dashboard/Partials/RentCapture';
 import RoomTypeMix from './Dashboard/Partials/RoomTypeMix';
 import TopDebtors from './Dashboard/Partials/TopDebtors';
+import VisitAlerts from './Dashboard/Partials/VisitAlerts';
 
 function greetingKey(hour) {
     if (hour < 12) {
@@ -127,7 +128,7 @@ function NoCompany() {
     );
 }
 
-export default function Dashboard({ company, summary, finance, cheques, occupancyTrend, activity, properties, roomTypes, documents }) {
+export default function Dashboard({ company, summary, finance, cheques, visitAlerts, occupancyTrend, activity, properties, roomTypes, documents }) {
     const { t } = useTranslation();
 
     return (
@@ -139,6 +140,8 @@ export default function Dashboard({ company, summary, finance, cheques, occupanc
             ) : (
                 <>
                     <Greeting company={company} summary={summary} />
+
+                    <VisitAlerts visits={visitAlerts} />
 
                     <KpiCards summary={summary} finance={finance} currency={company.currency} />
 

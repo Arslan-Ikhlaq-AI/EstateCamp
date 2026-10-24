@@ -8,12 +8,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Validation\ValidationException;
 
 /**
- * One billing period of one contract. Invoices are created by
- * Contract::generateNextInvoice(); `amount_paid` and `status` follow from
- * the cleared payments allocated to it (recalculatePaid()).
+ * What a contract's client is charged: one billing period of rent (kind
+ * `rent`, created by Contract::generateNextInvoice()) or a month's gas at
+ * one property (kind `gas`, created with its GasBill). `amount_paid` and
+ * `status` follow from the cleared payments allocated to it
+ * (recalculatePaid()).
  */
 #[Fillable(['issue_date', 'due_date', 'period_start', 'period_end', 'notes'])]
 class Invoice extends Model
@@ -25,6 +28,8 @@ class Invoice extends Model
     public const NUMBER_COLUMN = 'invoice_number';
 
     public const STATUSES = ['issued', 'partially_paid', 'paid', 'void'];
+
+    public const KINDS = ['rent', 'gas'];
 
     /**
      * Get the attributes that should be cast.
@@ -121,6 +126,16 @@ class Invoice extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * The gas bill a gas invoice charges for.
+     *
+     * @return HasOne<GasBill, $this>
+     */
+    public function gasBill(): HasOne
+    {
+        return $this->hasOne(GasBill::class);
     }
 
     /**

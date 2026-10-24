@@ -3,19 +3,24 @@
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\ChequeController;
+use App\Http\Controllers\ChequeStatusController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CompanyOnboardingController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GasBillController;
 use App\Http\Controllers\HeadLeaseController;
 use App\Http\Controllers\IncomeReportController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LandlordController;
 use App\Http\Controllers\MaintenanceBillController;
 use App\Http\Controllers\MaintenanceCategoryController;
+use App\Http\Controllers\MaintenanceContractController;
 use App\Http\Controllers\MaintenanceJobController;
 use App\Http\Controllers\MaintenanceReportController;
 use App\Http\Controllers\MaintenanceStatusController;
+use App\Http\Controllers\MaintenanceVisitController;
 use App\Http\Controllers\OccupancyController;
 use App\Http\Controllers\OccupancyReportController;
 use App\Http\Controllers\OccupantController;
@@ -40,12 +45,25 @@ use App\Http\Controllers\StaffPortalController;
 use App\Http\Controllers\StaffReportController;
 use App\Http\Controllers\StaffRoleController;
 use App\Http\Controllers\SummaryReportController;
+use App\Models\Company;
+use App\Models\MaintenanceContract;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function (Request $request) {
     return redirect()->route($request->user() ? 'dashboard' : 'login');
 });
+
+// Signing a new company up, linked from the marketing site. Each step is checked
+// through Precognition before the next opens; the final submit is limited per hour.
+Route::get('get-started', [CompanyOnboardingController::class, 'create'])->name('onboarding.create');
+Route::post('get-started', [CompanyOnboardingController::class, 'store'])
+    ->middleware([HandlePrecognitiveRequests::class, 'throttle:onboarding'])
+    ->name('onboarding.store');
+
+// A company's own sign-in address: the sign-in page, under the company's name.
+Route::get('w/{company:slug}', fn (Company $company) => to_route('login', ['workspace' => $company->slug]))->name('workspace');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Staff whose sign-in covers only the staff pages are sent on from here to their own.
@@ -119,6 +137,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('rental-payments/{rentalPayment}', [RentalPaymentController::class, 'show'])->whereNumber('rentalPayment')->name('rental-payments.show');
         Route::post('rental-payments/{rentalPayment}/void', [RentalPaymentController::class, 'void'])->whereNumber('rentalPayment')->name('rental-payments.void');
 
+        // Gas bills: each month's gas, charged to clients whose contracts do not include it.
+        Route::resource('gas-bills', GasBillController::class)->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['gas-bills' => 'gasBill'])->whereNumber('gasBill');
+        Route::get('gas-bills/{gasBill}/document', [GasBillController::class, 'document'])->whereNumber('gasBill')->name('gas-bills.document');
+
         // Maintenance bills: paying vendors for finished work, with a voucher for each payment.
         Route::get('maintenance-bills', [MaintenanceBillController::class, 'index'])->name('maintenance-bills.index');
         Route::post('maintenance-bills/{maintenanceJob}/pay', [MaintenanceBillController::class, 'pay'])->whereNumber('maintenanceJob')->name('maintenance-bills.pay');
@@ -127,8 +149,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Cheques: the main record of money moving under contracts and head leases.
         Route::get('cheques', [ChequeController::class, 'index'])->name('cheques.index');
+        Route::post('cheques/status', [ChequeController::class, 'bulkStatus'])->name('cheques.bulk-status');
         Route::put('cheques/{cheque}', [ChequeController::class, 'update'])->name('cheques.update');
-        Route::post('cheques/{cheque}/transition', [ChequeController::class, 'transition'])->name('cheques.transition');
+        Route::post('cheques/{cheque}/status', [ChequeController::class, 'changeStatus'])->name('cheques.status');
         Route::post('cheques/{cheque}/replace', [ChequeController::class, 'replace'])->name('cheques.replace');
         Route::get('cheques/{cheque}/images/{side}', [ChequeController::class, 'image'])->whereIn('side', ['front', 'back'])->name('cheques.image');
 
@@ -163,31 +186,46 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('configuration/maintenance-categories', [MaintenanceCategoryController::class, 'store'])->name('configuration.maintenance-categories.store');
         Route::put('configuration/maintenance-categories/{maintenanceCategory}', [MaintenanceCategoryController::class, 'updateType'])->name('configuration.maintenance-categories.update');
         Route::delete('configuration/maintenance-categories/{maintenanceCategory}', [MaintenanceCategoryController::class, 'destroyType'])->name('configuration.maintenance-categories.destroy');
+        Route::get('configuration/cheque-statuses', [ChequeStatusController::class, 'index'])->name('configuration.cheque-statuses');
+        Route::post('configuration/cheque-statuses', [ChequeStatusController::class, 'store'])->name('configuration.cheque-statuses.store');
+        Route::put('configuration/cheque-statuses/{chequeStatus}', [ChequeStatusController::class, 'updateType'])->name('configuration.cheque-statuses.update');
+        Route::delete('configuration/cheque-statuses/{chequeStatus}', [ChequeStatusController::class, 'destroyType'])->name('configuration.cheque-statuses.destroy');
         Route::get('configuration/staff-roles', [StaffRoleController::class, 'index'])->name('configuration.staff-roles');
         Route::post('configuration/staff-roles', [StaffRoleController::class, 'store'])->name('configuration.staff-roles.store');
         Route::put('configuration/staff-roles/{staffRole}', [StaffRoleController::class, 'updateType'])->name('configuration.staff-roles.update');
         Route::delete('configuration/staff-roles/{staffRole}', [StaffRoleController::class, 'destroyType'])->name('configuration.staff-roles.destroy');
         Route::get('configuration/regional-offices', [RegionalOfficeController::class, 'index'])->name('configuration.regional-offices');
 
-        /*
-         * Sections from the sidebar that are not built yet. Each renders a
-         * "coming soon" page; swap a line for the real controller once the
-         * module exists, keeping the route name so links keep working.
-         */
-        $comingSoon = [
-            'amcs/fire-safety' => 'amcs.fire-safety',
-            'amcs/lifts' => 'amcs.lifts',
-            'amcs/garbage' => 'amcs.garbage',
-            'amcs/grease-traps' => 'amcs.grease-traps',
-            'amcs/drainage' => 'amcs.drainage',
-            'amcs/pest-control' => 'amcs.pest-control',
-            'amcs/air-conditioning' => 'amcs.air-conditioning',
-            'amcs/water-tanks' => 'amcs.water-tanks',
-        ];
+        // Annual maintenance contracts (fire safety, lifts, garbage and the rest):
+        // one list per kind of service, named after its sidebar link
+        // (amcs.fire-safety, amcs.fire-safety.show, ...). The `service`
+        // default tells the controller which kind the page is for.
+        foreach (MaintenanceContract::SERVICES as $service) {
+            $uri = 'amcs/'.str_replace('_', '-', $service);
+            $name = MaintenanceContractController::routeName($service);
 
-        foreach ($comingSoon as $uri => $name) {
-            Route::inertia($uri, 'ComingSoon', ['section' => $name])->name($name);
+            Route::controller(MaintenanceContractController::class)->group(function () use ($service, $uri, $name) {
+                Route::get($uri, 'index')->defaults('service', $service)->name($name);
+                Route::get("{$uri}/create", 'create')->defaults('service', $service)->name("{$name}.create");
+                Route::post($uri, 'store')->defaults('service', $service)->name("{$name}.store");
+                Route::get("{$uri}/{maintenanceContract}", 'show')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.show");
+                Route::get("{$uri}/{maintenanceContract}/edit", 'edit')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.edit");
+                Route::put("{$uri}/{maintenanceContract}", 'update')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.update");
+                Route::get("{$uri}/{maintenanceContract}/document", 'document')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.document");
+            });
         }
+
+        // The contractors' visit schedules and the cheques paying them, for every kind of contract.
+        Route::controller(MaintenanceVisitController::class)->group(function () {
+            Route::get('amcs/visits', 'index')->name('amc-visits.index');
+            Route::get('amcs/contracts/{maintenanceContract}', 'contract')->name('amcs.contract');
+            Route::post('amcs/contracts/{maintenanceContract}/visits', 'store')->name('amc-visits.store');
+            Route::put('amcs/visits/{maintenanceVisit}', 'reschedule')->name('amc-visits.reschedule');
+            Route::post('amcs/visits/{maintenanceVisit}/status', 'changeStatus')->name('amc-visits.status');
+            Route::delete('amcs/visits/{maintenanceVisit}', 'destroy')->name('amc-visits.destroy');
+            Route::get('amcs/visits/{maintenanceVisit}/report', 'report')->name('amc-visits.report');
+        });
+        Route::post('amcs/contracts/{maintenanceContract}/cheques', [ChequeController::class, 'scheduleMaintenanceContract'])->name('amcs.cheques.store');
     });
 
     Route::inertia('help', 'ComingSoon', ['section' => 'help'])->name('help');

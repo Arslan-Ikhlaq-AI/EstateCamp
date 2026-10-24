@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'name',
     'legal_name',
     'short_name',
+    'slug',
+    'business_type',
     'trade_license_number',
     'tax_registration_number',
     'email',
@@ -41,6 +43,24 @@ class Company extends Model
     use HasFactory, SoftDeletes;
 
     /**
+     * What the company does, chosen when it signs up, with how it is named.
+     *
+     * @var array<string, string>
+     */
+    public const BUSINESS_TYPES = [
+        'staff_accommodation' => 'Staff accommodation',
+        'property_management' => 'Property management',
+        'facilities_management' => 'Facilities management',
+        'real_estate' => 'Real estate & brokerage',
+        'owner_landlord' => 'Owner / landlord',
+    ];
+
+    /**
+     * Workspace addresses kept for the platform's own pages.
+     */
+    public const RESERVED_SLUGS = ['admin', 'api', 'app', 'dashboard', 'estatecamp', 'get-started', 'help', 'login', 'mail', 'onboarding', 'register', 'support', 'www'];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -59,6 +79,14 @@ class Company extends Model
     public function localNow(): CarbonImmutable
     {
         return CarbonImmutable::now($this->timezone ?: config('app.timezone'));
+    }
+
+    /**
+     * The company's own sign-in address, which opens the sign-in page under its name.
+     */
+    public function workspaceUrl(): string
+    {
+        return route('workspace', $this->slug);
     }
 
     /**
@@ -135,6 +163,26 @@ class Company extends Model
     public function maintenanceJobs(): HasMany
     {
         return $this->hasMany(MaintenanceJob::class);
+    }
+
+    /**
+     * The annual maintenance contracts covering the company's properties.
+     *
+     * @return HasMany<MaintenanceContract, $this>
+     */
+    public function maintenanceContracts(): HasMany
+    {
+        return $this->hasMany(MaintenanceContract::class);
+    }
+
+    /**
+     * Every visit on the maintenance contractors' schedules.
+     *
+     * @return HasMany<MaintenanceVisit, $this>
+     */
+    public function maintenanceVisits(): HasMany
+    {
+        return $this->hasMany(MaintenanceVisit::class);
     }
 
     /**
@@ -233,6 +281,14 @@ class Company extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    /**
+     * @return HasMany<GasBill, $this>
+     */
+    public function gasBills(): HasMany
+    {
+        return $this->hasMany(GasBill::class);
     }
 
     /**

@@ -1,3 +1,4 @@
+import { amcNavTitle } from '@/Components/AmcBadges';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import {
@@ -10,6 +11,7 @@ import {
     IdCardIcon,
     LandmarkIcon,
     PenLineIcon,
+    SirenIcon,
     TicketXIcon,
     WalletCardsIcon,
     WrenchIcon,
@@ -30,6 +32,8 @@ const ICONS = {
     cheque_clearing: WalletCardsIcon,
     staff_document_expiring: IdCardIcon,
     staff_document_expired: IdCardIcon,
+    visit_due: SirenIcon,
+    visit_overdue: SirenIcon,
 };
 
 const CHEQUE_HEADINGS = {
@@ -51,7 +55,7 @@ const TONES = {
  *
  * @return {{heading: string, details: string[]}}
  */
-function describe({ type, title, subject, days }, t) {
+function describe({ type, title, subject, service, days }, t) {
     const timing = (pastKey, futureKey) => {
         if (days === 0) {
             return t('alerts.expiresToday');
@@ -99,6 +103,15 @@ function describe({ type, title, subject, days }, t) {
             return {
                 heading: t(CHEQUE_HEADINGS[type], { title }),
                 details: [days === 0 ? t('alerts.dueToday') : days < 0 ? t('alerts.dueAgo', { count: Math.abs(days) }) : t('alerts.dueIn', { count: days }), subject],
+            };
+        case 'visit_due':
+        case 'visit_overdue':
+            return {
+                heading: t('alerts.visit', { service: t(amcNavTitle(service)), title }),
+                details: [
+                    days === 0 ? t('alerts.visitToday') : days < 0 ? t('alerts.visitOverdue', { count: Math.abs(days) }) : t('alerts.visitIn', { count: days }),
+                    subject,
+                ],
             };
         default:
             return {

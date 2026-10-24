@@ -91,7 +91,7 @@ it('can be run again without duplicating records', function () {
     $this->seed(DatabaseSeeder::class);
     $this->seed(DatabaseSeeder::class);
 
-    expect(UserRole::count())->toBe(1)
+    expect(UserRole::count())->toBe(count(UserRole::BUILT_IN))
         ->and(Company::count())->toBe(1)
         ->and(User::count())->toBe(2 + count(StaffSeeder::SIGN_INS))
         ->and(Property::count())->toBe(2)
@@ -106,10 +106,10 @@ it('fills every column except those that do not apply', function () {
     $this->seed(DatabaseSeeder::class);
 
     expect(blankColumns(Company::sole()))->toBe([])
-        ->and(blankColumns(UserRole::sole()))->toBe([])
         ->and(blankColumns(Room::first()))->toBe([])
         ->and(blankColumns(RoomAttachment::first()))->toBe([]);
 
+    UserRole::all()->each(fn (UserRole $role) => expect(blankColumns($role))->toBe([]));
     Apartment::all()->each(fn (Apartment $apartment) => expect(blankColumns($apartment))->toBe([]));
     Shop::all()->each(fn (Shop $shop) => expect(blankColumns($shop))->toBe([]));
 

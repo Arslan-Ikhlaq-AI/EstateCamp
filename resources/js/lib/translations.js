@@ -1,3 +1,4 @@
+import { amcs } from './translations-amcs';
 import { finance } from './translations-finance';
 import { leasing } from './translations-leasing';
 import { maintenance } from './translations-maintenance';
@@ -10,8 +11,9 @@ import { staff } from './translations-staff';
  * plural forms chosen with Intl.PluralRules (Arabic uses all six). The
  * leasing pages' strings live in translations-leasing.js, the maintenance
  * pages' in translations-maintenance.js, the staff pages' in
- * translations-staff.js, the payments section's in translations-finance.js
- * and the reports' in translations-reports.js.
+ * translations-staff.js, the payments section's in translations-finance.js,
+ * the reports' in translations-reports.js and the maintenance contracts'
+ * in translations-amcs.js.
  */
 export const translations = {
     en: {
@@ -19,6 +21,7 @@ export const translations = {
         finance: finance.en,
         reports: reports.en,
         maintenance: maintenance.en,
+        amcs: amcs.en,
         staff: staff.en,
         common: {
             tagline: 'Camp management',
@@ -49,6 +52,7 @@ export const translations = {
             roomTypes: 'Room types',
             maintenanceStatuses: 'Maintenance statuses',
             maintenanceCategories: 'Maintenance categories',
+            chequeStatuses: 'Cheque statuses',
             staffRoles: 'Staff roles',
             regionalOffices: 'Regional offices',
             mySection: 'My work',
@@ -56,6 +60,7 @@ export const translations = {
             users: 'Users & roles',
             contracts: 'Client contracts',
             contractsMenu: 'Contracts',
+            amcVisits: 'Visit schedule',
             amcFireSafety: 'Fire safety',
             amcLifts: 'Lifts',
             amcGarbage: 'Garbage collection',
@@ -72,6 +77,7 @@ export const translations = {
             paymentsReceived: 'Payments received',
             paymentsOverview: 'Overview',
             rentCollections: 'Rent collections',
+            gasBills: 'Gas bills',
             maintenanceBills: 'Maintenance bills',
             salaries: 'Salaries',
             rentals: 'Individual rentals',
@@ -153,6 +159,10 @@ export const translations = {
             bouncedAgo: { one: 'Bounced {count} day ago', other: 'Bounced {count} days ago' },
             bouncedToday: 'Bounced today',
             staffDocument: '{document} of {name}',
+            visit: '{service} visit at {title}',
+            visitToday: 'Due today',
+            visitIn: { one: 'Due in {count} day', other: 'Due in {count} days' },
+            visitOverdue: { one: '{count} day overdue', other: '{count} days overdue' },
         },
         dashboard: {
             title: 'Dashboard',
@@ -488,6 +498,15 @@ export const translations = {
                     usage: { one: '{count} job', other: '{count} jobs' },
                     empty: 'No maintenance categories yet',
                 },
+                chequeStatus: {
+                    title: 'Cheque statuses',
+                    description:
+                        'The steps a cheque moves through, such as Created, Submitted and Approved. Each one means a stage the app understands: a cheque reaching a cleared status records its payment. A cheque entering a stage takes its first status in this order.',
+                    addTitle: 'Add cheque status',
+                    editTitle: 'Edit cheque status',
+                    usage: { one: '{count} cheque', other: '{count} cheques' },
+                    empty: 'No cheque statuses yet',
+                },
                 staffRole: {
                     title: 'Staff roles',
                     description: 'The jobs your staff hold, each at the level it usually works at: the head office, a regional office, or a camp or building.',
@@ -504,6 +523,7 @@ export const translations = {
                     active: 'Offered when adding records',
                     stage: 'What this status means',
                     stageHint: 'Lets the app count open and finished jobs whatever you call the status.',
+                    chequeStageHint: 'Decides what moving a cheque into this status does. It cannot change while cheques are in it.',
                     color: 'Colour',
                     level: 'Level',
                     levelHint: 'Where someone in this role usually works. Each staff member’s own workplace is set on their record.',
@@ -514,6 +534,16 @@ export const translations = {
                     open: 'Not started',
                     in_progress: 'Work in progress',
                     completed: 'Finished (asks for the invoice)',
+                    cancelled: 'Cancelled',
+                },
+                chequeStages: {
+                    pending: 'Expected, details not recorded yet',
+                    received: 'In hand (from a client)',
+                    issued: 'Handed over (to a landlord)',
+                    deposited: 'At the bank',
+                    cleared: 'Cleared (records the payment)',
+                    bounced: 'Bounced (takes the payment back)',
+                    returned: 'Handed back uncashed',
                     cancelled: 'Cancelled',
                 },
                 colors: { cyan: 'Cyan', navy: 'Navy', amber: 'Amber', green: 'Green', red: 'Red', grey: 'Grey' },
@@ -1320,38 +1350,6 @@ export const translations = {
         comingSoon: {
             badge: 'Coming soon',
             sections: {
-                'amcs.fire-safety': {
-                    title: 'Fire safety AMC',
-                    description: 'Fire alarm, sprinkler and extinguisher maintenance contracts with their visits and certificates.',
-                },
-                'amcs.lifts': {
-                    title: 'Lifts AMC',
-                    description: 'Lift maintenance contracts, monthly visits and annual inspections.',
-                },
-                'amcs.garbage': {
-                    title: 'Garbage collection AMC',
-                    description: 'Waste collection contracts and pickup schedules for each property.',
-                },
-                'amcs.grease-traps': {
-                    title: 'Grease traps AMC',
-                    description: 'Grease trap cleaning contracts and municipality disposal records.',
-                },
-                'amcs.drainage': {
-                    title: 'Drainage (majari) AMC',
-                    description: 'Sewage and drainage cleaning contracts and tanker visits.',
-                },
-                'amcs.pest-control': {
-                    title: 'Pest control AMC',
-                    description: 'Pest control contracts, treatment visits and certificates.',
-                },
-                'amcs.air-conditioning': {
-                    title: 'Air conditioning AMC',
-                    description: 'AC maintenance contracts, filter cleaning and servicing visits.',
-                },
-                'amcs.water-tanks': {
-                    title: 'Water tank cleaning AMC',
-                    description: 'Water tank cleaning and disinfection contracts with their certificates.',
-                },
                 help: {
                     title: 'Help & support',
                     description: 'Guides, answers to common questions and a direct line to our support team will live here.',
@@ -1399,6 +1397,7 @@ export const translations = {
         finance: finance.ar,
         reports: reports.ar,
         maintenance: maintenance.ar,
+        amcs: amcs.ar,
         staff: staff.ar,
         common: {
             dismiss: 'إغلاق',
@@ -1429,6 +1428,7 @@ export const translations = {
             roomTypes: 'أنواع الغرف',
             maintenanceStatuses: 'حالات الصيانة',
             maintenanceCategories: 'فئات الصيانة',
+            chequeStatuses: 'حالات الشيكات',
             staffRoles: 'وظائف الموظفين',
             regionalOffices: 'المكاتب الإقليمية',
             mySection: 'عملي',
@@ -1436,6 +1436,7 @@ export const translations = {
             users: 'المستخدمون والأدوار',
             contracts: 'عقود العملاء',
             contractsMenu: 'العقود',
+            amcVisits: 'جدول الزيارات',
             amcFireSafety: 'السلامة من الحرائق',
             amcLifts: 'المصاعد',
             amcGarbage: 'جمع النفايات',
@@ -1452,6 +1453,7 @@ export const translations = {
             paymentsReceived: 'المدفوعات المستلمة',
             paymentsOverview: 'نظرة عامة',
             rentCollections: 'تحصيل الإيجارات',
+            gasBills: 'فواتير الغاز',
             maintenanceBills: 'فواتير الصيانة',
             salaries: 'الرواتب المدفوعة',
             rentals: 'الإيجارات الفردية',
@@ -1533,6 +1535,10 @@ export const translations = {
             bouncedAgo: { one: 'ارتد قبل يوم واحد', two: 'ارتد قبل يومين', few: 'ارتد قبل {count} أيام', many: 'ارتد قبل {count} يومًا', other: 'ارتد قبل {count} يوم' },
             bouncedToday: 'ارتد اليوم',
             staffDocument: '{document} لـ {name}',
+            visit: 'زيارة {service} في {title}',
+            visitToday: 'مستحقة اليوم',
+            visitIn: { one: 'مستحقة بعد يوم واحد', two: 'مستحقة بعد يومين', few: 'مستحقة بعد {count} أيام', many: 'مستحقة بعد {count} يومًا', other: 'مستحقة بعد {count} يوم' },
+            visitOverdue: { one: 'متأخرة يومًا واحدًا', two: 'متأخرة يومين', few: 'متأخرة {count} أيام', many: 'متأخرة {count} يومًا', other: 'متأخرة {count} يوم' },
         },
         dashboard: {
             title: 'لوحة التحكم',
@@ -1755,6 +1761,15 @@ export const translations = {
                     usage: { one: 'عمل واحد', two: 'عملان', few: '{count} أعمال', other: '{count} عملًا' },
                     empty: 'لا توجد فئات صيانة بعد',
                 },
+                chequeStatus: {
+                    title: 'حالات الشيكات',
+                    description:
+                        'المراحل التي يمر بها الشيك، مثل تم الإنشاء ومقدَّم للبنك ومعتمد. لكل حالة معنى يفهمه التطبيق: وصول الشيك إلى حالة الصرف يسجّل دفعته. يأخذ الشيك عند دخوله مرحلةً أول حالاتها بهذا الترتيب.',
+                    addTitle: 'إضافة حالة شيك',
+                    editTitle: 'تعديل حالة الشيك',
+                    usage: { zero: 'لا توجد شيكات', one: 'شيك واحد', two: 'شيكان', few: '{count} شيكات', many: '{count} شيكًا', other: '{count} شيك' },
+                    empty: 'لا توجد حالات شيكات بعد',
+                },
                 staffRole: {
                     title: 'وظائف الموظفين',
                     description: 'الوظائف التي يشغلها موظفوك، كلٌّ في المستوى الذي يعمل فيه عادةً: المكتب الرئيسي أو مكتب إقليمي أو مخيم أو مبنى.',
@@ -1771,6 +1786,7 @@ export const translations = {
                     active: 'يُعرض عند إضافة السجلات',
                     stage: 'معنى هذه الحالة',
                     stageHint: 'يتيح للتطبيق عدّ الأعمال المفتوحة والمنتهية مهما كان اسم الحالة.',
+                    chequeStageHint: 'يحدد ما يحدث عند نقل الشيك إلى هذه الحالة. لا يمكن تغييره ما دامت فيه شيكات.',
                     color: 'اللون',
                     level: 'المستوى',
                     levelHint: 'المكان الذي يعمل فيه صاحب هذه الوظيفة عادةً. يُحدَّد مكان عمل كل موظف في سجله.',
@@ -1781,6 +1797,16 @@ export const translations = {
                     open: 'لم يبدأ',
                     in_progress: 'العمل جارٍ',
                     completed: 'منتهٍ (تُطلب الفاتورة)',
+                    cancelled: 'ملغى',
+                },
+                chequeStages: {
+                    pending: 'متوقع، لم تُسجَّل بياناته بعد',
+                    received: 'مستلم (من عميل)',
+                    issued: 'مسلَّم (إلى مالك)',
+                    deposited: 'في البنك',
+                    cleared: 'مصروف (تُسجَّل الدفعة)',
+                    bounced: 'مرتجع (تُلغى الدفعة)',
+                    returned: 'أعيد دون صرف',
                     cancelled: 'ملغى',
                 },
                 colors: { cyan: 'سماوي', navy: 'كحلي', amber: 'كهرماني', green: 'أخضر', red: 'أحمر', grey: 'رمادي' },
@@ -2297,38 +2323,6 @@ export const translations = {
         comingSoon: {
             badge: 'قريبًا',
             sections: {
-                'amcs.fire-safety': {
-                    title: 'عقد صيانة السلامة من الحرائق',
-                    description: 'عقود صيانة إنذار الحريق والرشاشات والطفايات مع زياراتها وشهاداتها.',
-                },
-                'amcs.lifts': {
-                    title: 'عقد صيانة المصاعد',
-                    description: 'عقود صيانة المصاعد والزيارات الشهرية والفحوصات السنوية.',
-                },
-                'amcs.garbage': {
-                    title: 'عقد صيانة جمع النفايات',
-                    description: 'عقود جمع النفايات وجداول الجمع لكل عقار.',
-                },
-                'amcs.grease-traps': {
-                    title: 'عقد صيانة مصائد الشحوم',
-                    description: 'عقود تنظيف مصائد الشحوم وسجلات التخلص لدى البلدية.',
-                },
-                'amcs.drainage': {
-                    title: 'عقد صيانة المجاري',
-                    description: 'عقود تنظيف المجاري والصرف وزيارات الصهاريج.',
-                },
-                'amcs.pest-control': {
-                    title: 'عقد صيانة مكافحة الحشرات',
-                    description: 'عقود مكافحة الحشرات وزيارات المعالجة والشهادات.',
-                },
-                'amcs.air-conditioning': {
-                    title: 'عقد صيانة التكييف',
-                    description: 'عقود صيانة التكييف وتنظيف الفلاتر وزيارات الخدمة.',
-                },
-                'amcs.water-tanks': {
-                    title: 'عقد صيانة تنظيف خزانات المياه',
-                    description: 'عقود تنظيف خزانات المياه وتعقيمها مع شهاداتها.',
-                },
                 help: {
                     title: 'المساعدة والدعم',
                     description: 'ستجد هنا الأدلة والإجابات عن الأسئلة الشائعة وقناة تواصل مباشرة مع فريق الدعم.',

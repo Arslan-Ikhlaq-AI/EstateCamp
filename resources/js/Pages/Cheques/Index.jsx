@@ -1,5 +1,6 @@
 import ChequeSchedule from '@/Components/ChequeSchedule';
 import FlashMessages from '@/Components/FlashMessages';
+import { CHEQUE_STAGE_ICONS, useChequeStatusName } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import { usePeriodLabel } from '@/Components/PeriodFilter';
 import RecordList, { ListEmpty, NoCompany } from '@/Components/RecordList';
@@ -15,30 +16,15 @@ import {
     CalendarClockIcon,
     CalendarRangeIcon,
     CircleAlertIcon,
-    CircleCheckIcon,
-    CircleSlashIcon,
-    ClockIcon,
     HandCoinsIcon,
     LandmarkIcon,
     PenLineIcon,
-    SendIcon,
     ShieldCheckIcon,
     Undo2Icon,
-    UndoIcon,
     UserIcon,
     WalletCardsIcon,
 } from 'lucide-react';
 
-const STATUS_ICONS = {
-    pending: ClockIcon,
-    received: HandCoinsIcon,
-    issued: SendIcon,
-    deposited: LandmarkIcon,
-    cleared: CircleCheckIcon,
-    bounced: Undo2Icon,
-    returned: UndoIcon,
-    cancelled: CircleSlashIcon,
-};
 const DUE_ICONS = { overdue: CircleAlertIcon, this_week: CalendarClockIcon, next_30_days: CalendarRangeIcon, to_collect: PenLineIcon };
 const PURPOSE_ICONS = { rent: BanknoteIcon, security_deposit: ShieldCheckIcon };
 
@@ -102,17 +88,11 @@ function PeriodTotals({ totals, period, currency }) {
     );
 }
 
-export default function Index({ company, filters, period, facets, summary, periodTotals, cheques }) {
+export default function Index({ company, filters, period, facets, summary, periodTotals, statuses, cheques }) {
     const { t, formatCurrency } = useTranslation();
+    const statusName = useChequeStatusName();
     const title = t('leasing.cheques.title');
     const direction = filters?.direction?.length === 1 ? filters.direction[0] : null;
-
-    const statusLabel = (status) =>
-        status !== 'pending'
-            ? t(`leasing.cheques.status.${status}`)
-            : direction
-              ? t(`leasing.cheques.status.pending_${direction}`)
-              : `${t('leasing.cheques.status.pending_received')} / ${t('leasing.cheques.status.pending_issued')}`;
 
     return (
         <DashboardLayout>
@@ -135,7 +115,7 @@ export default function Index({ company, filters, period, facets, summary, perio
                             label={t('leasing.cheques.stats.toDeposit')}
                             value={formatCurrency(summary.toDeposit.amount, company.currency)}
                             detail={t('leasing.cheques.stats.toDepositDetail', { count: summary.toDeposit.count })}
-                            href={route('cheques.index', { direction: ['received'], status: ['received'], due: ['overdue'] })}
+                            href={route('cheques.index', { direction: ['received'], stage: ['received'], due: ['overdue'] })}
                         />
                         <StatCard
                             icon={HandCoinsIcon}
@@ -146,7 +126,7 @@ export default function Index({ company, filters, period, facets, summary, perio
                                     ? t('leasing.cheques.stats.atBankDetail', { count: summary.atBank.count })
                                     : t('leasing.cheques.stats.inHandDetail', { count: summary.inHand.count })
                             }
-                            href={route('cheques.index', { direction: ['received'], status: ['received'] })}
+                            href={route('cheques.index', { direction: ['received'], stage: ['received'] })}
                         />
                         <StatCard
                             icon={ArrowUpRightIcon}
@@ -162,7 +142,7 @@ export default function Index({ company, filters, period, facets, summary, perio
                             label={t('leasing.cheques.stats.bounced')}
                             value={formatCurrency(summary.bounced.amount, company.currency)}
                             detail={summary.bounced.count > 0 ? t('leasing.cheques.stats.bouncedDetail', { count: summary.bounced.count }) : t('leasing.cheques.stats.bouncedNone')}
-                            href={route('cheques.index', { status: ['bounced'] })}
+                            href={route('cheques.index', { stage: ['bounced'] })}
                         />
                     </section>
 
@@ -170,7 +150,11 @@ export default function Index({ company, filters, period, facets, summary, perio
                         routeName="cheques.index"
                         filters={filters}
                         facets={{
-                            status: facets.status.map((option) => ({ ...option, label: statusLabel(option.value), icon: STATUS_ICONS[option.value] })),
+                            status: facets.status.map((option) => ({
+                                ...option,
+                                label: statusName({ slug: option.value, name: option.label }),
+                                icon: CHEQUE_STAGE_ICONS[option.stage],
+                            })),
                             due: facets.due.map((option) => ({ ...option, label: t(`leasing.cheques.due.${option.value}`), icon: DUE_ICONS[option.value] })),
                             purpose: facets.purpose.map((option) => ({ ...option, label: t(`leasing.cheques.purposes.${option.value}`), icon: PURPOSE_ICONS[option.value] })),
                             party: facets.party.map((option) => ({ ...option, icon: option.value.startsWith('landlord:') ? LandmarkIcon : UserIcon })),
@@ -189,7 +173,7 @@ export default function Index({ company, filters, period, facets, summary, perio
                         searchPlaceholder={t('leasing.cheques.searchPlaceholder')}
                         empty={<ListEmpty icon={WalletCardsIcon} title={t('leasing.cheques.empty.title')} description={t('leasing.cheques.empty.description')} />}
                     >
-                        <ChequeSchedule cheques={cheques.data} currency={company.currency} showParty />
+                        <ChequeSchedule cheques={cheques.data} currency={company.currency} statuses={statuses} showParty selectable />
                     </RecordList>
                 </>
             )}

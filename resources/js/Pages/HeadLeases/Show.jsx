@@ -58,7 +58,7 @@ function UnitTile({ icon: Icon, label, value, detail, href }) {
     );
 }
 
-export default function Show({ lease, property, documents, stats, cheques, banks, currency }) {
+export default function Show({ lease, property, documents, stats, cheques, banks, chequeStatuses, currency }) {
     const { t, tOr, formatCurrency, formatMoney, formatDate, formatNumber, formatPercent } = useTranslation();
     const filter = { properties: [property.code] };
     const place = [property.area, property.city].filter(Boolean).join(', ');
@@ -209,7 +209,7 @@ export default function Show({ lease, property, documents, stats, cheques, banks
                                 </PostButton>
                             </div>
                         ) : (
-                            <ChequeSchedule cheques={cheques} currency={currency} banks={banks} />
+                            <ChequeSchedule cheques={cheques} currency={currency} statuses={chequeStatuses} banks={banks} />
                         )}
                     </SectionCard>
 

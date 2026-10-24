@@ -11,7 +11,8 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Seed the application's database: the demo portfolio first, then the
-     * leasing data, maintenance jobs and staff that build on it.
+     * leasing data, maintenance jobs, maintenance contracts and staff that
+     * build on it.
      */
     public function run(): void
     {
@@ -19,6 +20,7 @@ class DatabaseSeeder extends Seeder
             PortfolioSeeder::class,
             LeasingSeeder::class,
             MaintenanceJobSeeder::class,
+            MaintenanceContractSeeder::class,
             StaffSeeder::class,
         ]);
     }

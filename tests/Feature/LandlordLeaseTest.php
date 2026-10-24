@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ChequeStatus;
 use App\Models\HeadLease;
 use App\Models\Landlord;
 use App\Models\Property;
@@ -132,7 +133,7 @@ test('records a cheque to the landlord as cleared', function () {
     $cheque->applyEntry(['cheque_number' => '402605', 'bank_name' => 'Emirates NBD']);
 
     $this->actingAs($this->superAdmin)
-        ->post(route('cheques.transition', $cheque), ['action' => 'clear', 'date' => '2026-10-17'])
+        ->post(route('cheques.status', $cheque), ['cheque_status_id' => ChequeStatus::where('slug', 'approved')->value('id'), 'date' => '2026-10-17'])
         ->assertSessionHasNoErrors();
 
     expect($cheque->refresh()->status)->toBe('cleared')
@@ -144,7 +145,7 @@ test('needs a date to mark a cheque cleared', function () {
     $cheque->applyEntry(['cheque_number' => '402606', 'bank_name' => 'Emirates NBD']);
 
     $this->actingAs($this->superAdmin)
-        ->post(route('cheques.transition', $cheque), ['action' => 'clear'])
+        ->post(route('cheques.status', $cheque), ['cheque_status_id' => ChequeStatus::where('slug', 'approved')->value('id')])
         ->assertSessionHasErrors('date');
 });
 
@@ -204,7 +205,7 @@ test('hides other companies\' landlords and leases', function () {
     $otherLease->syncCheques();
 
     $this->actingAs($this->superAdmin)
-        ->post(route('cheques.transition', $otherLease->cheques()->first()), ['action' => 'cancel'])
+        ->post(route('cheques.status', $otherLease->cheques()->first()), ['cheque_status_id' => ChequeStatus::where('slug', 'cancelled')->value('id'), 'date' => '2026-10-17'])
         ->assertNotFound();
 });
 

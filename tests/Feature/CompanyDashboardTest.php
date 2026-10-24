@@ -190,17 +190,9 @@ test('sidebar sections without a module yet show a coming soon page', function (
             ->where('section', $routeName)
         );
 })->with([
-    'amcs.fire-safety',
-    'amcs.lifts',
-    'amcs.garbage',
-    'amcs.grease-traps',
-    'amcs.drainage',
-    'amcs.pest-control',
-    'amcs.air-conditioning',
-    'amcs.water-tanks',
     'help',
 ]);
 
 test('coming soon pages require signing in', function () {
-    $this->get(route('amcs.lifts'))->assertRedirect(route('login'));
+    $this->get(route('help'))->assertRedirect(route('login'));
 });

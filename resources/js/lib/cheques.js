@@ -70,6 +70,14 @@ export function chequePeriods(start, end, months, chained = true) {
 }
 
 /**
+ * A term in whole months, counting its last day (1 Jan to 31 Dec is 12),
+ * rounded as MaintenanceContract::termMonths() does.
+ */
+export function termMonths(start, end) {
+    return Math.max(1, Math.round(monthsBetween(start, addDays(end, 1))));
+}
+
+/**
  * The agreement year today falls in; its cheques (and earlier ones) are needed now.
  */
 export function currentChequeYear(start, end, today = todayIso()) {
@@ -181,9 +189,59 @@ export function planLeaseCheques(data) {
     return withDeposit(rows, data);
 }
 
+/**
+ * How many payments a maintenance contract's value splits into, as
+ * MaintenanceContract::paymentCount(): one upfront, one per visit, or one
+ * every `paymentMonths[terms]` months over the term.
+ */
+export function maintenancePaymentCount(terms, months, visits, paymentMonths) {
+    if (terms === 'per_visit') {
+        return visits;
+    }
+
+    return terms === 'upfront' ? 1 : Math.max(1, Math.ceil(months / paymentMonths[terms]));
+}
+
+/**
+ * A maintenance contract's cheques to the contractor, as its
+ * plannedCheques(): one per payment, an equal share of the value each (the
+ * last taking what rounding leaves over), dated a fixed number of months
+ * apart from the start. A contract paid per visit has none.
+ */
+export function planMaintenanceCheques(data, paymentMonths) {
+    const { start_date, end_date, contract_value, payment_terms } = data;
+    const value = Number(contract_value);
+
+    if (!start_date || !end_date || end_date <= start_date || !(value > 0) || payment_terms === 'per_visit') {
+        return [];
+    }
+
+    const term = termMonths(start_date, end_date);
+    const months = paymentMonths[payment_terms] ?? term;
+    const count = maintenancePaymentCount(payment_terms, term, 0, paymentMonths);
+    const each = round2(value / count);
+
+    return Array.from({ length: count }, (_, index) => {
+        const from = addMonths(start_date, months * index);
+        const next = addDays(addMonths(start_date, months * (index + 1)), -1);
+        const isLast = index === count - 1;
+
+        return {
+            key: chequeKey('rent', index + 1),
+            purpose: 'rent',
+            sequence: index + 1,
+            periodStart: from,
+            periodEnd: isLast || next > end_date ? end_date : next,
+            chequeDate: from,
+            amount: isLast ? round2(value - each * (count - 1)) : each,
+        };
+    });
+}
+
 export const emptyChequeEntry = () => ({
     id: null,
     status: 'pending',
+    cheque_status: null,
     locked: false,
     cheque_date: '',
     amount: '',
@@ -216,6 +274,7 @@ export function initialChequeEntries(cheques = [], plan = []) {
                     ...emptyChequeEntry(),
                     id: cheque.id,
                     status: cheque.status,
+                    cheque_status: cheque.cheque_status,
                     locked: cheque.locked,
                     cheque_date: row?.chequeDate === cheque.cheque_date ? '' : cheque.cheque_date,
                     amount: row && Math.abs(row.amount - cheque.amount) < 0.005 ? '' : String(cheque.amount),

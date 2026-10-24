@@ -1,6 +1,7 @@
 import ActionDialog from '@/Components/ActionDialog';
 import FlashMessages from '@/Components/FlashMessages';
 import { ChoiceField, SelectField, TextareaField, TextField } from '@/Components/FormFields';
+import { CHEQUE_STAGE_ICONS, ChequeNamedStatusBadge } from '@/Components/LeasingBadges';
 import { MaintenanceStatusBadge } from '@/Components/MaintenanceBadges';
 import { LEVEL_ICONS } from '@/Components/StaffBadges';
 import PageHeader from '@/Components/PageHeader';
@@ -30,6 +31,7 @@ import {
     CircleAlertIcon,
     CircleCheckIcon,
     CirclePauseIcon,
+    ClipboardCheckIcon,
     ListChecksIcon,
     LockIcon,
     MoreHorizontalIcon,
@@ -76,6 +78,14 @@ const KINDS = {
         usageFilter: 'category',
         names: 'maintenance.categoryNames',
     },
+    chequeStatus: {
+        icon: ClipboardCheckIcon,
+        route: 'configuration.cheque-statuses',
+        usageRoute: 'cheques.index',
+        usageFilter: 'status',
+        names: 'leasing.cheques.statusNames',
+        extras: { stage: 'pending', color: 'cyan' },
+    },
     staffRole: {
         icon: BadgeCheckIcon,
         route: 'configuration.staff-roles',
@@ -88,11 +98,14 @@ const KINDS = {
 
 const STAGES = ['open', 'in_progress', 'completed', 'cancelled'];
 
+// What a cheque status can mean, in the order a cheque meets them.
+const CHEQUE_STAGES = ['pending', 'received', 'issued', 'deposited', 'cleared', 'bounced', 'returned', 'cancelled'];
+
 const LEVELS = ['head_office', 'regional', 'site'];
 
 const ACCESS_LEVELS = ['self', 'supervisor', 'admin'];
 
-// A dot of each colour a maintenance status can take, for the colour choice.
+// A dot of each colour a maintenance or cheque status can take, for the colour choice.
 const SWATCH_CLASSES = { cyan: 'bg-brand-cyan', navy: 'bg-primary', amber: 'bg-warning', green: 'bg-success', red: 'bg-destructive', grey: 'bg-muted-foreground/50' };
 const SWATCHES = Object.fromEntries(
     Object.entries(SWATCH_CLASSES).map(([color, className]) => [color, () => <span aria-hidden="true" data-icon="inline-start" className={cn('size-3 rounded-full', className)} />]),
@@ -171,6 +184,27 @@ function TypeDialog({ kind, type, nextOrder, open, onOpenChange }) {
                         />
                     </>
                 )}
+                {kind === 'chequeStatus' && (
+                    <>
+                        <SelectField
+                            id="type-stage"
+                            label={t('configuration.types.fields.stage')}
+                            value={data.stage}
+                            onChange={(value) => setData('stage', value)}
+                            items={CHEQUE_STAGES.map((stage) => ({ value: stage, label: t(`configuration.types.chequeStages.${stage}`) }))}
+                            description={t('configuration.types.fields.chequeStageHint')}
+                            error={errors.stage}
+                        />
+                        <ChoiceField
+                            id="type-color"
+                            label={t('configuration.types.fields.color')}
+                            value={data.color}
+                            onChange={(value) => setData('color', value)}
+                            options={Object.keys(SWATCHES).map((color) => ({ value: color, label: t(`configuration.types.colors.${color}`), icon: SWATCHES[color] }))}
+                            error={errors.color}
+                        />
+                    </>
+                )}
                 {kind === 'staffRole' && (
                     <ChoiceField
                         id="type-level"
@@ -234,6 +268,7 @@ function TypeRow({ kind, type, canManage, onEdit, onDelete }) {
     const config = KINDS[kind];
     const translated = tOr(`${config.names}.${type.slug}`, type.name);
     const LevelIcon = kind === 'staffRole' ? LEVEL_ICONS[type.level] : null;
+    const ChequeStageIcon = kind === 'chequeStatus' ? CHEQUE_STAGE_ICONS[type.stage] : null;
 
     return (
         <li className={cn('flex flex-wrap items-center gap-4 px-4 py-4 sm:px-5 lg:px-6', !type.is_active && 'bg-muted/30')}>
@@ -260,6 +295,15 @@ function TypeRow({ kind, type, canManage, onEdit, onDelete }) {
                 <span className="flex flex-col items-start gap-1">
                     <MaintenanceStatusBadge status={type} />
                     <span className="text-xs text-muted-foreground">{t(`configuration.types.stages.${type.stage}`)}</span>
+                </span>
+            )}
+            {ChequeStageIcon && (
+                <span className="flex flex-col items-start gap-1">
+                    <ChequeNamedStatusBadge status={type} />
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <ChequeStageIcon aria-hidden="true" className="size-3.5" />
+                        {t(`configuration.types.chequeStages.${type.stage}`)}
+                    </span>
                 </span>
             )}
             {LevelIcon && (
@@ -325,8 +369,8 @@ function TypeRow({ kind, type, canManage, onEdit, onDelete }) {
 
 /**
  * A configuration page for property or room types, maintenance statuses or
- * categories, or staff roles: the figures, the list in its order, and (for
- * admins) adding, editing, switching off and deleting.
+ * categories, cheque statuses, or staff roles: the figures, the list in its
+ * order, and (for admins) adding, editing, switching off and deleting.
  */
 export default function Types({ kind, types, canManage, errors }) {
     const { t, formatNumber } = useTranslation();

@@ -12,14 +12,8 @@ class UserRoleSeeder extends Seeder
      */
     public function run(): void
     {
-        UserRole::updateOrCreate(
-            ['slug' => UserRole::SUPER_ADMIN],
-            [
-                'name' => 'Super Admin',
-                'description' => 'Full access to every module and setting in the company account.',
-                'is_system' => true,
-                'is_active' => true,
-            ],
-        );
+        foreach (UserRole::BUILT_IN as $slug => $role) {
+            UserRole::updateOrCreate(['slug' => $slug], [...$role, 'is_system' => true, 'is_active' => true]);
+        }
     }
 }

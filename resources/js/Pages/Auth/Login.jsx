@@ -14,6 +14,7 @@ import {
 import { InputGroup, InputGroupInput } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
 import { focusFirstError, validateLogin } from '@/lib/auth-form';
+import { getInitials } from '@/lib/format';
 import { Head, Link, useForm } from '@inertiajs/react';
 import {
     ArrowRightIcon,
@@ -22,7 +23,7 @@ import {
     MailIcon,
 } from 'lucide-react';
 
-export default function Login({ status }) {
+export default function Login({ status, workspace }) {
     const {
         data,
         setData,
@@ -74,8 +75,36 @@ export default function Login({ status }) {
                 <AuthHeader
                     title="Welcome"
                     highlight="back"
-                    description="Sign in to manage your camps, rooms and residents."
+                    description={
+                        workspace
+                            ? `Sign in to the ${workspace.name} workspace.`
+                            : 'Sign in to manage your camps, rooms and residents.'
+                    }
                 />
+
+                {workspace && (
+                    <div className="flex items-center gap-3 rounded-2xl border bg-white p-3 shadow-xs">
+                        <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-linear-to-br from-brand-cyan to-brand-navy text-sm font-bold text-white">
+                            {workspace.logo_url ? (
+                                <img
+                                    src={workspace.logo_url}
+                                    alt=""
+                                    className="size-full bg-white object-contain p-1"
+                                />
+                            ) : (
+                                getInitials(workspace.name)
+                            )}
+                        </span>
+                        <div className="flex min-w-0 flex-col">
+                            <span className="text-xs font-semibold text-muted-foreground">
+                                Workspace
+                            </span>
+                            <span className="truncate font-bold">
+                                {workspace.name}
+                            </span>
+                        </div>
+                    </div>
+                )}
 
                 {status && (
                     <Alert role="status">
@@ -163,12 +192,12 @@ export default function Login({ status }) {
                 </FieldGroup>
 
                 <p className="text-center text-sm text-muted-foreground">
-                    Don&apos;t have an account?{' '}
+                    New to EstateCamp?{' '}
                     <Link
-                        href={route('register')}
+                        href={route('onboarding.create')}
                         className="rounded-sm font-semibold text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
                     >
-                        Create one
+                        Set up your company
                     </Link>
                 </p>
             </form>

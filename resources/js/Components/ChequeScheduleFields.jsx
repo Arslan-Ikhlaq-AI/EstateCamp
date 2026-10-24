@@ -124,7 +124,7 @@ export function TermPicker({ startDate, endDate, onChange }) {
     );
 }
 
-function ChequeRow({ row, index, direction, isNeededNow, enforce, banksId, onPatch, errors, currency }) {
+function ChequeRow({ row, index, direction, isNeededNow, enforce, optional, banksId, onPatch, errors, currency }) {
     const { t, formatDate, formatMoney } = useTranslation();
     const { entry } = row;
     const error = (field) => (index === null ? undefined : errors[`cheques.${index}.${field}`]);
@@ -150,7 +150,7 @@ function ChequeRow({ row, index, direction, isNeededNow, enforce, banksId, onPat
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-sm font-semibold tabular-nums">{formatMoney(row.amount, currency)}</span>
-                    <ChequeStatusBadge status={entry.status} direction={direction} />
+                    <ChequeStatusBadge status={entry.status} direction={direction} chequeStatus={entry.cheque_status} />
                 </div>
             </div>
         );
@@ -250,7 +250,7 @@ function ChequeRow({ row, index, direction, isNeededNow, enforce, banksId, onPat
                 <ChequePhotoInput
                     id={id('front')}
                     label={t('leasing.cheques.fields.front')}
-                    required={isNeededNow}
+                    required={isNeededNow && !optional}
                     file={entry.front_image}
                     url={entry.front_image_url}
                     removed={entry.remove_front_image}
@@ -279,9 +279,11 @@ function ChequeRow({ row, index, direction, isNeededNow, enforce, banksId, onPat
  * and front photo; later years can wait until the cheques arrive. `rows`
  * come from scheduleRows(); `onPatch(key, patch)` updates one entry.
  * `enforce` marks whether the cheques needed now are already required (an
- * agreement in force) or only needed to activate it (a draft).
+ * agreement in force) or only needed to activate it (a draft). `optional`
+ * marks agreements whose cheques are never required, with `hint` saying so
+ * in place of that explanation.
  */
-export default function ChequeScheduleFields({ rows, startDate, endDate, direction, enforce, isKept, onPatch, errors, currency, banks = [] }) {
+export default function ChequeScheduleFields({ rows, startDate, endDate, direction, enforce, isKept, onPatch, errors, currency, banks = [], optional = false, hint }) {
     const { t, formatDate, formatMoney } = useTranslation();
     const year = currentChequeYear(startDate, endDate);
     const banksId = 'cheque-banks';
@@ -304,7 +306,7 @@ export default function ChequeScheduleFields({ rows, startDate, endDate, directi
     return (
         <div className="flex flex-col gap-4">
             <p className="rounded-xl bg-brand-cyan/[0.06] px-4 py-3 text-[0.8125rem] leading-relaxed text-muted-foreground ring-1 ring-brand-cyan/15">
-                {t(`leasing.cheques.schedule.requiredHint.${direction}`)} {!enforce && t('leasing.cheques.schedule.draftHint')}
+                {hint ?? `${t(`leasing.cheques.schedule.requiredHint.${direction}`)} ${enforce ? '' : t('leasing.cheques.schedule.draftHint')}`}
             </p>
             {isKept && <p className="text-[0.8125rem] text-warning">{t('leasing.cheques.schedule.kept')}</p>}
             {errors.cheques && <p className="text-[0.8125rem] text-destructive">{errors.cheques}</p>}
@@ -361,6 +363,7 @@ export default function ChequeScheduleFields({ rows, startDate, endDate, directi
                                     direction={direction}
                                     isNeededNow={isNeededNow}
                                     enforce={enforce}
+                                    optional={optional}
                                     banksId={banksId}
                                     onPatch={(patch) => onPatch(row.key, patch)}
                                     errors={errors}

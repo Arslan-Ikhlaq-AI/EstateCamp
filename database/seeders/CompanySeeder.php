@@ -30,6 +30,8 @@ class CompanySeeder extends Seeder
                 'name' => 'Horizon Facilities Management',
                 'legal_name' => 'Horizon Facilities Management L.L.C.',
                 'short_name' => 'Horizon FM',
+                'slug' => 'horizon-fm',
+                'business_type' => 'staff_accommodation',
                 'trade_license_number' => 'CN-4518273',
                 'email' => 'info@horizonfm.test',
                 'phone' => '+971 4 321 7788',

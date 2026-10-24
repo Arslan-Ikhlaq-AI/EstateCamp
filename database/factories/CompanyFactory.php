@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Company;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 /**
  * @extends Factory<Company>
@@ -22,6 +23,8 @@ class CompanyFactory extends Factory
         return [
             'name' => $name,
             'legal_name' => "{$name} L.L.C.",
+            'slug' => Str::slug(Str::limit($name, 30, '')).'-'.fake()->unique()->numberBetween(100, 99999),
+            'business_type' => fake()->randomElement(array_keys(Company::BUSINESS_TYPES)),
             'trade_license_number' => fake()->unique()->numerify('CN-#######'),
             // UAE tax registration numbers are 15 digits.
             'tax_registration_number' => fake()->unique()->numerify('100########0003'),

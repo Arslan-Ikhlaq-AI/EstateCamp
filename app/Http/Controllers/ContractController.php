@@ -12,6 +12,7 @@ use App\Models\Company;
 use App\Models\Contract;
 use App\Models\ContractDocument;
 use App\Models\ContractLine;
+use App\Models\GasBill;
 use App\Models\Invoice;
 use App\Models\Occupancy;
 use App\Models\Property;
@@ -37,6 +38,11 @@ class ContractController extends Controller
     private const RELATION_FIELDS = ['client_mode', 'client_id', 'new_client', 'lines', 'documents'];
 
     /**
+     * The list's gas filter: gas included in the rent, or billed monthly.
+     */
+    private const GAS_OPTIONS = ['included', 'billed'];
+
+    /**
      * List the company's contracts with their value, what they rent and who is staying.
      */
     public function index(Request $request): Response
@@ -47,7 +53,7 @@ class ContractController extends Controller
             return Inertia::render('Contracts/Index', ['company' => null]);
         }
 
-        $filters = $this->listFilters($request, ['status' => Contract::STATUSES, 'types' => Client::TYPES]);
+        $filters = $this->listFilters($request, ['status' => Contract::STATUSES, 'types' => Client::TYPES, 'gas' => self::GAS_OPTIONS]);
         $typeCounts = $this->filteredQuery($company, $filters, except: 'types')
             ->join('clients', 'clients.id', '=', 'contracts.client_id')
             ->toBase()
@@ -61,6 +67,10 @@ class ContractController extends Controller
             'facets' => [
                 'status' => $this->facetOptions(Contract::STATUSES, $this->countBy($this->filteredQuery($company, $filters, except: 'status'), 'status')),
                 'types' => array_map(fn (string $type) => ['value' => $type, 'count' => (int) $typeCounts->get($type, 0)], Client::TYPES),
+                'gas' => array_map(fn (string $option) => [
+                    'value' => $option,
+                    'count' => $this->filteredQuery($company, $filters, except: 'gas')->where('contracts.gas_included', $option === 'included')->count(),
+                ], self::GAS_OPTIONS),
             ],
             'summary' => $this->summary($company),
             'contracts' => $this->filteredQuery($company, $filters)
@@ -118,7 +128,8 @@ class ContractController extends Controller
     }
 
     /**
-     * Show a contract with its lines, the people staying under it and its invoices.
+     * Show a contract with its lines, the people staying under it, its
+     * invoices and, when the client pays for gas, its gas bills.
      */
     public function show(Request $request, Contract $contract): Response
     {
@@ -142,9 +153,10 @@ class ContractController extends Controller
             ->get();
         $current = $stays->whereNull('check_out_date');
         $invoices = $contract->invoices()->orderByDesc('period_start')->orderByDesc('id')->get();
+        $gasBills = $contract->gasBills()->with(GasBillController::listRelations())->orderByDesc('period_start')->orderByDesc('id')->get();
         $period = $contract->status === 'active' ? $contract->nextBillingPeriod() : null;
         $cheques = $contract->cheques()
-            ->with(['replacement:id,replaces_id', 'payment:id,cheque_id,payment_number'])
+            ->with(['chequeStatus:id,name,slug,color,stage', 'replacement:id,replaces_id', 'payment:id,cheque_id,payment_number', ...ChequeController::historyRelations()])
             ->orderByRaw("case when purpose = 'security_deposit' then 0 else 1 end")
             ->orderBy('sequence')
             ->orderBy('id')
@@ -192,8 +204,10 @@ class ContractController extends Controller
                 'paid' => round((float) $invoices->where('status', '!=', 'void')->sum('amount_paid'), 2),
             ],
             'nextPeriod' => $period ? ['start' => $period[0]->toDateString(), 'end' => $period[1]->toDateString()] : null,
+            'gasBills' => $gasBills->map(fn (GasBill $bill) => GasBillController::details($bill)),
             'cheques' => $cheques->map(fn (Cheque $cheque) => ChequeController::details($cheque)),
             'banks' => ChequeController::knownBanks($contract->company),
+            'chequeStatuses' => ChequeController::statusOptions(),
             'chequeStats' => [
                 'expected' => $cheques->whereNull('replaces_id')->whereNotIn('status', ['cancelled'])->count(),
                 'inHand' => $cheques->whereIn('status', ['received', 'deposited', 'cleared'])->count(),
@@ -210,6 +224,7 @@ class ContractController extends Controller
                 'invoice' => $period !== null,
                 'checkIn' => $contract->status === 'active' && $contract->lines->contains(fn (ContractLine $line) => $line->housesOccupants()),
                 'scheduleCheques' => $contract->isEditable() && $cheques->isEmpty() && $contract->lines->isNotEmpty(),
+                'billGas' => ! $contract->gas_included && $contract->status !== 'draft',
             ],
         ]);
     }
@@ -236,7 +251,7 @@ class ContractController extends Controller
                 'id' => $contract->id,
                 'contract_number' => $contract->contract_number,
                 'status' => $contract->status,
-                ...$contract->only(['client_id', 'ejari_number', 'billing_cycle', 'payment_terms_days', 'security_deposit', 'notes']),
+                ...$contract->only(['client_id', 'ejari_number', 'billing_cycle', 'payment_terms_days', 'security_deposit', 'gas_included', 'notes']),
                 'start_date' => $contract->start_date->toDateString(),
                 'end_date' => $contract->end_date->toDateString(),
                 'signed_on' => $contract->signed_on?->toDateString(),
@@ -254,7 +269,7 @@ class ContractController extends Controller
                 'staying' => $contract->occupancies()->whereNull('check_out_date')->count(),
                 'balance' => (float) $contract->invoices()->whereNot('status', 'void')->sum(DB::raw('total - amount_paid')),
                 'hasLockedCheques' => $contract->cheques()->whereNotIn('status', Cheque::EDITABLE_STATUSES)->exists(),
-                'cheques' => $contract->cheques()->whereNull('replaces_id')->get()->map(fn (Cheque $cheque) => ChequeController::formDetails($cheque)),
+                'cheques' => $contract->cheques()->whereNull('replaces_id')->with('chequeStatus:id,name,slug,color,stage')->get()->map(fn (Cheque $cheque) => ChequeController::formDetails($cheque)),
             ],
             'clientId' => null,
             ...$this->formOptions($contract->company, $contract),
@@ -345,6 +360,7 @@ class ContractController extends Controller
             'startDate' => $contract->start_date->toDateString(),
             'endDate' => $contract->end_date->toDateString(),
             'billingCycle' => $contract->billing_cycle,
+            'gasIncluded' => (bool) $contract->gas_included,
             'monthlyValue' => $contract->monthlyValue(),
             'units' => [
                 'beds' => (int) $lines->where('unit_type', 'bed')->sum('quantity'),
@@ -573,7 +589,8 @@ class ContractController extends Controller
                 ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%"))))
             ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('contracts.status', $filters['status']))
             ->when($except !== 'types' && $filters['types'] !== [], fn (Builder $query) => $query
-                ->whereHas('client', fn (Builder $clients) => $clients->whereIn('client_type', $filters['types'])));
+                ->whereHas('client', fn (Builder $clients) => $clients->whereIn('client_type', $filters['types'])))
+            ->when($except !== 'gas' && count($filters['gas']) === 1, fn (Builder $query) => $query->where('contracts.gas_included', $filters['gas'][0] === 'included'));
     }
 
     /**

@@ -4,20 +4,26 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiltersByPeriod;
 use App\Http\Controllers\Concerns\ListsRecords;
+use App\Http\Requests\ChequeBulkStatusRequest;
 use App\Http\Requests\ChequeDetailsRequest;
 use App\Http\Requests\ChequeReplaceRequest;
-use App\Http\Requests\ChequeTransitionRequest;
+use App\Http\Requests\ChequeStatusChangeRequest;
 use App\Models\Cheque;
+use App\Models\ChequeStatus;
+use App\Models\ChequeUpdate;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\HeadLease;
+use App\Models\MaintenanceContract;
 use App\Models\RoomRental;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,7 +31,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * The cheque register: every cheque the company receives from clients and
- * individual tenants or issues to landlords, and what happens to each one.
+ * individual tenants or issues to landlords and maintenance contractors,
+ * and what happens to each one, moved through the company's cheque
+ * statuses one at a time or several together.
  */
 class ChequeController extends Controller
 {
@@ -36,7 +44,10 @@ class ChequeController extends Controller
     /**
      * List the cheques: those still to deal with first, soonest dated on top.
      * A period narrows them to those dated in it; `party` to the cheques of
-     * chosen clients, tenants or landlords (`client:12`, `landlord:3`).
+     * chosen clients, tenants or landlords (`client:12`, `landlord:3`). The
+     * status filter holds the slugs of the company's cheque statuses; links
+     * from elsewhere can ask for a `stage` instead, which becomes the slugs
+     * of that stage's statuses.
      */
     public function index(Request $request): Response
     {
@@ -46,11 +57,12 @@ class ChequeController extends Controller
             return Inertia::render('Cheques/Index', ['company' => null]);
         }
 
+        $statuses = ChequeStatus::query()->orderBy('sort_order')->orderBy('name')->get();
         $period = $this->periodFilter($request);
         $filters = [
             ...$this->listFilters($request, [
                 'direction' => Cheque::DIRECTIONS,
-                'status' => Cheque::STATUSES,
+                'status' => $statuses->pluck('slug')->all(),
                 'due' => self::DUE_FILTERS,
                 'purpose' => Cheque::PURPOSES,
                 'party' => null,
@@ -58,7 +70,15 @@ class ChequeController extends Controller
             'period' => $period['value'],
         ];
         $filters['party'] = array_values(array_filter($filters['party'], fn (string $party) => preg_match('/^(client|landlord):\d+$/', $party) === 1));
-        $statuses = count($filters['direction']) === 1 ? Cheque::DIRECTION_STATUSES[$filters['direction'][0]] : Cheque::STATUSES;
+        $stages = $this->listFilters($request, ['stage' => Cheque::STATUSES])['stage'];
+
+        if ($stages !== []) {
+            $filters['status'] = array_values(array_unique([...$filters['status'], ...$statuses->whereIn('stage', $stages)->pluck('slug')->all()]));
+        }
+
+        $listedStatuses = count($filters['direction']) === 1
+            ? $statuses->filter(fn (ChequeStatus $status) => in_array($filters['direction'][0], $status->directions(), true))
+            : $statuses;
         $dueQuery = fn () => $this->filteredQuery($company, $filters, $period, except: 'due');
 
         return Inertia::render('Cheques/Index', [
@@ -66,15 +86,16 @@ class ChequeController extends Controller
             'filters' => $filters,
             'period' => $period,
             'facets' => [
-                'status' => $this->facetOptions($statuses, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'status'), 'status')),
+                'status' => $this->statusFacet($listedStatuses, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'status'), 'cheque_status_id')),
                 'due' => array_map(fn (string $due) => ['value' => $due, 'count' => $this->whereDue($dueQuery(), $due)->count()], self::DUE_FILTERS),
                 'purpose' => $this->facetOptions(Cheque::PURPOSES, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'purpose'), 'purpose')),
                 'party' => $this->partyFacet($company, $filters, $period),
             ],
             'summary' => self::summary($company),
+            'statuses' => self::statusOptions(),
             'periodTotals' => $period['kind'] === 'all' ? null : $this->periodTotals($this->filteredQuery($company, $filters, $period)),
             'cheques' => $this->filteredQuery($company, $filters, $period)
-                ->with(self::detailRelations())
+                ->with([...self::detailRelations(), ...self::historyRelations()])
                 ->orderByRaw("case when status in ('pending', 'received', 'issued', 'deposited') then 0 else 1 end")
                 ->orderBy('cheque_date')
                 ->orderBy('id')
@@ -96,31 +117,56 @@ class ChequeController extends Controller
     }
 
     /**
-     * Record what happened to a cheque: deposited, cleared, bounced, handed back or cancelled.
+     * Move a cheque to another of the company's statuses: one that deposits,
+     * clears, bounces, hands back or cancels it, or another name for where
+     * it already stands.
      */
-    public function transition(ChequeTransitionRequest $request, Cheque $cheque): RedirectResponse
+    public function changeStatus(ChequeStatusChangeRequest $request, Cheque $cheque): RedirectResponse
     {
-        $on = $request->date('date') ?? today();
+        $status = $request->newStatus();
 
-        match ($request->validated('action')) {
-            'deposit' => $cheque->deposit($on),
-            'clear' => $cheque->clear($on),
-            'bounce' => $cheque->bounce($on, $request->validated('reason')),
-            'return' => $cheque->markReturned($on, $request->validated('note')),
-            'cancel' => $cheque->cancel($request->validated('note')),
+        $cheque->moveTo($status, $request->date('date'), $request->validated('note'), $request->validated('reason'), $request->user());
+
+        $message = match (true) {
+            $status->stage === 'cleared' && $cheque->payment !== null => "Cheque {$this->label($cheque)} is now {$status->name} and was recorded as payment {$cheque->payment->payment_number}.",
+            $status->stage === 'cleared' && $cheque->rentalPayment !== null => "Cheque {$this->label($cheque)} is now {$status->name} and was recorded as receipt {$cheque->rentalPayment->receipt_number}.",
+            $status->stage === 'bounced' => "Cheque {$this->label($cheque)} is now {$status->name}. Record the replacement cheque when it arrives.",
+            default => "Cheque {$this->label($cheque)} is now {$status->name}.",
         };
 
-        $message = match ($request->validated('action')) {
-            'deposit' => "Cheque {$this->label($cheque)} was deposited.",
-            'clear' => match (true) {
-                $cheque->direction === 'received' && $cheque->payment !== null => "Cheque {$this->label($cheque)} cleared and was recorded as payment {$cheque->payment->payment_number}.",
-                $cheque->direction === 'received' && $cheque->rentalPayment !== null => "Cheque {$this->label($cheque)} cleared and was recorded as receipt {$cheque->rentalPayment->receipt_number}.",
-                default => "Cheque {$this->label($cheque)} cleared.",
-            },
-            'bounce' => "Cheque {$this->label($cheque)} was marked as bounced. Record the replacement cheque when it arrives.",
-            'return' => "Cheque {$this->label($cheque)} was handed back.",
-            'cancel' => "Cheque {$this->label($cheque)} was cancelled.",
-        };
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Move the cheques chosen on the register to one status together.
+     * Cheques that cannot take that move now are left as they are.
+     *
+     * @throws ValidationException When none of the chosen cheques can move.
+     */
+    public function bulkStatus(ChequeBulkStatusRequest $request): RedirectResponse
+    {
+        $status = $request->newStatus();
+        $moved = 0;
+        $left = 0;
+
+        foreach ($request->cheques() as $cheque) {
+            try {
+                $cheque->moveTo($status, $request->date('date'), $request->validated('note'), $request->validated('reason'), $request->user());
+                $moved++;
+            } catch (ValidationException) {
+                $left++;
+            }
+        }
+
+        if ($moved === 0) {
+            throw ValidationException::withMessages(['cheque_status_id' => "None of the chosen cheques can move to {$status->name} right now."]);
+        }
+
+        $message = "{$moved} ".Str::plural('cheque', $moved)." moved to {$status->name}.";
+
+        if ($left > 0) {
+            $message .= " {$left} could not move to it yet and ".($left === 1 ? 'was' : 'were').' left as '.($left === 1 ? 'it was.' : 'they were.');
+        }
 
         return back()->with('success', $message);
     }
@@ -178,6 +224,19 @@ class ChequeController extends Controller
     }
 
     /**
+     * Build the cheque schedule of a maintenance contract that has none yet,
+     * such as one added before its cheques were tracked.
+     */
+    public function scheduleMaintenanceContract(Request $request, MaintenanceContract $maintenanceContract): RedirectResponse
+    {
+        $this->ensureSameCompany($request, $maintenanceContract);
+
+        $maintenanceContract->syncCheques([], $request->user());
+
+        return back()->with('success', "The cheque schedule of {$maintenanceContract->contract_number} was set up. Record each cheque as you write it.");
+    }
+
+    /**
      * The relations details() reads, for eager loading.
      *
      * @return array<string, mixed>
@@ -188,12 +247,46 @@ class ChequeController extends Controller
             'chequeable' => fn (MorphTo $morph) => $morph->morphWith([
                 Contract::class => ['client:id,name'],
                 HeadLease::class => ['landlord:id,name', 'property:id,name,code'],
+                MaintenanceContract::class => ['property:id,name,code'],
                 RoomRental::class => ['client:id,name', 'property:id,name,code'],
             ]),
+            'chequeStatus:id,name,slug,color,stage',
             'replacement:id,replaces_id',
             'payment:id,cheque_id,payment_number',
             'rentalPayment:id,cheque_id,receipt_number,status',
         ];
+    }
+
+    /**
+     * The relations a cheque's history needs, for the pages where cheques are updated.
+     *
+     * @return array<string, mixed>
+     */
+    public static function historyRelations(): array
+    {
+        return [
+            'updates' => fn (HasMany $updates) => $updates
+                ->with(['status:id,name,slug,color,stage', 'previousStatus:id,name,slug,color,stage', 'user:id,name'])
+                ->latest('changed_on')
+                ->latest('id'),
+        ];
+    }
+
+    /**
+     * The cheque statuses offered when updating cheques, in order, with the
+     * stage each means and which cheques (received, issued) it applies to.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function statusOptions(): array
+    {
+        return ChequeStatus::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (ChequeStatus $status) => [...$status->only(['id', 'name', 'slug', 'description', 'stage', 'color']), 'directions' => $status->directions()])
+            ->all();
     }
 
     /**
@@ -224,6 +317,7 @@ class ChequeController extends Controller
             'bankName' => $cheque->bank_name,
             'accountHolder' => $cheque->account_holder,
             'status' => $cheque->status,
+            'chequeStatus' => $cheque->chequeStatus?->only(['id', 'name', 'slug', 'color', 'stage']),
             'isOverdue' => $cheque->isOverdue(),
             'isDueNow' => $cheque->isDueNow(),
             'handedOverOn' => $cheque->handed_over_on?->toDateString(),
@@ -244,14 +338,27 @@ class ChequeController extends Controller
                 $agreement instanceof Contract => ['type' => 'contract', 'id' => $agreement->id, 'number' => $agreement->contract_number],
                 $agreement instanceof HeadLease => ['type' => 'head_lease', 'id' => $agreement->id, 'number' => $agreement->lease_number],
                 $agreement instanceof RoomRental => ['type' => 'room_rental', 'id' => $agreement->id, 'number' => $agreement->rental_number],
+                $agreement instanceof MaintenanceContract => ['type' => 'maintenance_contract', 'id' => $agreement->id, 'number' => $agreement->contract_number, 'service' => $agreement->service],
                 default => null,
             },
+            // A contractor is known by name only, so their cheques open the contract.
             'party' => match (true) {
                 $agreement instanceof Contract, $agreement instanceof RoomRental => ['type' => 'client', 'id' => $agreement->client_id, 'name' => $agreement->client?->name],
                 $agreement instanceof HeadLease => ['type' => 'landlord', 'id' => $agreement->landlord_id, 'name' => $agreement->landlord?->name],
+                $agreement instanceof MaintenanceContract => ['type' => 'vendor', 'id' => null, 'name' => $agreement->vendor_name],
                 default => null,
             },
-            'property' => $agreement instanceof HeadLease || $agreement instanceof RoomRental ? $agreement->property?->only(['id', 'name', 'code']) : null,
+            'property' => $agreement instanceof HeadLease || $agreement instanceof RoomRental || $agreement instanceof MaintenanceContract
+                ? $agreement->property?->only(['id', 'name', 'code'])
+                : null,
+            'history' => $cheque->relationLoaded('updates') ? $cheque->updates->map(fn (ChequeUpdate $update) => [
+                'id' => $update->id,
+                'status' => $update->status?->only(['id', 'name', 'slug', 'color', 'stage']),
+                'previous' => $update->previousStatus?->only(['id', 'name', 'slug', 'color', 'stage']),
+                'changedOn' => $update->changed_on->toDateString(),
+                'note' => $update->note,
+                'by' => $update->user?->name,
+            ])->all() : null,
         ];
     }
 
@@ -270,6 +377,7 @@ class ChequeController extends Controller
             'period_start' => $cheque->period_start?->toDateString(),
             'period_end' => $cheque->period_end?->toDateString(),
             'status' => $cheque->status,
+            'cheque_status' => $cheque->chequeStatus?->only(['id', 'name', 'slug', 'color', 'stage']),
             'locked' => ! $cheque->isEditable(),
             'cheque_date' => $cheque->cheque_date->toDateString(),
             'amount' => (float) $cheque->amount,
@@ -315,9 +423,34 @@ class ChequeController extends Controller
     }
 
     /**
+     * The cheque statuses as filter options, by slug, with each one's name,
+     * colour and stage and how many listed cheques are in it. A switched-off
+     * status is listed only while cheques are in it.
+     *
+     * @param  Collection<int, ChequeStatus>  $statuses
+     * @param  Collection<array-key, int>  $counts  by status id
+     * @return list<array<string, mixed>>
+     */
+    private function statusFacet(Collection $statuses, Collection $counts): array
+    {
+        return $statuses
+            ->filter(fn (ChequeStatus $status) => $status->is_active || $counts->get($status->id, 0) > 0)
+            ->map(fn (ChequeStatus $status) => [
+                'value' => $status->slug,
+                'label' => $status->name,
+                'color' => $status->color,
+                'stage' => $status->stage,
+                'count' => $counts->get($status->id, 0),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * Who the listed cheques are from or to, as filter options with how many
-     * cheques each has: clients and tenants first, then landlords. A chosen
-     * party stays listed even at zero so its filter chip keeps its name.
+     * cheques each has: clients and tenants first, then landlords.
+     * Contractors are not listed; search finds their cheques by name. A
+     * chosen party stays listed even at zero so its filter chip keeps its name.
      *
      * @param  array<string, mixed>  $filters
      * @param  array{from: ?string, to: ?string}  $period
@@ -336,7 +469,7 @@ class ChequeController extends Controller
         $options = $cheques
             ->map(fn (Cheque $cheque) => match (true) {
                 $cheque->chequeable instanceof HeadLease => ['value' => "landlord:{$cheque->chequeable->landlord_id}", 'label' => $cheque->chequeable->landlord?->name, 'type' => 1],
-                $cheque->chequeable !== null => ['value' => "client:{$cheque->chequeable->client_id}", 'label' => $cheque->chequeable->client?->name, 'type' => 0],
+                $cheque->chequeable instanceof Contract, $cheque->chequeable instanceof RoomRental => ['value' => "client:{$cheque->chequeable->client_id}", 'label' => $cheque->chequeable->client?->name, 'type' => 0],
                 default => null,
             })
             ->filter()
@@ -409,7 +542,11 @@ class ChequeController extends Controller
                     ->orWhereHas('property', fn (Builder $properties) => $properties->whereLike('name', "%{$search}%")))
                 ->orWhereHasMorph('chequeable', [RoomRental::class], fn (Builder $rentals) => $rentals
                     ->whereLike('rental_number', "%{$search}%")
-                    ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%")))))
+                    ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%")))
+                ->orWhereHasMorph('chequeable', [MaintenanceContract::class], fn (Builder $contracts) => $contracts
+                    ->whereLike('contract_number', "%{$search}%")
+                    ->orWhereLike('vendor_name', "%{$search}%")
+                    ->orWhereHas('property', fn (Builder $properties) => $properties->whereLike('name', "%{$search}%")))))
             ->when($except !== 'party' && $parties->isNotEmpty(), fn (Builder $query) => $query->where(function (Builder $query) use ($parties) {
                 if ($parties->has('client')) {
                     $query->orWhereHasMorph('chequeable', [Contract::class, RoomRental::class], fn (Builder $agreements) => $agreements->whereIn('client_id', $parties['client']));
@@ -420,7 +557,7 @@ class ChequeController extends Controller
                 }
             }))
             ->when($filters['direction'] !== [], fn (Builder $query) => $query->whereIn('direction', $filters['direction']))
-            ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('status', $filters['status']))
+            ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('cheque_status_id', ChequeStatus::query()->whereIn('slug', $filters['status'])->select('id')))
             ->when($except !== 'purpose' && $filters['purpose'] !== [], fn (Builder $query) => $query->whereIn('purpose', $filters['purpose']))
             ->when($except !== 'due' && $filters['due'] !== [], fn (Builder $query) => $query->where(function (Builder $query) use ($filters) {
                 foreach ($filters['due'] as $due) {

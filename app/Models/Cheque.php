@@ -8,9 +8,11 @@ use Database\Factories\ChequeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\UploadedFile;
@@ -31,6 +33,11 @@ use Illuminate\Validation\ValidationException;
  * room rental their receipt. An issued cheque goes pending
  * (not written yet) → issued (handed over) → cleared, or bounces. A bounced
  * cheque is replaced by a new one for the same period.
+ *
+ * Those stages are the cheque's `status`. What people see is one of the
+ * company's named ChequeStatus entries for that stage (such as Submitted
+ * or Approved), and moveTo() moves a cheque between them, noting each move
+ * in its history.
  *
  * Photos of the cheque are kept on the private disk, because they show bank
  * account details; they are served only to the company's own users.
@@ -72,12 +79,36 @@ class Cheque extends Model
      */
     public const EDITABLE_STATUSES = ['pending', 'received', 'issued'];
 
-    public const ACTIONS = ['deposit', 'clear', 'bounce', 'return', 'cancel'];
+    /**
+     * The step that takes a cheque into each stage. The others (expected,
+     * in hand, handed over) follow from whether its details are recorded.
+     */
+    public const STAGE_ACTIONS = ['deposited' => 'deposit', 'cleared' => 'clear', 'bounced' => 'bounce', 'returned' => 'return', 'cancelled' => 'cancel'];
 
     /**
      * The disk holding cheque photos.
      */
     public const IMAGE_DISK = 'local';
+
+    /**
+     * Setting the stage sets the company's status for it too: the one the
+     * cheque already has when it stays in its stage, otherwise the stage's
+     * first. Kept here rather than in a model event so it holds while seeding.
+     *
+     * @return Attribute<string, string>
+     */
+    protected function status(): Attribute
+    {
+        return Attribute::make(set: function (string $stage, array $attributes): array {
+            if (($attributes['status'] ?? null) === $stage && isset($attributes['cheque_status_id'])) {
+                return ['status' => $stage];
+            }
+
+            $this->unsetRelation('chequeStatus');
+
+            return ['status' => $stage, 'cheque_status_id' => ChequeStatus::firstIn($stage)?->id];
+        });
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -237,6 +268,49 @@ class Cheque extends Model
     }
 
     /**
+     * Whether the cheque can move to `$status` now: another status of the
+     * stage it is in, or one of a stage its next step leads to.
+     */
+    public function canMoveTo(ChequeStatus $status): bool
+    {
+        if ($status->id === $this->cheque_status_id) {
+            return false;
+        }
+
+        return $status->stage === $this->status || in_array(self::STAGE_ACTIONS[$status->stage] ?? null, $this->allowedActions(), true);
+    }
+
+    /**
+     * Move the cheque to one of the company's statuses on `$on`, noting it
+     * in its history. Another status of the same stage only changes what
+     * the cheque is called; one of a later stage takes the step into it
+     * (deposit, clear, bounce, hand back or cancel) with all that it does.
+     *
+     * @throws ValidationException When the cheque cannot move to that status now.
+     */
+    public function moveTo(ChequeStatus $status, CarbonInterface $on, ?string $note = null, ?string $reason = null, ?User $by = null): void
+    {
+        if (! $this->canMoveTo($status)) {
+            throw ValidationException::withMessages(['cheque_status_id' => "This cheque cannot move to {$status->name} from {$this->chequeStatus?->name}."]);
+        }
+
+        DB::transaction(function () use ($status, $on, $note, $reason, $by) {
+            $previousId = $this->cheque_status_id;
+
+            match ($status->stage === $this->status ? 'rename' : self::STAGE_ACTIONS[$status->stage]) {
+                'rename' => $this->forceFill(['cheque_status_id' => $status->id])->save(),
+                'deposit' => $this->deposit($on, $status),
+                'clear' => $this->clear($on, $status),
+                'bounce' => $this->bounce($on, $reason, $status),
+                'return' => $this->markReturned($on, $note, $status),
+                'cancel' => $this->cancel($note, $status),
+            };
+
+            $this->recordUpdate($previousId, $on, implode(' · ', array_filter([$reason, $note], 'filled')) ?: null, $by);
+        });
+    }
+
+    /**
      * Fill in what the user entered for this cheque: an adjusted date or
      * amount, the cheque's details and its photos. A cheque with its number
      * and bank recorded counts as in hand (or handed over); without them it
@@ -271,24 +345,31 @@ class Cheque extends Model
             }
         }
 
-        $this->refreshHeldStatus();
+        $this->refreshHeldStatus($by);
     }
 
     /**
-     * Keep a not-yet-presented cheque's status in step with its details.
+     * Keep a not-yet-presented cheque's status in step with its details,
+     * noting it in the history when the details move it in or out of hand.
      */
-    public function refreshHeldStatus(): void
+    public function refreshHeldStatus(?User $by = null): void
     {
         if (! $this->isEditable()) {
             return;
         }
 
         $status = $this->hasDetails() ? $this->heldStatus() : 'pending';
+        $previousId = $this->cheque_status_id;
+        $changed = $status !== $this->status;
 
         $this->forceFill([
             'status' => $status,
             'handed_over_on' => $status === 'pending' ? null : ($this->handed_over_on ?? today()),
         ])->save();
+
+        if ($changed) {
+            $this->recordUpdate($previousId, today(), null, $by);
+        }
     }
 
     /**
@@ -331,7 +412,7 @@ class Cheque extends Model
      *
      * @throws ValidationException When the cheque cannot be deposited now.
      */
-    public function deposit(CarbonInterface $on): void
+    public function deposit(CarbonInterface $on, ?ChequeStatus $as = null): void
     {
         $this->ensureAllowed('deposit');
 
@@ -339,7 +420,7 @@ class Cheque extends Model
             throw ValidationException::withMessages(['action' => 'Activate the contract before depositing its cheques.']);
         }
 
-        $this->forceFill(['status' => 'deposited', 'deposited_on' => $on])->save();
+        $this->forceFill(['status' => 'deposited', 'deposited_on' => $on, ...$this->named($as)])->save();
     }
 
     /**
@@ -350,12 +431,12 @@ class Cheque extends Model
      *
      * @throws ValidationException When the cheque cannot clear now.
      */
-    public function clear(CarbonInterface $on): void
+    public function clear(CarbonInterface $on, ?ChequeStatus $as = null): void
     {
         $this->ensureAllowed('clear');
 
-        DB::transaction(function () use ($on) {
-            $this->forceFill(['status' => 'cleared', 'cleared_on' => $on])->save();
+        DB::transaction(function () use ($on, $as) {
+            $this->forceFill(['status' => 'cleared', 'cleared_on' => $on, ...$this->named($as)])->save();
 
             if ($this->direction !== 'received') {
                 return;
@@ -376,12 +457,12 @@ class Cheque extends Model
      *
      * @throws ValidationException When the cheque cannot bounce now.
      */
-    public function bounce(CarbonInterface $on, ?string $reason = null): void
+    public function bounce(CarbonInterface $on, ?string $reason = null, ?ChequeStatus $as = null): void
     {
         $this->ensureAllowed('bounce');
 
-        DB::transaction(function () use ($on, $reason) {
-            $this->forceFill(['status' => 'bounced', 'bounced_on' => $on, 'bounce_reason' => $reason])->save();
+        DB::transaction(function () use ($on, $reason, $as) {
+            $this->forceFill(['status' => 'bounced', 'bounced_on' => $on, 'bounce_reason' => $reason, ...$this->named($as)])->save();
             $this->payment?->changeStatus('bounced');
             $this->rentalPayment?->void($on, 'The cheque bounced.');
         });
@@ -393,21 +474,21 @@ class Cheque extends Model
      *
      * @throws ValidationException When the cheque is not in hand.
      */
-    public function markReturned(CarbonInterface $on, ?string $note = null): void
+    public function markReturned(CarbonInterface $on, ?string $note = null, ?ChequeStatus $as = null): void
     {
         $this->ensureAllowed('return');
 
-        $this->forceFill(['status' => 'returned', 'handed_over_on' => $on, 'notes' => $this->appendNote($note)])->save();
+        $this->forceFill(['status' => 'returned', 'handed_over_on' => $on, 'notes' => $this->appendNote($note), ...$this->named($as)])->save();
     }
 
     /**
      * @throws ValidationException When the cheque has already been presented.
      */
-    public function cancel(?string $note = null): void
+    public function cancel(?string $note = null, ?ChequeStatus $as = null): void
     {
         $this->ensureAllowed('cancel');
 
-        $this->forceFill(['status' => 'cancelled', 'notes' => $this->appendNote($note)])->save();
+        $this->forceFill(['status' => 'cancelled', 'notes' => $this->appendNote($note), ...$this->named($as)])->save();
     }
 
     /**
@@ -426,7 +507,7 @@ class Cheque extends Model
 
         return DB::transaction(function () use ($entry, $by) {
             $replacement = $this->replicate([
-                'cheque_number', 'bank_name', 'account_holder', 'front_image_path', 'back_image_path', 'status',
+                'cheque_number', 'bank_name', 'account_holder', 'front_image_path', 'back_image_path', 'status', 'cheque_status_id',
                 'handed_over_on', 'deposited_on', 'cleared_on', 'bounced_on', 'bounce_reason', 'notes', 'recorded_by',
             ]);
             $replacement->forceFill(['status' => 'pending', 'replaces_id' => $this->id])->save();
@@ -455,6 +536,31 @@ class Cheque extends Model
             'return' => 'returned',
             default => 'cancelled',
         };
+    }
+
+    /**
+     * The chosen status to enter a stage in, set after the stage so it wins
+     * over the stage's first.
+     *
+     * @return array{cheque_status_id?: int}
+     */
+    private function named(?ChequeStatus $status): array
+    {
+        return $status ? ['cheque_status_id' => $status->id] : [];
+    }
+
+    /**
+     * Note in the history that the cheque moved to the status it is in now.
+     */
+    private function recordUpdate(?int $previousStatusId, CarbonInterface $on, ?string $note, ?User $by): void
+    {
+        $this->updates()->create([
+            'cheque_status_id' => $this->cheque_status_id,
+            'previous_status_id' => $previousStatusId,
+            'changed_on' => $on,
+            'note' => $note,
+            'user_id' => $by?->id,
+        ]);
     }
 
     private function appendNote(?string $note): ?string
@@ -486,9 +592,10 @@ class Cheque extends Model
         $remaining = (float) $this->amount;
         $amounts = [];
 
+        // The rent invoice for the cheque's own period first, then other rent, then gas bills.
         $invoices = $contract->invoices()
             ->whereIn('status', ['issued', 'partially_paid'])
-            ->orderByRaw('case when period_start = ? then 0 else 1 end', [($this->period_start ?? $this->cheque_date)->toDateString()])
+            ->orderByRaw("case when kind = 'rent' and period_start = ? then 0 when kind = 'rent' then 1 else 2 end", [($this->period_start ?? $this->cheque_date)->toDateString()])
             ->orderBy('period_start')
             ->orderBy('id')
             ->get();
@@ -524,6 +631,26 @@ class Cheque extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * The company's name for where the cheque stands, one of the stage in `status`.
+     *
+     * @return BelongsTo<ChequeStatus, $this>
+     */
+    public function chequeStatus(): BelongsTo
+    {
+        return $this->belongsTo(ChequeStatus::class);
+    }
+
+    /**
+     * The cheque's history of status changes.
+     *
+     * @return HasMany<ChequeUpdate, $this>
+     */
+    public function updates(): HasMany
+    {
+        return $this->hasMany(ChequeUpdate::class);
     }
 
     /**

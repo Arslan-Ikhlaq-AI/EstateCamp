@@ -18,10 +18,12 @@ import {
     CalendarClockIcon,
     CircleCheckIcon,
     CirclePauseIcon,
+    CylinderIcon,
     EyeIcon,
     FileClockIcon,
     FileSignatureIcon,
     FileXIcon,
+    HouseIcon,
     PencilIcon,
     PlusIcon,
     UserIcon,
@@ -29,6 +31,7 @@ import {
 
 const STATUS_ICONS = { draft: FileClockIcon, active: CircleCheckIcon, ended: CirclePauseIcon, terminated: FileXIcon };
 const TYPE_ICONS = { company: Building2Icon, individual: UserIcon };
+const GAS_ICONS = { included: HouseIcon, billed: CylinderIcon };
 
 export default function Index({ company, filters, facets, summary, contracts }) {
     const { t, formatNumber, formatCurrency, formatMoney } = useTranslation();
@@ -72,7 +75,22 @@ export default function Index({ company, filters, facets, summary, contracts }) 
                 </div>
             ),
         },
-        { id: 'units', header: t('leasing.contracts.columns.units'), className: 'min-w-28 whitespace-normal', cell: (contract) => <span className="text-sm">{unitsSummary(contract.units) || '—'}</span> },
+        {
+            id: 'units',
+            header: t('leasing.contracts.columns.units'),
+            className: 'min-w-28 whitespace-normal',
+            cell: (contract) => (
+                <div className="flex flex-col">
+                    <span className="text-sm">{unitsSummary(contract.units) || '—'}</span>
+                    {!contract.gasIncluded && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <CylinderIcon className="size-3 text-(--cash-gas)" />
+                            {t('leasing.contracts.form.gasOptions.billed')}
+                        </span>
+                    )}
+                </div>
+            ),
+        },
         {
             id: 'value',
             header: t('leasing.contracts.columns.monthly'),
@@ -146,8 +164,9 @@ export default function Index({ company, filters, facets, summary, contracts }) 
                         facets={{
                             status: facets.status.map((option) => ({ ...option, label: t(`leasing.status.contract.${option.value}`), icon: STATUS_ICONS[option.value] })),
                             types: facets.types.map((option) => ({ ...option, label: t(`leasing.partyTypes.${option.value}`), icon: TYPE_ICONS[option.value] })),
+                            gas: facets.gas.map((option) => ({ ...option, label: t(`leasing.contracts.form.gasOptions.${option.value}`), icon: GAS_ICONS[option.value] })),
                         }}
-                        labels={{ status: t('leasing.common.status'), types: t('leasing.contracts.filters.clientType') }}
+                        labels={{ status: t('leasing.common.status'), types: t('leasing.contracts.filters.clientType'), gas: t('leasing.contracts.form.fields.gas') }}
                         only={['contracts', 'facets']}
                         paginator={contracts}
                         searchLabel={t('leasing.contracts.searchLabel')}

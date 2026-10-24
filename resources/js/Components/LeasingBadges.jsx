@@ -1,6 +1,20 @@
+import { STATUS_COLOR_VARIANTS } from '@/Components/MaintenanceBadges';
 import { Badge } from '@/components/ui/badge';
 import { useTranslation } from '@/hooks/use-translation';
-import { Building2Icon, CircleAlertIcon, CircleCheckIcon, LandmarkIcon, Undo2Icon, UserIcon } from 'lucide-react';
+import {
+    Building2Icon,
+    CircleAlertIcon,
+    CircleCheckIcon,
+    CircleSlashIcon,
+    ClockIcon,
+    CylinderIcon,
+    HandCoinsIcon,
+    LandmarkIcon,
+    SendIcon,
+    Undo2Icon,
+    UndoIcon,
+    UserIcon,
+} from 'lucide-react';
 
 /**
  * Badge colours by meaning, so every leasing status reads the same way:
@@ -36,6 +50,20 @@ const PAYMENT_TONES = { pending: 'warning', cleared: 'success', bounced: 'danger
 const CHEQUE_TONES = { pending: 'muted', received: 'primary', issued: 'primary', deposited: 'info', cleared: 'success', bounced: 'danger', returned: 'muted', cancelled: 'muted' };
 const CHEQUE_ICONS = { deposited: LandmarkIcon, cleared: CircleCheckIcon, bounced: Undo2Icon };
 
+/**
+ * An icon for each stage a cheque status can belong to.
+ */
+export const CHEQUE_STAGE_ICONS = {
+    pending: ClockIcon,
+    received: HandCoinsIcon,
+    issued: SendIcon,
+    deposited: LandmarkIcon,
+    cleared: CircleCheckIcon,
+    bounced: Undo2Icon,
+    returned: UndoIcon,
+    cancelled: CircleSlashIcon,
+};
+
 export function LeaseStatusBadge({ status }) {
     const { t } = useTranslation();
 
@@ -65,6 +93,23 @@ export function InvoiceStatusBadge({ status, isOverdue = false }) {
     return <ToneBadge tone={INVOICE_TONES[status]}>{t(`leasing.status.invoice.${status}`)}</ToneBadge>;
 }
 
+/**
+ * Marks a gas bill's invoice among the rent invoices, which need no mark.
+ */
+export function InvoiceKindBadge({ kind }) {
+    const { t } = useTranslation();
+
+    if (kind !== 'gas') {
+        return null;
+    }
+
+    return (
+        <ToneBadge tone="info" icon={CylinderIcon}>
+            {t('leasing.invoices.kinds.gas')}
+        </ToneBadge>
+    );
+}
+
 export function PaymentStatusBadge({ status }) {
     const { t } = useTranslation();
 
@@ -72,26 +117,60 @@ export function PaymentStatusBadge({ status }) {
 }
 
 /**
- * A cheque, worded for its direction: a pending one is still to collect
- * (from a client) or to write (to a landlord). One past its date shows as
- * overdue, or "deposit now" when it is in hand.
+ * A cheque status's name as the company typed it, translated when it is
+ * one of the starter statuses.
  */
-export function ChequeStatusBadge({ status, direction, isOverdue = false }) {
+export function useChequeStatusName() {
+    const { tOr } = useTranslation();
+
+    return (status) => tOr(`leasing.cheques.statusNames.${status.slug}`, status.name);
+}
+
+/**
+ * One of the company's cheque statuses, in the colour chosen for it, with its stage's icon.
+ */
+export function ChequeNamedStatusBadge({ status }) {
+    const statusName = useChequeStatusName();
+    const Icon = CHEQUE_STAGE_ICONS[status.stage] ?? ClockIcon;
+
+    return (
+        <Badge variant={STATUS_COLOR_VARIANTS[status.color] ?? 'secondary'}>
+            <Icon data-icon="inline-start" />
+            {statusName(status)}
+        </Badge>
+    );
+}
+
+/**
+ * A cheque, by the company's status for it when given, otherwise worded
+ * for its direction: a pending one is still to collect (from a client) or
+ * to write (to a landlord). One past its date is flagged as overdue, or
+ * "deposit now" when it is in hand.
+ */
+export function ChequeStatusBadge({ status, direction, isOverdue = false, chequeStatus = null }) {
     const { t } = useTranslation();
     const key = status === 'pending' ? `pending_${direction}` : status;
+    const overdue = isOverdue && (status === 'pending' || status === 'received') && (
+        <ToneBadge tone={status === 'received' ? 'warning' : 'danger'} icon={CircleAlertIcon}>
+            {t(`leasing.cheques.status.overdue_${key}`)}
+        </ToneBadge>
+    );
 
-    if (isOverdue && (status === 'pending' || status === 'received')) {
+    if (chequeStatus) {
         return (
-            <ToneBadge tone={status === 'received' ? 'warning' : 'danger'} icon={CircleAlertIcon}>
-                {t(`leasing.cheques.status.overdue_${key}`)}
-            </ToneBadge>
+            <span className="inline-flex flex-wrap items-center gap-1">
+                <ChequeNamedStatusBadge status={chequeStatus} />
+                {overdue}
+            </span>
         );
     }
 
     return (
-        <ToneBadge tone={CHEQUE_TONES[status]} icon={CHEQUE_ICONS[status]}>
-            {t(`leasing.cheques.status.${key}`)}
-        </ToneBadge>
+        overdue || (
+            <ToneBadge tone={CHEQUE_TONES[status]} icon={CHEQUE_ICONS[status]}>
+                {t(`leasing.cheques.status.${key}`)}
+            </ToneBadge>
+        )
     );
 }
 

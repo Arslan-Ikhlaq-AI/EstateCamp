@@ -22,7 +22,9 @@ use Illuminate\Validation\ValidationException;
  * A client renting from the operator. What is rented, and at what rate,
  * lives in its ContractLines. The client pays by cheques, one per billing
  * period (four a year on a quarterly cycle), plus one for the security
- * deposit; clearing a cheque settles that period's invoice.
+ * deposit; clearing a cheque settles that period's invoice. Gas is either
+ * included in the rent (`gas_included`) or charged on top: then each
+ * month's gas at a property is a GasBill with its own invoice.
  *
  * Lifecycle: draft → active → ended (its end date passed) or terminated
  * (stopped early). Status changes go through activate(), markEnded() and
@@ -36,6 +38,7 @@ use Illuminate\Validation\ValidationException;
     'billing_cycle',
     'payment_terms_days',
     'security_deposit',
+    'gas_included',
     'signed_on',
     'notes',
 ])]
@@ -69,6 +72,7 @@ class Contract extends Model
             'terminated_on' => 'date',
             'payment_terms_days' => 'integer',
             'security_deposit' => 'decimal:2',
+            'gas_included' => 'boolean',
         ];
     }
 
@@ -230,7 +234,7 @@ class Contract extends Model
             $this->syncUnitStatuses();
 
             // Cheques still expected for the time after the contract stops are no longer due.
-            $this->cheques()->where('status', 'pending')->whereDate('cheque_date', '>', $on)->update(['status' => 'cancelled']);
+            $this->cheques()->where('status', 'pending')->whereDate('cheque_date', '>', $on)->update(['status' => 'cancelled', 'cheque_status_id' => ChequeStatus::firstIn('cancelled')?->id]);
         });
     }
 
@@ -281,13 +285,13 @@ class Contract extends Model
     /**
      * The next period to invoice, from the day after the last invoiced period
      * (or the start date) for one billing cycle, capped at the end date. Null
-     * once the whole term is invoiced.
+     * once the whole term is invoiced. Gas invoices are not billing periods.
      *
      * @return array{0: CarbonImmutable, 1: CarbonImmutable}|null
      */
     public function nextBillingPeriod(): ?array
     {
-        $lastEnd = $this->invoices()->whereNot('status', 'void')->max('period_end');
+        $lastEnd = $this->invoices()->where('kind', 'rent')->whereNot('status', 'void')->max('period_end');
         $start = $lastEnd ? CarbonImmutable::parse($lastEnd)->addDay() : $this->start_date->toImmutable();
 
         if ($start->gt($this->end_date)) {
@@ -384,6 +388,7 @@ class Contract extends Model
                 'company_id' => $this->company_id,
                 'contract_id' => $this->id,
                 'client_id' => $this->client_id,
+                'kind' => 'rent',
                 'invoice_number' => Invoice::nextNumber($this->company_id, $issued),
                 'subtotal' => $subtotal,
                 'vat_amount' => $vatAmount,
@@ -494,6 +499,16 @@ class Contract extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    /**
+     * The client's monthly gas bills, when gas is not included in the rent.
+     *
+     * @return HasMany<GasBill, $this>
+     */
+    public function gasBills(): HasMany
+    {
+        return $this->hasMany(GasBill::class);
     }
 
     /**

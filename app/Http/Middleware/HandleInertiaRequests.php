@@ -2,10 +2,14 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\MaintenanceContractController;
+use App\Http\Controllers\MaintenanceVisitController;
 use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\HeadLease;
+use App\Models\MaintenanceContract;
+use App\Models\MaintenanceVisit;
 use App\Models\Property;
 use App\Models\PropertyDocument;
 use App\Models\Room;
@@ -84,8 +88,8 @@ class HandleInertiaRequests extends Middleware
 
     /**
      * Cheques that need someone to act: bounced ones without a replacement,
-     * client cheques to deposit or still to collect, and landlord cheques to
-     * write or about to clear (so the account has the funds).
+     * client cheques to deposit or still to collect, and landlord and
+     * contractor cheques to write or about to clear (so the account has the funds).
      *
      * @return Collection<int, array<string, mixed>>
      */
@@ -116,7 +120,7 @@ class HandleInertiaRequests extends Middleware
                     'bounced' => 'cheque_bounced',
                     'received' => 'cheque_deposit_due',
                     'issued' => 'cheque_clearing',
-                    default => $isLease ? 'cheque_to_write' : 'cheque_to_collect',
+                    default => $cheque->direction === 'issued' ? 'cheque_to_write' : 'cheque_to_collect',
                 };
 
                 return [
@@ -128,20 +132,47 @@ class HandleInertiaRequests extends Middleware
                         default => 'warning',
                     },
                     'title' => $cheque->cheque_number ?? "{$cheque->sequence} · ".match (true) {
-                        $agreement instanceof Contract => $agreement->contract_number,
+                        $agreement instanceof Contract, $agreement instanceof MaintenanceContract => $agreement->contract_number,
                         $agreement instanceof RoomRental => $agreement->rental_number,
                         default => $agreement->lease_number,
                     },
-                    'subject' => $isLease ? $agreement->landlord?->name : $agreement->client?->name,
+                    'subject' => match (true) {
+                        $isLease => $agreement->landlord?->name,
+                        $agreement instanceof MaintenanceContract => $agreement->vendor_name,
+                        default => $agreement->client?->name,
+                    },
                     'days' => $days,
                     'url' => match (true) {
                         $agreement instanceof Contract => route('contracts.show', $agreement->id),
                         $agreement instanceof RoomRental => route('rentals.show', $agreement->id),
+                        $agreement instanceof MaintenanceContract => route(MaintenanceContractController::routeName($agreement->service, 'show'), $agreement->id),
                         default => route('head-leases.show', $agreement->id),
                     },
                 ];
             })
             ->values();
+    }
+
+    /**
+     * Contractors' visits that are close (within their contract's alert
+     * window) or overdue, one notification per visit; the dashboard shows
+     * the same visits in its alert.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function visitNotifications(Company $company): Collection
+    {
+        return MaintenanceVisitController::needingAttention($company)
+            ->map(fn (MaintenanceVisit $visit): array => [
+                'id' => "visit-{$visit->id}",
+                'type' => $visit->alertState() === 'overdue' ? 'visit_overdue' : 'visit_due',
+                'severity' => $visit->daysAway() <= 1 ? 'critical' : 'warning',
+                'title' => $visit->contract->property?->name ?? $visit->contract->contract_number,
+                'subject' => $visit->contract->vendor_name,
+                'service' => $visit->contract->service,
+                'days' => $visit->daysAway(),
+                'url' => route(MaintenanceContractController::routeName($visit->contract->service, 'show'), $visit->contract->id),
+            ]);
     }
 
     /**
@@ -176,7 +207,7 @@ class HandleInertiaRequests extends Middleware
      * carries data rather than a sentence so the client can word it in the
      * user's language.
      *
-     * @return array<int, array{id: string, type: string, severity: string, title: string, subject: string|null, days: int|null, url: string}>
+     * @return array<int, array{id: string, type: string, severity: string, title: string, subject: string|null, service?: string, days: int|null, url: string}>
      */
     private function notifications(Company $company): array
     {
@@ -255,6 +286,7 @@ class HandleInertiaRequests extends Middleware
         $severityOrder = ['critical' => 0, 'warning' => 1, 'info' => 2];
 
         return $license
+            ->concat($this->visitNotifications($company))
             ->concat($this->chequeNotifications($company))
             ->concat($documents)
             ->concat($this->staffDocumentNotifications($company))

@@ -11,7 +11,7 @@ import { chequePayload, emptyChequeEntry, initialChequeEntries, planContractCheq
 import { Head, Link, useForm } from '@inertiajs/react';
 import { DetailList } from '@/Components/DetailCards';
 import { ContractStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
-import { Building2Icon, CircleAlertIcon, FilePlusIcon, Trash2Icon } from 'lucide-react';
+import { Building2Icon, CircleAlertIcon, CylinderIcon, FilePlusIcon, HouseIcon, Trash2Icon } from 'lucide-react';
 import DocumentFields from '../Properties/Partials/DocumentFields';
 import ClientPicker, { emptyClient } from './Partials/ClientPicker';
 import RentedSummary, { groupByProperty, UNIT_ICONS, useDescribeLine } from './Partials/RentedSummary';
@@ -68,6 +68,7 @@ function initialData(contract, clientId, clients) {
             billing_cycle: 'monthly',
             payment_terms_days: 7,
             security_deposit: '',
+            gas_included: true,
             signed_on: '',
             notes: '',
             lines: [],
@@ -92,6 +93,7 @@ function initialData(contract, clientId, clients) {
         billing_cycle: contract.billing_cycle,
         payment_terms_days: contract.payment_terms_days,
         security_deposit: contract.security_deposit ?? '',
+        gas_included: contract.gas_included,
         signed_on: contract.signed_on ?? '',
         notes: contract.notes ?? '',
         lines,
@@ -291,6 +293,7 @@ function Summary({ data, currency }) {
         { label: t('leasing.contracts.form.summary.vat'), value: formatMoney(vat, currency) },
         { label: t('leasing.contracts.form.summary.perInvoice', { cycle: t(`leasing.billingCycles.${data.billing_cycle}`) }), value: formatMoney((monthly + vat) * months, currency), strong: true },
         { label: t('leasing.common.securityDeposit'), value: formatMoney(Number(data.security_deposit) || 0, currency) },
+        { label: t('leasing.contracts.form.fields.gas'), value: t(`leasing.contracts.form.gasOptions.${data.gas_included ? 'included' : 'billed'}`) },
     ];
 
     return (
@@ -426,6 +429,19 @@ export default function Form({ contract, clientId, currency, clients, clientType
                             description={t('leasing.contracts.form.paymentTermsHint')}
                         />
                         <MoneyField {...bind('security_deposit')} label={t('leasing.common.securityDeposit')} currency={currency} optional description={t('leasing.contracts.form.depositHint')} />
+                        <ChoiceField
+                            id="gas_included"
+                            label={t('leasing.contracts.form.fields.gas')}
+                            value={data.gas_included ? 'included' : 'billed'}
+                            onChange={(value) => setData('gas_included', value === 'included')}
+                            options={[
+                                { value: 'included', label: t('leasing.contracts.form.gasOptions.included'), icon: HouseIcon },
+                                { value: 'billed', label: t('leasing.contracts.form.gasOptions.billed'), icon: CylinderIcon },
+                            ]}
+                            description={t(`leasing.contracts.form.gasHints.${data.gas_included ? 'included' : 'billed'}`)}
+                            error={errors.gas_included}
+                            className="sm:col-span-2"
+                        />
                     </FieldGroup>
                 </FormSection>
 

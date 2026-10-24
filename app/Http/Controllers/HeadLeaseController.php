@@ -142,7 +142,7 @@ class HeadLeaseController extends Controller
             'renewal:id,renewed_from_id,lease_number',
         ]);
         $cheques = $headLease->cheques()
-            ->with(['replacement:id,replaces_id', 'payment:id,cheque_id,payment_number'])
+            ->with(['chequeStatus:id,name,slug,color,stage', 'replacement:id,replaces_id', 'payment:id,cheque_id,payment_number', ...ChequeController::historyRelations()])
             ->orderByRaw("case when purpose = 'security_deposit' then 0 else 1 end")
             ->orderBy('sequence')
             ->orderBy('id')
@@ -194,6 +194,7 @@ class HeadLeaseController extends Controller
             ]),
             'cheques' => $cheques->map(fn (Cheque $cheque) => ChequeController::details($cheque)),
             'banks' => ChequeController::knownBanks($headLease->company),
+            'chequeStatuses' => ChequeController::statusOptions(),
         ]);
     }
 
@@ -215,7 +216,7 @@ class HeadLeaseController extends Controller
                 'start_date' => $headLease->start_date->toDateString(),
                 'end_date' => $headLease->end_date->toDateString(),
                 'hasLockedCheques' => $headLease->cheques()->whereNotIn('status', Cheque::EDITABLE_STATUSES)->exists(),
-                'cheques' => $headLease->cheques()->whereNull('replaces_id')->get()->map(fn (Cheque $cheque) => ChequeController::formDetails($cheque)),
+                'cheques' => $headLease->cheques()->whereNull('replaces_id')->with('chequeStatus:id,name,slug,color,stage')->get()->map(fn (Cheque $cheque) => ChequeController::formDetails($cheque)),
             ],
             'prefill' => null,
             'renewing' => null,

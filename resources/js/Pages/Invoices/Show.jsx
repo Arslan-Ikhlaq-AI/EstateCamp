@@ -1,7 +1,7 @@
 import ActionDialog from '@/Components/ActionDialog';
 import { SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
-import { InvoiceStatusBadge, PaymentStatusBadge } from '@/Components/LeasingBadges';
+import { InvoiceKindBadge, InvoiceStatusBadge, PaymentStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { BanIcon, ReceiptIcon } from 'lucide-react';
+import { BanIcon, CylinderIcon, PencilIcon, ReceiptIcon } from 'lucide-react';
 import { useState } from 'react';
 
 function VoidDialog({ invoice, open, onOpenChange }) {
@@ -58,7 +58,12 @@ export default function Show({ invoice, items, allocations, company, currency })
             <PageHeader
                 breadcrumbs={[{ label: t('nav.payments') }, { label: t('leasing.invoices.title'), href: route('invoices.index') }, { label: invoice.number }]}
                 title={invoice.number}
-                badge={<InvoiceStatusBadge status={invoice.status} isOverdue={invoice.isOverdue} />}
+                badge={
+                    <>
+                        <InvoiceKindBadge kind={invoice.kind} />
+                        <InvoiceStatusBadge status={invoice.status} isOverdue={invoice.isOverdue} />
+                    </>
+                }
                 description={
                     <span>
                         <Link href={route('clients.show', invoice.client.id)} className="underline-offset-4 hover:text-brand-ink hover:underline" dir="auto">
@@ -68,10 +73,22 @@ export default function Show({ invoice, items, allocations, company, currency })
                         <Link href={route('contracts.show', invoice.contract.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                             {invoice.contract.number}
                         </Link>
+                        {invoice.gasBill && (
+                            <>
+                                {' '}
+                                · <span dir="auto">{t('leasing.invoices.show.gasBill', { property: invoice.gasBill.property.name })}</span>
+                            </>
+                        )}
                     </span>
                 }
                 actions={
                     <>
+                        {invoice.gasBill?.canEdit && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('gas-bills.edit', invoice.gasBill.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('leasing.invoices.show.editGasBill')}
+                            </Button>
+                        )}
                         {invoice.canVoid && (
                             <Button variant="outline" onClick={() => setIsVoiding(true)}>
                                 <BanIcon data-icon="inline-start" />
@@ -142,7 +159,12 @@ export default function Show({ invoice, items, allocations, company, currency })
                             <TableBody>
                                 {items.map((item) => (
                                     <TableRow key={item.id}>
-                                        <TableCell className="whitespace-normal">{item.description}</TableCell>
+                                        <TableCell className="whitespace-normal">
+                                            <span className="flex items-start gap-2">
+                                                {item.type === 'gas' && <CylinderIcon className="mt-0.5 size-4 shrink-0 text-(--cash-gas)" />}
+                                                {item.description}
+                                            </span>
+                                        </TableCell>
                                         <TableCell className="text-end tabular-nums">{formatNumber(item.quantity)}</TableCell>
                                         <TableCell className="text-end tabular-nums">{formatMoney(item.unitPrice, currency)}</TableCell>
                                         <TableCell className="text-end tabular-nums">{item.vatRate > 0 ? `${formatNumber(item.vatRate)}%` : '—'}</TableCell>

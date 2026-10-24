@@ -13,28 +13,12 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
-    AirVentIcon,
     ArrowLeftIcon,
-    ArrowUpDownIcon,
-    BugIcon,
-    DropletsIcon,
-    FilterIcon,
-    FlameIcon,
-    Trash2Icon,
-    WavesIcon,
     LifeBuoyIcon,
     SparklesIcon,
 } from 'lucide-react';
 
 const SECTIONS = {
-    'amcs.fire-safety': { icon: FlameIcon, parent: 'nav.contractsMenu' },
-    'amcs.lifts': { icon: ArrowUpDownIcon, parent: 'nav.contractsMenu' },
-    'amcs.garbage': { icon: Trash2Icon, parent: 'nav.contractsMenu' },
-    'amcs.grease-traps': { icon: FilterIcon, parent: 'nav.contractsMenu' },
-    'amcs.drainage': { icon: WavesIcon, parent: 'nav.contractsMenu' },
-    'amcs.pest-control': { icon: BugIcon, parent: 'nav.contractsMenu' },
-    'amcs.air-conditioning': { icon: AirVentIcon, parent: 'nav.contractsMenu' },
-    'amcs.water-tanks': { icon: DropletsIcon, parent: 'nav.contractsMenu' },
     help: { icon: LifeBuoyIcon },
 };
 

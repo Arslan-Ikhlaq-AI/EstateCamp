@@ -3,7 +3,7 @@ import DataTable from '@/Components/DataTable';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
 import { RentalStatusBadge, RentStandingBadge, StandingDetail, useRentalPlace } from '@/Components/FinanceBadges';
 import FlashMessages from '@/Components/FlashMessages';
-import { ClientStatusBadge, ContractStatusBadge, InvoiceStatusBadge, PartyTypeBadge, PaymentStatusBadge } from '@/Components/LeasingBadges';
+import { ClientStatusBadge, ContractStatusBadge, InvoiceKindBadge, InvoiceStatusBadge, PartyTypeBadge, PaymentStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import PropertyHoldings, { holdingTotals, useHoldingSummary } from '@/Components/PropertyHoldings';
 import StatCard from '@/Components/StatCard';
@@ -216,9 +216,12 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
                                         id: 'number',
                                         header: t('leasing.invoices.columns.invoice'),
                                         cell: (invoice) => (
-                                            <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
-                                                {invoice.number}
-                                            </Link>
+                                            <span className="flex flex-wrap items-center gap-2">
+                                                <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
+                                                    {invoice.number}
+                                                </Link>
+                                                <InvoiceKindBadge kind={invoice.kind} />
+                                            </span>
                                         ),
                                     },
                                     { id: 'period', header: t('leasing.invoices.columns.period'), cell: (invoice) => <span className="text-sm">{period(invoice.periodStart, invoice.periodEnd)}</span> },

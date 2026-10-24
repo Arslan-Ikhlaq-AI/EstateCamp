@@ -1,6 +1,6 @@
 import DataTable from '@/Components/DataTable';
 import FlashMessages from '@/Components/FlashMessages';
-import { InvoiceStatusBadge } from '@/Components/LeasingBadges';
+import { InvoiceKindBadge, InvoiceStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import { usePeriodLabel } from '@/Components/PeriodFilter';
 import RecordList, { ListEmpty, NoCompany } from '@/Components/RecordList';
@@ -18,6 +18,7 @@ import {
     CircleCheckIcon,
     CircleDashedIcon,
     CircleSlashIcon,
+    CylinderIcon,
     EyeIcon,
     FileSignatureIcon,
     FileTextIcon,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react';
 
 const STATUS_ICONS = { issued: CircleDashedIcon, partially_paid: WalletIcon, paid: CircleCheckIcon, void: CircleSlashIcon };
+const KIND_ICONS = { rent: FileSignatureIcon, gas: CylinderIcon };
 
 export default function Index({ company, filters, period: listPeriod, facets, summary, invoices }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
@@ -39,9 +41,12 @@ export default function Index({ company, filters, period: listPeriod, facets, su
             header: t('leasing.invoices.columns.invoice'),
             cell: (invoice) => (
                 <div className="flex flex-col">
-                    <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
-                        {invoice.number}
-                    </Link>
+                    <span className="flex flex-wrap items-center gap-2">
+                        <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
+                            {invoice.number}
+                        </Link>
+                        <InvoiceKindBadge kind={invoice.kind} />
+                    </span>
                     <span className="text-xs text-muted-foreground">{t('leasing.invoices.issuedOn', { date: formatDate(invoice.issueDate) })}</span>
                 </div>
             ),
@@ -124,9 +129,10 @@ export default function Index({ company, filters, period: listPeriod, facets, su
                         filters={filters}
                         facets={{
                             status: facets.status.map((option) => ({ ...option, label: t(`leasing.status.invoice.${option.value}`), icon: STATUS_ICONS[option.value] })),
+                            kind: facets.kind.map((option) => ({ ...option, label: t(`leasing.invoices.kinds.${option.value}`), icon: KIND_ICONS[option.value] })),
                             due: facets.due.map((option) => ({ ...option, label: t('leasing.status.invoice.overdue'), icon: CircleAlertIcon })),
                         }}
-                        labels={{ status: t('leasing.common.status'), due: t('leasing.invoices.filters.due') }}
+                        labels={{ status: t('leasing.common.status'), kind: t('leasing.invoices.filters.kind'), due: t('leasing.invoices.filters.due') }}
                         only={['invoices', 'facets', 'summary']}
                         period={listPeriod}
                         paginator={invoices}
