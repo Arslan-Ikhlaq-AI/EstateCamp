@@ -140,7 +140,6 @@ function PropertyList({ company, filters, facets, summary, properties }) {
 
     return (
         <Card className="gap-0 overflow-hidden py-0">
-            <div aria-hidden="true" className="h-1 bg-linear-to-r from-brand-cyan via-chart-1 to-gold rtl:bg-linear-to-l" />
             <div className="flex flex-col gap-3 border-b px-4 py-3.5 sm:px-5 lg:px-6">
                 <PropertyToolbar
                     search={search}
@@ -201,7 +200,6 @@ export default function Index({ company, filters, facets, summary, properties })
             <PageHeader
                 breadcrumbs={[{ label: t('properties.title') }]}
                 title={t('properties.title')}
-                count={summary?.properties}
                 description={t('properties.description')}
                 actions={
                     company !== null && (

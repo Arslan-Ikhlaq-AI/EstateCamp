@@ -86,7 +86,7 @@ test('rejects an invalid company profile', function (array $overrides, string $f
         ->assertSessionHasErrors($field);
 })->with([
     'missing name' => [['name' => ''], 'name'],
-    'short TRN' => [['tax_registration_number' => '1234'], 'tax_registration_number'],
+    'a malformed tax number' => [['tax_registration_number' => 'VAT#1234!'], 'tax_registration_number'],
     'unknown time zone' => [['timezone' => 'Mars/Olympus'], 'timezone'],
     'three-letter country' => [['country_code' => 'ARE'], 'country_code'],
 ]);

@@ -36,6 +36,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'postal_code',
     'country_code',
     'expiry_date',
+    'terms_version',
+    'terms_accepted_at',
+    'terms_accepted_ip',
 ])]
 class Company extends Model
 {
@@ -56,9 +59,23 @@ class Company extends Model
     ];
 
     /**
+     * The Terms of Service in force: their effective date. Change it with
+     * the text in resources/js/lib/terms.js, so each company's acceptance
+     * points to the words it agreed to.
+     */
+    public const TERMS_VERSION = '2026-10-25';
+
+    /**
+     * A tax registration number in any country's format (VAT, GST, TRN,
+     * EIN and the like): letters and digits, with spaces, dots, slashes or
+     * hyphens between them.
+     */
+    public const TAX_NUMBER_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9 .\/-]{1,48}[A-Za-z0-9]$/';
+
+    /**
      * Workspace addresses kept for the platform's own pages.
      */
-    public const RESERVED_SLUGS = ['admin', 'api', 'app', 'dashboard', 'estatecamp', 'get-started', 'help', 'login', 'mail', 'onboarding', 'register', 'support', 'www'];
+    public const RESERVED_SLUGS = ['admin', 'api', 'app', 'dashboard', 'estatecamp', 'get-started', 'help', 'login', 'mail', 'onboarding', 'register', 'support', 'terms', 'www'];
 
     /**
      * Get the attributes that should be cast.
@@ -69,6 +86,7 @@ class Company extends Model
     {
         return [
             'expiry_date' => 'date',
+            'terms_accepted_at' => 'datetime',
         ];
     }
 

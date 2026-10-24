@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { getInitials } from '@/lib/format';
+import { generatePassword } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
 import {
     BriefcaseBusinessIcon,
@@ -15,7 +16,7 @@ import {
     UserRoundIcon,
     UsersRoundIcon,
 } from 'lucide-react';
-import { FieldSection, IconField, IconSelect } from './OnboardingFields';
+import { FieldSection, IconField, IconSelect, PasswordField } from './OnboardingFields';
 
 export const ROLE_ICONS = { super_admin: CrownIcon, manager: BriefcaseBusinessIcon, accountant: CalculatorIcon };
 
@@ -63,6 +64,15 @@ export default function TeamStep({ form, bind, roles, maxTeam, onTeamCountChange
     const { team } = form.data;
     const roleItems = roles.map((role) => ({ value: role.value, label: role.name }));
     const people = 1 + team.length;
+    const confirmation = bind('admin_password_confirmation');
+
+    // A generated password fills both boxes, so it never needs typing twice.
+    const generateAdminPassword = () => {
+        const password = generatePassword();
+
+        form.setData((values) => ({ ...values, admin_password: password, admin_password_confirmation: password }));
+        form.validate({ only: ['admin_password', 'admin_password_confirmation'] });
+    };
 
     return (
         <div className="flex flex-col gap-10">
@@ -79,9 +89,23 @@ export default function TeamStep({ form, bind, roles, maxTeam, onTeamCountChange
                         </span>
                     </div>
                     <div className="grid gap-5 sm:grid-cols-2">
-                        <IconField {...bind('admin_name')} label="Full name" icon={UserRoundIcon} autoComplete="name" placeholder="Omar Rahman" />
-                        <IconField {...bind('admin_email')} label="Work email" icon={MailIcon} type="email" inputMode="email" autoComplete="email" placeholder="omar@company.com" description="Your sign-in details are sent here." />
-                        <IconField {...bind('admin_phone')} label="Mobile" icon={SmartphoneIcon} optional type="tel" autoComplete="tel" placeholder="+971 50 123 4567" />
+                        <IconField {...bind('admin_name')} label="Full name" icon={UserRoundIcon} autoComplete="name" placeholder="Alex Morgan" />
+                        <IconField {...bind('admin_email')} label="Work email" icon={MailIcon} type="email" inputMode="email" autoComplete="username" placeholder="alex@company.com" description="Your sign-in details are sent here." />
+                        <PasswordField
+                            {...bind('admin_password')}
+                            label="Password"
+                            placeholder="At least 8 characters"
+                            onGenerate={generateAdminPassword}
+                            showStrength
+                            description="You sign in with this; it is also in your welcome email."
+                        />
+                        <PasswordField
+                            {...confirmation}
+                            valid={confirmation.valid && confirmation.value === form.data.admin_password}
+                            label="Confirm password"
+                            placeholder="Type it again"
+                        />
+                        <IconField {...bind('admin_phone')} label="Mobile" icon={SmartphoneIcon} optional type="tel" autoComplete="tel" placeholder="+ country code and number" />
                     </div>
                 </div>
             </FieldSection>
@@ -126,10 +150,19 @@ export default function TeamStep({ form, bind, roles, maxTeam, onTeamCountChange
                                         <Trash2Icon />
                                     </Button>
                                 </div>
-                                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
-                                    <IconField {...bind(`team.${index}.name`)} label="Name" icon={UserRoundIcon} autoComplete="off" placeholder="Sara Ahmed" />
-                                    <IconField {...bind(`team.${index}.email`)} label="Email" icon={MailIcon} type="email" inputMode="email" autoComplete="off" placeholder="sara@company.com" />
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <IconField {...bind(`team.${index}.name`)} label="Name" icon={UserRoundIcon} autoComplete="off" placeholder="Jordan Lee" />
+                                    <IconField {...bind(`team.${index}.email`)} label="Email" icon={MailIcon} type="email" inputMode="email" autoComplete="off" placeholder="jordan@company.com" />
                                     <IconSelect {...bind(`team.${index}.role`)} label="Role" icon={ROLE_ICONS[member.role] ?? ShieldCheckIcon} items={roleItems} />
+                                    <PasswordField
+                                        {...bind(`team.${index}.password`)}
+                                        label="Password"
+                                        optional
+                                        autoComplete="off"
+                                        placeholder="Leave blank"
+                                        onGenerate={() => bind(`team.${index}.password`).onChange(generatePassword())}
+                                        description={member.password ? 'Sent to them in their welcome email.' : 'We create one and email it to them.'}
+                                    />
                                 </div>
                             </li>
                         ))}

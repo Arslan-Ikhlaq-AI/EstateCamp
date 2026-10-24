@@ -2,11 +2,11 @@ import BrandLogo from '@/Components/BrandLogo';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { COUNTRIES, fieldId, focusFirstError, slugify, stepWithError, STEPS, suggestSlug } from '@/lib/onboarding';
+import { browserTimeZone, fieldId, focusFirstError, readLogo, slugify, stepWithError, STEPS, suggestSlug } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeftIcon, ArrowRightIcon, CircleAlertIcon, CornerDownLeftIcon, RocketIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeftIcon, ArrowRightIcon, CircleAlertIcon, RocketIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import CompanyStep from './Partials/CompanyStep';
 import OnboardingAside from './Partials/OnboardingAside';
 import OnboardingComplete from './Partials/OnboardingComplete';
@@ -16,6 +16,7 @@ import WorkspaceStep from './Partials/WorkspaceStep';
 
 const INITIAL_DATA = {
     name: '',
+    logo: null,
     legal_name: '',
     trade_license_number: '',
     expiry_date: '',
@@ -23,20 +24,24 @@ const INITIAL_DATA = {
     email: '',
     phone: '',
     website: '',
-    country_code: 'AE',
+    country_code: '',
     city: '',
     address_line_1: '',
     business_type: '',
     slug: '',
-    default_currency: 'AED',
-    timezone: 'Asia/Dubai',
+    default_currency: '',
+    timezone: '',
     admin_name: '',
     admin_email: '',
     admin_phone: '',
+    admin_password: '',
+    admin_password_confirmation: '',
     team: [],
     terms: false,
     fax: '',
 };
+
+const LOGO_REQUIRED = 'Upload your company logo.';
 
 // Changing these by hand stops the country from overriding them.
 const REGION_FIELDS = ['default_currency', 'timezone'];
@@ -71,9 +76,15 @@ function MobileProgress({ step }) {
  * workspace, its team, then a review before it goes live. Each step is
  * checked against the server's rules before the next one opens.
  */
-export default function Start({ completed, businessTypes, roles, currencies, timezones, maxTeam, workspaceBase }) {
+export default function Start({ completed, businessTypes, roles, countries, currencies, timezones, maxTeam, workspaceBase, termsVersion }) {
     const host = workspaceBase.replace(/^https?:\/\//, '');
-    const form = useForm('post', route('onboarding.store'), INITIAL_DATA);
+    // The terms version shown here goes back with the sign-up, so the server records what was actually read.
+    // Nothing is assumed about where the company is, except the time zone the visitor's own browser is in.
+    const form = useForm('post', route('onboarding.store'), () => ({
+        ...INITIAL_DATA,
+        timezone: timezones.includes(browserTimeZone()) ? browserTimeZone() : '',
+        terms_version: termsVersion,
+    }));
     const { data } = form;
 
     const [step, setStep] = useState(0);
@@ -81,9 +92,14 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
     const [direction, setDirection] = useState('forward');
     const [isChecking, setIsChecking] = useState(false);
     const [hasConnectionError, setHasConnectionError] = useState(false);
+    const [logoInfo, setLogoInfo] = useState(null);
+
+    const logoPreview = useMemo(() => (data.logo ? URL.createObjectURL(data.logo) : null), [data.logo]);
+
+    useEffect(() => () => logoPreview && URL.revokeObjectURL(logoPreview), [logoPreview]);
 
     const slugEdited = useRef(false);
-    const regionEdited = useRef(false);
+    const regionEdited = useRef({});
     const nextMemberKey = useRef(1);
     const headingRef = useRef(null);
     const hasMounted = useRef(false);
@@ -110,7 +126,7 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
         value: readPath(data, name),
         onChange: (value) => {
             if (REGION_FIELDS.includes(name)) {
-                regionEdited.current = true;
+                regionEdited.current[name] = true;
             }
 
             if (name === 'name' && !slugEdited.current) {
@@ -123,6 +139,11 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
             if (form.errors[name]) {
                 form.validate(name);
             }
+
+            // So is the confirmation once the password it has to match changes.
+            if (name === 'admin_password' && data.admin_password_confirmation !== '') {
+                form.validate('admin_password_confirmation');
+            }
         },
         onBlur: () => {
             if (readPath(data, name) !== '' || form.invalid(name)) {
@@ -133,15 +154,42 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
         valid: form.valid(name) && readPath(data, name) !== '',
     });
 
+    // A country suggests its currency and a time zone: the visitor's own when it is in that country, else the country's main one.
     const changeCountry = (code) => {
-        const country = COUNTRIES.find((option) => option.code === code);
+        const country = countries.find((option) => option.code === code);
+        const ownZone = browserTimeZone();
 
         form.setData((values) => ({
             ...values,
             country_code: code,
-            ...(country && !regionEdited.current ? { default_currency: country.currency, timezone: country.timezone } : {}),
+            ...(country?.currency && !regionEdited.current.default_currency ? { default_currency: country.currency } : {}),
+            ...(country && !regionEdited.current.timezone ? { timezone: country.timezones.includes(ownZone) ? ownZone : (country.timezones[0] ?? values.timezone) } : {}),
         }));
         form.clearErrors('country_code');
+    };
+
+    const chooseLogo = async (file) => {
+        if (!file) {
+            return;
+        }
+
+        const { error, width, height } = await readLogo(file);
+
+        // A wrong file keeps the logo already chosen, if there is one.
+        if (error) {
+            form.setError('logo', error);
+
+            return;
+        }
+
+        form.setData('logo', file);
+        form.clearErrors('logo');
+        setLogoInfo({ name: file.name, size: file.size, width, height });
+    };
+
+    const removeLogo = () => {
+        form.setData('logo', null);
+        setLogoInfo(null);
     };
 
     const changeSlug = (value) => {
@@ -164,7 +212,7 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
 
     const changeTeamCount = (count) => {
         const size = Math.max(0, Math.min(maxTeam, count));
-        const added = Array.from({ length: Math.max(0, size - data.team.length) }, () => ({ key: nextMemberKey.current++, name: '', email: '', role: 'manager' }));
+        const added = Array.from({ length: Math.max(0, size - data.team.length) }, () => ({ key: nextMemberKey.current++, name: '', email: '', role: 'manager', password: '' }));
 
         form.setData('team', size > data.team.length ? [...data.team, ...added] : data.team.slice(0, size));
         clearTeamErrors();
@@ -214,20 +262,37 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
         }
 
         const isLastStep = step === STEPS.length - 1;
+        // The logo is checked here rather than through Precognition, which would upload it with every check.
+        const isLogoMissing = (step === 0 || isLastStep) && !data.logo;
         let isAnswered = false;
 
         setIsChecking(true);
         setHasConnectionError(false);
+
+        if (isLogoMissing) {
+            form.setError('logo', LOGO_REQUIRED);
+        }
 
         // The last step checks every field, so launching only sends a sign-up that will succeed.
         form.validate({
             only: isLastStep ? STEPS.flatMap((item) => item.fields) : STEPS[step].fields,
             onSuccess: () => {
                 isAnswered = true;
+
+                if (isLogoMissing) {
+                    if (step !== 0) {
+                        goTo(0);
+                    }
+
+                    requestAnimationFrame(() => focusFirstError({ logo: LOGO_REQUIRED }));
+
+                    return;
+                }
+
                 isLastStep ? launch() : goTo(step + 1);
             },
             onValidationError: (response) => {
-                const errors = response.data.errors ?? {};
+                const errors = isLogoMissing ? { logo: LOGO_REQUIRED, ...response.data.errors } : (response.data.errors ?? {});
                 const target = stepWithError(errors);
 
                 isAnswered = true;
@@ -254,7 +319,16 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
         <div className="auth-theme grid min-h-svh bg-background font-display text-foreground lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] 2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <Head title={completed ? 'Workspace ready' : 'Set up your company'} />
 
-            <OnboardingAside step={step} furthest={furthest} isComplete={Boolean(completed)} onStepClick={goTo} data={data} host={host} businessType={businessType} />
+            <OnboardingAside
+                step={step}
+                furthest={furthest}
+                isComplete={Boolean(completed)}
+                onStepClick={goTo}
+                data={data}
+                host={host}
+                businessType={businessType}
+                logoPreview={logoPreview ?? completed?.logoUrl}
+            />
 
             <main className="relative isolate flex min-w-0 flex-col overflow-hidden px-5 pt-6 pb-10 sm:px-10 lg:px-14 lg:pt-10 xl:px-20">
                 <div aria-hidden="true" className="pointer-events-none absolute -top-[22rem] -right-[22rem] -z-10 size-[44rem] rounded-full bg-radial from-brand-cyan/15 to-transparent to-70%" />
@@ -298,12 +372,28 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
                                     direction === 'forward' ? 'motion-safe:slide-in-from-right-6 rtl:motion-safe:slide-in-from-left-6' : 'motion-safe:slide-in-from-left-6 rtl:motion-safe:slide-in-from-right-6',
                                 )}
                             >
-                                {step === 0 && <CompanyStep bind={bind} onCountryChange={changeCountry} />}
+                                {step === 0 && (
+                                    <CompanyStep
+                                        bind={bind}
+                                        countries={countries}
+                                        onCountryChange={changeCountry}
+                                        logo={{ preview: logoPreview, info: logoInfo, error: form.errors.logo, onChoose: chooseLogo, onRemove: removeLogo }}
+                                    />
+                                )}
                                 {step === 1 && (
-                                    <WorkspaceStep form={form} bind={bind} businessTypes={businessTypes} currencies={currencies} timezones={timezones} host={host} onSlugChange={changeSlug} />
+                                    <WorkspaceStep
+                                        form={form}
+                                        bind={bind}
+                                        businessTypes={businessTypes}
+                                        countries={countries}
+                                        currencies={currencies}
+                                        timezones={timezones}
+                                        host={host}
+                                        onSlugChange={changeSlug}
+                                    />
                                 )}
                                 {step === 2 && <TeamStep form={form} bind={bind} roles={roles} maxTeam={maxTeam} onTeamCountChange={changeTeamCount} onRemoveMember={removeMember} />}
-                                {step === 3 && <ReviewStep form={form} host={host} businessTypes={businessTypes} roles={roles} onEdit={goTo} />}
+                                {step === 3 && <ReviewStep form={form} host={host} businessTypes={businessTypes} roles={roles} logoPreview={logoPreview} termsVersion={termsVersion} onEdit={goTo} />}
                             </div>
 
                             {/* Left empty by people; bots that fill every field are turned away. */}
@@ -327,10 +417,7 @@ export default function Start({ completed, businessTypes, roles, currencies, tim
                                         <ArrowLeftIcon data-icon="inline-start" className="rtl:rotate-180" /> Back
                                     </Button>
                                 )}
-                                <span className="ms-auto hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-                                    Press <kbd className="inline-flex items-center gap-1 rounded-md border bg-white px-1.5 py-0.5 font-sans font-semibold text-foreground shadow-xs">Enter <CornerDownLeftIcon className="size-3" /></kbd>
-                                </span>
-                                <Button type="submit" variant="brand" size="lg" className="ms-auto h-12 min-w-40 px-6 text-[0.95rem] sm:ms-0" disabled={isBusy}>
+                                <Button type="submit" variant="brand" size="lg" className="ms-auto h-12 min-w-40 px-6 text-[0.95rem]" disabled={isBusy}>
                                     {isBusy && <Spinner data-icon="inline-start" />}
                                     {isLastStep ? (form.processing ? 'Launching…' : 'Launch workspace') : isChecking ? 'Checking…' : `Continue to ${STEPS[step + 1].label.toLowerCase()}`}
                                     {!isBusy && (isLastStep ? <RocketIcon data-icon="inline-end" /> : <ArrowRightIcon data-icon="inline-end" className="transition-transform group-hover/button:translate-x-0.5 rtl:rotate-180" />)}

@@ -62,6 +62,9 @@ Route::post('get-started', [CompanyOnboardingController::class, 'store'])
     ->middleware([HandlePrecognitiveRequests::class, 'throttle:onboarding'])
     ->name('onboarding.store');
 
+// The Terms of Service a company accepts at sign-up, for the marketing site and emails to link to.
+Route::inertia('terms', 'Legal/Terms', ['version' => Company::TERMS_VERSION])->name('terms');
+
 // A company's own sign-in address: the sign-in page, under the company's name.
 Route::get('w/{company:slug}', fn (Company $company) => to_route('login', ['workspace' => $company->slug]))->name('workspace');
 

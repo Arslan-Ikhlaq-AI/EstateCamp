@@ -49,6 +49,7 @@ export default function OnboardingComplete({ completed }) {
 
     useEffect(() => headingRef.current?.focus(), []);
 
+    const hasGeneratedPasswords = completed.users.some((user) => user.isGenerated);
     const recipients = [
         { key: 'company', name: completed.company, email: completed.companyEmail, note: 'Workspace summary', icon: Building2Icon, isCompany: true },
         ...completed.users.map((user) => ({ key: user.email, name: user.name, email: user.email, note: `${user.role} sign-in`, icon: KeyRoundIcon })),
@@ -105,11 +106,17 @@ export default function OnboardingComplete({ completed }) {
                             <span
                                 aria-hidden="true"
                                 className={cn(
-                                    'flex size-9 shrink-0 items-center justify-center rounded-full bg-linear-to-br text-xs font-bold text-white',
-                                    isCompany ? 'rounded-xl from-brand-navy to-[#0b2a8a]' : index === 1 ? 'from-gold to-[#d68a00]' : 'from-brand-cyan to-brand-navy',
+                                    'flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-linear-to-br text-xs font-bold text-white',
+                                    isCompany && completed.logoUrl && 'rounded-xl bg-white bg-none ring-1 ring-border',
+                                    isCompany && !completed.logoUrl && 'rounded-xl from-brand-navy to-[#0b2a8a]',
+                                    !isCompany && (index === 1 ? 'from-gold to-[#d68a00]' : 'from-brand-cyan to-brand-navy'),
                                 )}
                             >
-                                {isCompany ? <Building2Icon className="size-4" /> : getInitials(name)}
+                                {isCompany ? (
+                                    completed.logoUrl ? <img src={completed.logoUrl} alt="" className="size-full object-contain p-1" /> : <Building2Icon className="size-4" />
+                                ) : (
+                                    getInitials(name)
+                                )}
                             </span>
                             <div className="flex min-w-0 flex-1 flex-col">
                                 <span className="truncate text-sm font-bold">{name}</span>
@@ -121,7 +128,12 @@ export default function OnboardingComplete({ completed }) {
                         </li>
                     ))}
                 </ul>
-                <p className="text-[0.8125rem] text-muted-foreground">Not there in a few minutes? Check the spam folder. Each password is temporary and should be changed after the first sign-in.</p>
+                <p className="text-[0.8125rem] text-muted-foreground">
+                    Not there in a few minutes? Check the spam folder.{' '}
+                    {hasGeneratedPasswords
+                        ? 'Passwords created at launch are temporary, so ask those teammates to change theirs after they first sign in.'
+                        : 'Everyone signs in with the password set during sign-up.'}
+                </p>
             </section>
 
             <div className="flex flex-col gap-3 sm:flex-row">

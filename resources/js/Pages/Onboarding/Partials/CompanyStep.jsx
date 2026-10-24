@@ -1,4 +1,4 @@
-import { COUNTRIES, countryName } from '@/lib/onboarding';
+import { COUNTRY_KEYWORDS, countryName } from '@/lib/onboarding';
 import {
     Building2Icon,
     CalendarClockIcon,
@@ -11,40 +11,54 @@ import {
     PhoneIcon,
     ReceiptTextIcon,
 } from 'lucide-react';
-import { FieldSection, IconField, IconSelect } from './OnboardingFields';
-
-const COUNTRY_ITEMS = COUNTRIES.map(({ code }) => ({ value: code, label: countryName(code), hint: code }));
+import { useMemo } from 'react';
+import LogoUpload from './LogoUpload';
+import { FieldSection, IconCombobox, IconField } from './OnboardingFields';
 
 /**
- * Step 1: the company's identity, how to reach it and where it is.
+ * Step 1: the company's identity and logo, how to reach it and where it is.
  */
-export default function CompanyStep({ bind, onCountryChange }) {
-    const country = bind('country_code');
+export default function CompanyStep({ bind, countries, onCountryChange, logo }) {
+    const countryItems = useMemo(
+        () =>
+            countries
+                .map(({ code }) => ({ value: code, label: countryName(code), hint: code, keywords: COUNTRY_KEYWORDS[code] }))
+                .sort((first, second) => first.label.localeCompare(second.label)),
+        [countries],
+    );
 
     return (
         <div className="flex flex-col gap-10">
-            <FieldSection icon={Building2Icon} title="Identity" description="How your company is named on documents.">
+            <FieldSection icon={Building2Icon} title="Identity" description="How your company looks and is named on documents.">
+                <LogoUpload {...logo} />
                 <div className="grid gap-5 sm:grid-cols-2">
-                    <IconField {...bind('name')} label="Company name" icon={Building2Icon} placeholder="Horizon Facilities Management" autoComplete="organization" className="sm:col-span-2" />
-                    <IconField {...bind('legal_name')} label="Legal name" icon={FileSignatureIcon} optional placeholder="As on your trade licence" description="Printed on invoices and contracts." />
-                    <IconField {...bind('trade_license_number')} label="Trade licence number" icon={FileBadgeIcon} optional placeholder="CN-4518273" />
+                    <IconField {...bind('name')} label="Company name" icon={Building2Icon} placeholder="Northwind Properties" autoComplete="organization" className="sm:col-span-2" />
+                    <IconField {...bind('legal_name')} label="Legal name" icon={FileSignatureIcon} optional placeholder="As registered" description="Printed on invoices and contracts." />
+                    <IconField
+                        {...bind('trade_license_number')}
+                        label="Registration number"
+                        icon={FileBadgeIcon}
+                        optional
+                        placeholder="Company or licence number"
+                        description="Trade licence, commercial registration or company number."
+                    />
                     <IconField
                         {...bind('expiry_date')}
-                        label="Licence expiry"
+                        label="Registration expiry"
                         icon={CalendarClockIcon}
                         type="date"
                         optional
-                        description="You are reminded 90 days before it expires."
+                        description="If it expires, you are reminded 90 days before."
                     />
                     <IconField
                         {...bind('tax_registration_number')}
-                        label="Tax registration number (TRN)"
+                        label="Tax registration number"
                         icon={ReceiptTextIcon}
                         optional
-                        inputMode="numeric"
-                        maxLength={15}
-                        placeholder="15 digits"
-                        className="tabular-nums"
+                        autoCapitalize="characters"
+                        maxLength={50}
+                        placeholder="VAT, GST or tax ID"
+                        description="Shown on your invoices, if you are registered for tax."
                     />
                 </div>
             </FieldSection>
@@ -61,7 +75,15 @@ export default function CompanyStep({ bind, onCountryChange }) {
                         placeholder="info@company.com"
                         description="Your workspace summary is sent here."
                     />
-                    <IconField {...bind('phone')} label="Company phone" icon={PhoneIcon} type="tel" autoComplete="tel" placeholder="+971 4 321 7788" />
+                    <IconField
+                        {...bind('phone')}
+                        label="Company phone"
+                        icon={PhoneIcon}
+                        type="tel"
+                        autoComplete="tel"
+                        placeholder="+ country code and number"
+                        description="Include the country code."
+                    />
                     <IconField
                         {...bind('website')}
                         label="Website"
@@ -77,15 +99,23 @@ export default function CompanyStep({ bind, onCountryChange }) {
 
             <FieldSection icon={MapPinIcon} title="Location" description="Sets your suggested currency and time zone.">
                 <div className="grid gap-5 sm:grid-cols-2">
-                    <IconSelect {...country} onChange={onCountryChange} label="Country" icon={GlobeIcon} items={COUNTRY_ITEMS} placeholder="Choose a country" />
-                    <IconField {...bind('city')} label="City" icon={MapPinnedIcon} optional autoComplete="address-level2" placeholder="Dubai" />
+                    <IconCombobox
+                        {...bind('country_code')}
+                        onChange={onCountryChange}
+                        label="Country"
+                        icon={GlobeIcon}
+                        items={countryItems}
+                        placeholder="Search for your country"
+                        emptyText="No country matches that search."
+                    />
+                    <IconField {...bind('city')} label="City" icon={MapPinnedIcon} optional autoComplete="address-level2" placeholder="City" />
                     <IconField
                         {...bind('address_line_1')}
                         label="Office address"
                         icon={MapPinIcon}
                         optional
                         autoComplete="address-line1"
-                        placeholder="Office 1204, Opal Tower, Business Bay"
+                        placeholder="Street, building and suite"
                         className="sm:col-span-2"
                     />
                 </div>

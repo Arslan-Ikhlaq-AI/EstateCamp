@@ -1,9 +1,12 @@
 import InputIcon from '@/Components/InputIcon';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, useComboboxAnchor } from '@/components/ui/combobox';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { passwordStrength } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
-import { CircleCheckIcon } from 'lucide-react';
+import { CircleCheckIcon, EyeIcon, EyeOffIcon, LockKeyholeIcon, WandSparklesIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 /**
  * A field's label, with "Optional" set quietly beside it.
@@ -62,6 +65,94 @@ export function IconField({ id, label, icon, value, onChange, error, description
     );
 }
 
+const STRENGTHS = [
+    { label: 'At least 8 characters', bar: 'bg-muted' },
+    { label: 'Weak', bar: 'bg-destructive' },
+    { label: 'Fair', bar: 'bg-warning' },
+    { label: 'Good', bar: 'bg-brand-cyan' },
+    { label: 'Strong', bar: 'bg-success' },
+];
+
+/**
+ * Four bars and a word for how strong the password looks.
+ */
+function StrengthMeter({ value }) {
+    const score = passwordStrength(value);
+    const { label, bar } = STRENGTHS[score];
+
+    return (
+        <div className="flex items-center gap-3" aria-live="polite">
+            <div className="grid flex-1 grid-cols-4 gap-1" aria-hidden="true">
+                {[1, 2, 3, 4].map((level) => (
+                    <span key={level} className={cn('h-1.5 rounded-full transition-colors duration-300', level <= score ? bar : 'bg-muted')} />
+                ))}
+            </div>
+            <span className={cn('min-w-24 text-end text-xs font-semibold', score === 0 ? 'text-muted-foreground' : 'text-foreground')}>
+                <span className="sr-only">Password strength: </span>
+                {label}
+            </span>
+        </div>
+    );
+}
+
+/**
+ * A password input with show and hide, and a button that fills in a
+ * generated password (and shows it, so it can be read or copied).
+ */
+export function PasswordField({ id, label, value, onChange, onBlur, error, description, optional, valid, placeholder, onGenerate, showStrength = false, autoComplete = 'new-password', className }) {
+    const [isVisible, setIsVisible] = useState(false);
+
+    return (
+        <Field data-invalid={error ? true : undefined} className={className}>
+            <Label id={id} label={label} optional={optional} />
+            <InputGroup className="h-11 bg-white">
+                <InputGroupInput
+                    id={id}
+                    name={id}
+                    type={isVisible ? 'text' : 'password'}
+                    value={value ?? ''}
+                    onChange={(event) => onChange(event.target.value)}
+                    onBlur={onBlur}
+                    autoComplete={autoComplete}
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    placeholder={placeholder}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={describedBy(id, { description, error })}
+                    className={cn('placeholder:text-muted-foreground/55', isVisible && value && 'font-mono tracking-wide')}
+                />
+                <InputIcon icon={LockKeyholeIcon} />
+                <InputGroupAddon align="inline-end" className="gap-1 pe-1.5">
+                    {valid && !error && <CircleCheckIcon className="me-1 text-success motion-safe:animate-in motion-safe:zoom-in-50" aria-hidden="true" />}
+                    {onGenerate && (
+                        <InputGroupButton
+                            size="xs"
+                            className="font-semibold text-brand-ink"
+                            onClick={() => {
+                                onGenerate();
+                                setIsVisible(true);
+                            }}
+                        >
+                            <WandSparklesIcon /> Generate
+                        </InputGroupButton>
+                    )}
+                    <InputGroupButton
+                        size="icon-xs"
+                        aria-label={isVisible ? 'Hide password' : 'Show password'}
+                        aria-pressed={isVisible}
+                        aria-controls={id}
+                        onClick={() => setIsVisible((visible) => !visible)}
+                    >
+                        {isVisible ? <EyeOffIcon /> : <EyeIcon />}
+                    </InputGroupButton>
+                </InputGroupAddon>
+            </InputGroup>
+            {showStrength && value && <StrengthMeter value={value} />}
+            <Hint id={id} description={description} error={error} />
+        </Field>
+    );
+}
+
 /**
  * A dropdown with a leading icon. `items` are `{ value, label, hint? }`;
  * a hint is shown beside its label in the list.
@@ -93,6 +184,60 @@ export function IconSelect({ id, label, icon: Icon, value, onChange, items, erro
                     </SelectGroup>
                 </SelectContent>
             </Select>
+            <Hint id={id} description={description} error={error} />
+        </Field>
+    );
+}
+
+// Matches what was typed against an item's label, value, hint and other names, ignoring case.
+const matchesQuery = (item, query) => [item.label, item.value, item.hint, item.keywords].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase());
+
+/**
+ * A searchable list with a leading icon, for choices too long to scroll:
+ * countries, currencies, time zones. `items` are `{ value, label, hint?,
+ * keywords? }`; typing matches any of them.
+ */
+export function IconCombobox({ id, label, icon, value, onChange, items, error, description, optional, placeholder, emptyText = 'Nothing matches that search.', className }) {
+    const selected = useMemo(() => items.find((item) => item.value === value) ?? null, [items, value]);
+    // The list opens under the whole field, not under its chevron button.
+    const anchor = useComboboxAnchor();
+
+    return (
+        <Field data-invalid={error ? true : undefined} className={className}>
+            <Label id={id} label={label} optional={optional} />
+            <Combobox
+                items={items}
+                value={selected}
+                onValueChange={(item) => onChange(item?.value ?? '')}
+                itemToStringLabel={(item) => item.label}
+                isItemEqualToValue={(item, current) => item.value === current.value}
+                filter={matchesQuery}
+                autoHighlight
+            >
+                <div ref={anchor}>
+                    <ComboboxInput
+                        id={id}
+                        placeholder={placeholder}
+                        className="h-11 w-full bg-white"
+                        inputClassName="placeholder:text-muted-foreground/55"
+                        aria-invalid={Boolean(error)}
+                        aria-describedby={describedBy(id, { description, error })}
+                    >
+                        {icon && <InputIcon icon={icon} />}
+                    </ComboboxInput>
+                </div>
+                <ComboboxContent anchor={anchor}>
+                    <ComboboxEmpty>{emptyText}</ComboboxEmpty>
+                    <ComboboxList>
+                        {(item) => (
+                            <ComboboxItem key={item.value} value={item}>
+                                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                                {item.hint && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{item.hint}</span>}
+                            </ComboboxItem>
+                        )}
+                    </ComboboxList>
+                </ComboboxContent>
+            </Combobox>
             <Hint id={id} description={description} error={error} />
         </Field>
     );

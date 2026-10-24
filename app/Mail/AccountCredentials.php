@@ -12,15 +12,15 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * A new user's sign-in details: their workspace, email, role and the
- * password generated for them. Encrypted while it waits on the queue, so
- * the password is never stored in plain text.
+ * A new user's sign-in details: their workspace, email, role and password,
+ * whether it was chosen at sign-up or generated. Encrypted while it waits
+ * on the queue, so the password is never stored in plain text.
  */
 class AccountCredentials extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public User $user, public string $password) {}
+    public function __construct(public User $user, public string $password, public bool $isGenerated = true) {}
 
     /**
      * Get the message envelope.

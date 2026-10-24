@@ -21,6 +21,8 @@
 @endsection
 
 @section('content')
+    @include('mail.partials.company')
+
     <p style="margin: 0 0 16px;">Welcome aboard,</p>
     <p style="margin: 0 0 26px;">
         Your {{ config('app.name') }} workspace for <strong style="color: #0b1238;">{{ $company->legal_name ?: $company->name }}</strong> is set up and ready to use.
@@ -39,6 +41,9 @@
                     @include('mail.partials.detail-row', ['label' => 'Currency', 'value' => $company->default_currency])
                     @include('mail.partials.detail-row', ['label' => 'Time zone', 'value' => str_replace('_', ' ', $company->timezone)])
                     @include('mail.partials.detail-row', ['label' => 'Super admin', 'value' => $company->contact_person_name])
+                    @if ($company->terms_accepted_at)
+                        @include('mail.partials.detail-row', ['label' => 'Terms accepted', 'value' => 'Version '.$company->terms_version.', on '.$company->terms_accepted_at->timezone($company->timezone)->format('j M Y, H:i'), 'href' => route('terms')])
+                    @endif
                 </table>
             </td>
         </tr>

@@ -2,7 +2,7 @@ import InputIcon from '@/Components/InputIcon';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
-import { COUNTRIES, countryName, currencyName, timezoneLabel } from '@/lib/onboarding';
+import { countryName, currencyName, timezoneLabel, zoneDetails } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
 import {
     Building2Icon,
@@ -19,7 +19,7 @@ import {
     WrenchIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
-import { FieldSection, IconSelect } from './OnboardingFields';
+import { FieldSection, IconCombobox } from './OnboardingFields';
 
 const BUSINESS_DETAILS = {
     staff_accommodation: { icon: TentIcon, description: 'Labour camps, staff housing and bed spaces.' },
@@ -28,8 +28,6 @@ const BUSINESS_DETAILS = {
     real_estate: { icon: KeyRoundIcon, description: 'Leasing, brokerage and tenant contracts.' },
     owner_landlord: { icon: LandmarkIcon, description: 'Your own portfolio of buildings and units.' },
 };
-
-const localTime = (timeZone) => new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date());
 
 /**
  * What the company does, as one card per kind of business.
@@ -153,11 +151,24 @@ function WorkspaceAddress({ host, slug, onChange, error, isChecking, isAvailable
 /**
  * Step 2: the kind of business, the workspace address and the regional settings.
  */
-export default function WorkspaceStep({ form, bind, businessTypes, currencies, timezones, host, onSlugChange }) {
-    const suggested = COUNTRIES.find(({ code }) => code === form.data.country_code);
+export default function WorkspaceStep({ form, bind, businessTypes, countries, currencies, timezones, host, onSlugChange }) {
+    const country = countries.find(({ code }) => code === form.data.country_code);
+    const countryLabel = country ? countryName(country.code) : null;
 
-    const currencyItems = useMemo(() => currencies.map((code) => ({ value: code, label: code, hint: currencyName(code) })), [currencies]);
-    const timezoneItems = useMemo(() => timezones.map((zone) => ({ value: zone, label: timezoneLabel(zone), hint: localTime(zone) })), [timezones]);
+    // The country's own currency and time zones come first; everything else follows.
+    const currencyItems = useMemo(
+        () =>
+            [...new Set([country?.currency, ...currencies].filter(Boolean))].map((code) => ({
+                value: code,
+                label: code,
+                hint: currencyName(code),
+            })),
+        [country, currencies],
+    );
+    const timezoneItems = useMemo(
+        () => [...new Set([...(country?.timezones ?? []), ...timezones])].map((zone) => ({ value: zone, label: timezoneLabel(zone), hint: zoneDetails(zone) })),
+        [country, timezones],
+    );
 
     return (
         <div className="flex flex-col gap-10">
@@ -178,19 +189,23 @@ export default function WorkspaceStep({ form, bind, businessTypes, currencies, t
 
             <FieldSection icon={SlidersHorizontalIcon} title="Regional settings" description="Every amount and date in your workspace follows these.">
                 <div className="grid gap-5 sm:grid-cols-2">
-                    <IconSelect
+                    <IconCombobox
                         {...bind('default_currency')}
                         label="Currency"
                         icon={CoinsIcon}
                         items={currencyItems}
-                        description={suggested?.currency === form.data.default_currency ? `Suggested for ${countryName(suggested.code)}.` : 'Used for rents, invoices and payroll.'}
+                        placeholder="Search by code or name"
+                        emptyText="No currency matches that search."
+                        description={country?.currency && country.currency === form.data.default_currency ? `The currency of ${countryLabel}.` : 'Used for rents, invoices and payroll.'}
                     />
-                    <IconSelect
+                    <IconCombobox
                         {...bind('timezone')}
                         label="Time zone"
                         icon={Clock3Icon}
                         items={timezoneItems}
-                        description={suggested?.timezone === form.data.timezone ? `Suggested for ${countryName(suggested.code)}.` : 'Sets when each working day starts.'}
+                        placeholder="Search by city or region"
+                        emptyText="No time zone matches that search."
+                        description={country?.timezones.includes(form.data.timezone) ? `A time zone in ${countryLabel}.` : 'Sets when each working day starts.'}
                     />
                 </div>
                 <p className="rounded-xl bg-muted/70 px-4 py-3 text-[0.8125rem] text-muted-foreground">

@@ -20,6 +20,7 @@ import {
     StatusBadge,
 } from './PropertyBadges';
 import PropertyActions from './PropertyActions';
+import RoomOccupancyCounts from './RoomOccupancy';
 
 /**
  * Table columns in display order. `sort` is the server sort key a header
@@ -31,13 +32,13 @@ export const TABLE_COLUMNS = [
     { id: 'type' },
     { id: 'ownership', sort: 'lease_end' },
     { id: 'occupancy', sort: 'occupancy' },
-    { id: 'rooms', sort: 'rooms', align: 'end' },
+    { id: 'roomOccupancy', sort: 'rooms' },
     { id: 'rentRoll', sort: 'rent_roll', align: 'end' },
     { id: 'compliance' },
     { id: 'status' },
 ];
 
-export const DEFAULT_HIDDEN_COLUMNS = ['type', 'rooms'];
+export const DEFAULT_HIDDEN_COLUMNS = ['type'];
 
 // Solid equivalents of the header and hover tints, so the pinned actions
 // column matches the row it sits on while the rest of the table scrolls under it.
@@ -132,7 +133,7 @@ function OccupancyCell({ beds }) {
 }
 
 function Cell({ column, property, currency }) {
-    const { tOr, formatNumber, formatCurrency } = useTranslation();
+    const { tOr, formatCurrency } = useTranslation();
 
     switch (column.id) {
         case 'property':
@@ -162,8 +163,8 @@ function Cell({ column, property, currency }) {
             );
         case 'occupancy':
             return <OccupancyCell beds={property.beds} />;
-        case 'rooms':
-            return <span className="tabular-nums">{formatNumber(property.rooms)}</span>;
+        case 'roomOccupancy':
+            return <RoomOccupancyCounts rooms={property.roomOccupancy} className="flex-nowrap" />;
         case 'rentRoll':
             return (
                 <span className="font-bold tabular-nums">

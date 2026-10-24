@@ -71,8 +71,9 @@ class Property extends Model
     /**
      * Add room and bed totals from the property's rooms: `rooms_count`,
      * `beds_total`, `beds_occupied`, `beds_available` (free beds in active
-     * rooms) and `rent_roll` (occupied beds at their room's bed rate). The sums
-     * are null for a property without rooms.
+     * rooms), `rent_roll` (occupied beds at their room's bed rate), and
+     * `full_rooms_count` and `empty_rooms_count` (rooms with every bed taken,
+     * and with nobody in them). The sums are null for a property without rooms.
      *
      * @param  Builder<Property>  $query
      */
@@ -80,7 +81,11 @@ class Property extends Model
     protected function withOccupancy(Builder $query): void
     {
         $query
-            ->withCount('rooms')
+            ->withCount([
+                'rooms',
+                'rooms as full_rooms_count' => fn (Builder $rooms) => $rooms->whereColumn('occupied_count', '>=', 'capacity'),
+                'rooms as empty_rooms_count' => fn (Builder $rooms) => $rooms->where('occupied_count', 0),
+            ])
             ->withSum('rooms as beds_total', 'capacity')
             ->withSum('rooms as beds_occupied', 'occupied_count')
             ->withSum(

@@ -42,6 +42,7 @@ describe('for the seeded demo company', function () {
                 ->where('properties.data.0.typeSlug', 'worker_accommodation')
                 ->where('properties.data.0.ownership', 'owned')
                 ->where('properties.data.0.rooms', 5)
+                ->where('properties.data.0.roomOccupancy', ['full' => 2, 'partial' => 2, 'empty' => 1])
                 ->where('properties.data.0.beds', [
                     'total' => 30,
                     'occupied' => 22,
@@ -53,6 +54,7 @@ describe('for the seeded demo company', function () {
                 ->where('properties.data.0.documents', ['total' => 3, 'expiring' => 1, 'expired' => 0])
                 ->where('properties.data.1.name', 'Jebel Ali Staff Residence')
                 ->where('properties.data.1.leaseEndsOn', '2028-12-31')
+                ->where('properties.data.1.roomOccupancy', ['full' => 3, 'partial' => 1, 'empty' => 1])
                 ->where('properties.data.1.rentRoll', 6500)
             );
     });
@@ -67,10 +69,9 @@ describe('for the seeded demo company', function () {
                 ->where('summary.owned', 1)
                 ->where('summary.leased', 1)
                 ->where('summary.rooms', 10)
+                ->where('summary.roomOccupancy', ['full' => 5, 'partial' => 3, 'empty' => 2])
                 ->where('summary.beds.occupancyRate', 87.1)
                 ->where('summary.rentRoll', 17450)
-                ->where('summary.leasesEndingSoon', 0)
-                ->where('summary.documentsNeedingAttention', 1)
             );
     });
 

@@ -350,10 +350,7 @@ export const translations = {
                 occupancyDetail: '{occupied} of {total} beds in service',
                 rentRoll: 'Monthly rent roll',
                 rentRollDetail: { one: 'Across {count} room', other: 'Across {count} rooms' },
-                attention: 'Needs attention',
-                documents: { one: '{count} document to renew', other: '{count} documents to renew' },
-                leases: { one: '{count} lease ending', other: '{count} leases ending' },
-                allClear: 'Documents and leases are in order',
+                rooms: 'Rooms',
             },
             toolbar: {
                 search: 'Search name, code or area…',
@@ -398,7 +395,7 @@ export const translations = {
                 type: 'Type',
                 ownership: 'Ownership',
                 occupancy: 'Occupancy',
-                rooms: 'Rooms',
+                roomOccupancy: 'Rooms',
                 rentRoll: 'Rent roll',
                 compliance: 'Compliance',
                 status: 'Status',
@@ -428,6 +425,13 @@ export const translations = {
             occupancy: {
                 beds: '{occupied} / {total} beds',
                 noBeds: 'No beds yet',
+            },
+            roomOccupancy: {
+                full: 'Full',
+                partial: 'Partial',
+                empty: 'Empty',
+                summary: '{full} full, {partial} partial and {empty} empty rooms',
+                none: 'No rooms yet',
             },
             card: {
                 rooms: 'Rooms',
@@ -2133,10 +2137,7 @@ export const translations = {
                 occupancyDetail: '{occupied} من أصل {total} من الأسرّة العاملة',
                 rentRoll: 'الإيجارات الشهرية',
                 rentRollDetail: { zero: 'لا توجد غرف', one: 'في غرفة واحدة', two: 'في غرفتين', few: 'في {count} غرف', many: 'في {count} غرفة', other: 'في {count} غرفة' },
-                attention: 'يحتاج إلى متابعة',
-                documents: { zero: 'لا توجد مستندات للتجديد', one: 'مستند واحد للتجديد', two: 'مستندان للتجديد', few: '{count} مستندات للتجديد', many: '{count} مستندًا للتجديد', other: '{count} مستند للتجديد' },
-                leases: { zero: 'لا توجد عقود تنتهي', one: 'عقد إيجار واحد ينتهي', two: 'عقدا إيجار ينتهيان', few: '{count} عقود إيجار تنتهي', many: '{count} عقدًا ينتهي', other: '{count} عقد ينتهي' },
-                allClear: 'المستندات وعقود الإيجار سليمة',
+                rooms: 'الغرف',
             },
             toolbar: {
                 search: 'ابحث بالاسم أو الرمز أو المنطقة…',
@@ -2181,7 +2182,7 @@ export const translations = {
                 type: 'النوع',
                 ownership: 'الملكية',
                 occupancy: 'الإشغال',
-                rooms: 'الغرف',
+                roomOccupancy: 'الغرف',
                 rentRoll: 'الإيجارات',
                 compliance: 'الامتثال',
                 status: 'الحالة',
@@ -2211,6 +2212,13 @@ export const translations = {
             occupancy: {
                 beds: '{occupied} / {total} سرير',
                 noBeds: 'لا توجد أسرّة بعد',
+            },
+            roomOccupancy: {
+                full: 'ممتلئة',
+                partial: 'جزئية',
+                empty: 'فارغة',
+                summary: 'الغرف الممتلئة: {full}، الجزئية: {partial}، الفارغة: {empty}',
+                none: 'لا توجد غرف بعد',
             },
             card: {
                 rooms: 'الغرف',

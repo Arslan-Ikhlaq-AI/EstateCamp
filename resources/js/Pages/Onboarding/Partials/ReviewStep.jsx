@@ -2,9 +2,12 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { countryName, STEPS, timezoneLabel } from '@/lib/onboarding';
+import { formatTermsDate } from '@/lib/terms';
 import { cn } from '@/lib/utils';
-import { CrownIcon, KeyRoundIcon, MailCheckIcon, PencilIcon, ShieldCheckIcon, SparklesIcon } from 'lucide-react';
+import { BookOpenIcon, CrownIcon, KeyRoundIcon, MailCheckIcon, PencilIcon, ScaleIcon, ShieldCheckIcon, SparklesIcon } from 'lucide-react';
+import { useState } from 'react';
 import { PersonAvatar, ROLE_ICONS } from './TeamStep';
+import TermsDialog from './TermsDialog';
 
 /**
  * One step's answers, with a button back to that step.
@@ -48,28 +51,42 @@ function Details({ items }) {
 
 const NEXT_STEPS = [
     { icon: SparklesIcon, title: 'Your workspace is created', description: 'With your company profile, regional settings and roles.' },
-    { icon: KeyRoundIcon, title: 'Everyone gets their sign-in', description: 'Each person receives their own email with a temporary password.' },
+    { icon: KeyRoundIcon, title: 'Everyone gets their sign-in', description: 'Each person receives their own email with their workspace link and password.' },
     { icon: MailCheckIcon, title: 'A summary goes to the company', description: 'Your company email gets the workspace details for your records.' },
 ];
 
 /**
  * Step 4: everything entered, what launching does, and the terms.
  */
-export default function ReviewStep({ form, host, businessTypes, roles, onEdit }) {
+export default function ReviewStep({ form, host, businessTypes, roles, logoPreview, termsVersion, onEdit }) {
     const { data } = form;
+    const [isReadingTerms, setIsReadingTerms] = useState(false);
+
+    const acceptTerms = (isAccepted) => {
+        form.setData('terms', isAccepted);
+        form.clearErrors('terms');
+    };
     const businessType = businessTypes.find((type) => type.value === data.business_type)?.label;
     const roleName = (value) => roles.find((role) => role.value === value)?.name;
-    const people = [{ name: data.admin_name, email: data.admin_email, role: 'super_admin', isOwner: true }, ...data.team];
+    const people = [{ name: data.admin_name, email: data.admin_email, role: 'super_admin', password: data.admin_password }, ...data.team];
 
     return (
         <div className="flex flex-col gap-5">
             <SummaryCard step={0} onEdit={onEdit}>
+                <div className="mb-4 flex items-center gap-4 border-b pb-4">
+                    <span className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[conic-gradient(#eef1f6_25%,#fff_0_50%,#eef1f6_0_75%,#fff_0)] bg-size-[14px_14px] ring-1 ring-border">
+                        {logoPreview && <img src={logoPreview} alt={`${data.name} logo`} className="size-full object-contain p-2" />}
+                    </span>
+                    <div className="flex min-w-0 flex-col">
+                        <span className="truncate text-base font-bold tracking-tight">{data.name}</span>
+                        {businessType && <span className="truncate text-[0.8125rem] text-muted-foreground">{businessType}</span>}
+                    </div>
+                </div>
                 <Details
                     items={[
-                        ['Company', data.name, true],
                         ['Legal name', data.legal_name],
-                        ['Trade licence', [data.trade_license_number, data.expiry_date && `expires ${new Date(`${data.expiry_date}T00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`].filter(Boolean).join(', ')],
-                        ['TRN', data.tax_registration_number],
+                        ['Registration', [data.trade_license_number, data.expiry_date && `expires ${new Date(`${data.expiry_date}T00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`].filter(Boolean).join(', ')],
+                        ['Tax number', data.tax_registration_number],
                         ['Email', data.email],
                         ['Phone', data.phone],
                         ['Website', data.website],
@@ -99,7 +116,9 @@ export default function ReviewStep({ form, host, businessTypes, roles, onEdit })
                                 <PersonAvatar name={person.name} isOwner={index === 0} className="size-9 text-xs" />
                                 <div className="flex min-w-0 flex-1 flex-col">
                                     <span className="truncate text-sm font-bold">{person.name}</span>
-                                    <span className="truncate text-[0.8125rem] text-muted-foreground">{person.email}</span>
+                                    <span className="truncate text-[0.8125rem] text-muted-foreground">
+                                        {person.email} · {person.password ? 'password set' : 'password created at launch'}
+                                    </span>
                                 </div>
                                 <span
                                     className={cn(
@@ -140,25 +159,67 @@ export default function ReviewStep({ form, host, businessTypes, roles, onEdit })
                 </ol>
             </section>
 
-            <Field orientation="horizontal" data-invalid={form.errors.terms ? true : undefined} className="items-start rounded-2xl border bg-white p-4">
-                <Checkbox
-                    id="terms"
-                    checked={data.terms}
-                    onCheckedChange={(checked) => {
-                        form.setData('terms', checked);
-                        form.clearErrors('terms');
-                    }}
-                    aria-invalid={Boolean(form.errors.terms)}
-                    aria-describedby={form.errors.terms ? 'terms-error' : undefined}
-                    className="mt-0.5 size-5"
-                />
-                <div className="flex flex-col gap-1">
-                    <FieldLabel htmlFor="terms" className="text-sm leading-relaxed font-medium">
-                        I am authorised to register {data.name.trim() || 'this company'} and agree to the EstateCamp terms of service and privacy policy.
-                    </FieldLabel>
-                    {form.errors.terms && <FieldError id="terms-error">{form.errors.terms}</FieldError>}
+            <section aria-labelledby="terms-heading" className="flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-xs">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="flex flex-1 items-start gap-3.5">
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-cyan/10 text-brand-ink ring-1 ring-brand-cyan/20">
+                            <ScaleIcon className="size-4.5" aria-hidden="true" />
+                        </span>
+                        <div className="flex flex-col gap-0.5">
+                            <h2 id="terms-heading" className="text-[0.95rem] font-bold tracking-tight">
+                                Terms of Service
+                            </h2>
+                            <p className="text-[0.8125rem] leading-snug text-muted-foreground">
+                                Version {termsVersion}, effective {formatTermsDate(termsVersion)}. Covers your workspace and accounts, your data, and how the personal data of tenants and staff is handled.
+                            </p>
+                        </div>
+                    </div>
+                    <Button id="terms_version" type="button" variant="outline" className="shrink-0" onClick={() => setIsReadingTerms(true)}>
+                        <BookOpenIcon data-icon="inline-start" /> Read terms
+                    </Button>
                 </div>
-            </Field>
+
+                <Field
+                    orientation="horizontal"
+                    data-invalid={form.errors.terms || form.errors.terms_version ? true : undefined}
+                    className={cn('items-start rounded-xl p-3.5 transition-colors', data.terms ? 'bg-success/[0.06] ring-1 ring-success/20' : 'bg-muted/60')}
+                >
+                    <Checkbox
+                        id="terms"
+                        checked={data.terms}
+                        onCheckedChange={acceptTerms}
+                        aria-required="true"
+                        aria-invalid={Boolean(form.errors.terms)}
+                        aria-describedby={form.errors.terms ? 'terms-error' : undefined}
+                        className="mt-0.5 size-5"
+                    />
+                    <div className="flex flex-col gap-1">
+                        <FieldLabel htmlFor="terms" className="block text-sm leading-relaxed font-medium">
+                            I am authorised to register {data.name.trim() || 'this company'} and accept the EstateCamp{' '}
+                            <button
+                                type="button"
+                                onClick={() => setIsReadingTerms(true)}
+                                className="rounded-sm font-semibold text-brand-ink underline decoration-brand-cyan/40 underline-offset-4 outline-none hover:decoration-brand-cyan focus-visible:ring-3 focus-visible:ring-ring/50"
+                            >
+                                Terms of Service
+                            </button>
+                            , including how personal data is handled.
+                        </FieldLabel>
+                        {form.errors.terms && <FieldError id="terms-error">{form.errors.terms}</FieldError>}
+                        {form.errors.terms_version && <FieldError>{form.errors.terms_version}</FieldError>}
+                    </div>
+                </Field>
+            </section>
+
+            <TermsDialog
+                open={isReadingTerms}
+                onOpenChange={setIsReadingTerms}
+                version={termsVersion}
+                onAccept={() => {
+                    acceptTerms(true);
+                    setIsReadingTerms(false);
+                }}
+            />
         </div>
     );
 }

@@ -1,12 +1,7 @@
 import StatCard from '@/Components/StatCard';
 import { useTranslation } from '@/hooks/use-translation';
-import {
-    BanknoteIcon,
-    BedDoubleIcon,
-    Building2Icon,
-    ShieldAlertIcon,
-    ShieldCheckIcon,
-} from 'lucide-react';
+import { BanknoteIcon, BedDoubleIcon, Building2Icon, DoorOpenIcon } from 'lucide-react';
+import { RoomOccupancyBar, RoomOccupancyLegend } from './RoomOccupancy';
 
 /**
  * Headline figures for the whole portfolio, unaffected by the list filters.
@@ -14,19 +9,6 @@ import {
 export default function PortfolioStats({ summary, currency }) {
     const { t, formatNumber, formatPercent, formatCurrency } = useTranslation();
     const { beds } = summary;
-    const attentionCount = summary.documentsNeedingAttention + summary.leasesEndingSoon;
-
-    const attentionDetail =
-        attentionCount === 0
-            ? t('properties.stats.allClear')
-            : [
-                  summary.documentsNeedingAttention > 0 &&
-                      t('properties.stats.documents', { count: summary.documentsNeedingAttention }),
-                  summary.leasesEndingSoon > 0 &&
-                      t('properties.stats.leases', { count: summary.leasesEndingSoon }),
-              ]
-                  .filter(Boolean)
-                  .join(' · ');
 
     return (
         <section
@@ -61,13 +43,10 @@ export default function PortfolioStats({ summary, currency }) {
                 value={formatCurrency(summary.rentRoll, currency)}
                 detail={t('properties.stats.rentRollDetail', { count: summary.rooms })}
             />
-            <StatCard
-                icon={attentionCount > 0 ? ShieldAlertIcon : ShieldCheckIcon}
-                tone={attentionCount > 0 ? 'warning' : 'success'}
-                label={t('properties.stats.attention')}
-                value={formatNumber(attentionCount)}
-                detail={attentionDetail}
-            />
+            <StatCard icon={DoorOpenIcon} label={t('properties.stats.rooms')} value={formatNumber(summary.rooms)}>
+                <RoomOccupancyBar rooms={summary.roomOccupancy} />
+                <RoomOccupancyLegend rooms={summary.roomOccupancy} />
+            </StatCard>
         </section>
     );
 }

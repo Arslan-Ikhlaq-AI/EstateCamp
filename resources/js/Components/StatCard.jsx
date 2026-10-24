@@ -19,11 +19,12 @@ const TONES = {
 
 /**
  * A headline figure with an icon, an optional meter, a line of detail and
- * an optional badge (such as a count that needs attention). With `href` the
- * whole tile links to the page behind the figure. The value keeps
- * proportional figures, which read tighter at display size.
+ * an optional badge (such as a count that needs attention). `children`, such
+ * as a breakdown chart, show under the meter. With `href` the whole tile
+ * links to the page behind the figure. The value keeps proportional figures,
+ * which read tighter at display size.
  */
-export default function StatCard({ icon: Icon, label, value, detail, meter, badge, href, tone = 'primary' }) {
+export default function StatCard({ icon: Icon, label, value, detail, meter, badge, href, tone = 'primary', children }) {
     const card = (
         <Card
             className={cn(
@@ -48,6 +49,7 @@ export default function StatCard({ icon: Icon, label, value, detail, meter, badg
                 <p className="truncate font-heading text-2xl font-bold tracking-tight sm:text-[1.875rem] sm:leading-9">{value}</p>
                 <div className="mt-auto flex flex-col gap-2.5">
                     {meter !== undefined && <Progress value={meter} aria-label={label} />}
+                    {children}
                     {(detail || badge) && (
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             {detail && <p className="text-[0.875rem] text-pretty text-muted-foreground">{detail}</p>}

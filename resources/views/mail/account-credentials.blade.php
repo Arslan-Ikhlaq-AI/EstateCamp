@@ -12,6 +12,8 @@
 @endsection
 
 @section('content')
+    @include('mail.partials.company')
+
     <p style="margin: 0 0 16px;">Hi {{ $user->name }},</p>
     <p style="margin: 0 0 26px;">
         {{ $company->name }} now runs on {{ config('app.name') }}, and you have been added as
@@ -30,7 +32,7 @@
         </tr>
         <tr>
             <td style="padding: 0 24px 24px;">
-                <p style="margin: 6px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #7a829e;">Temporary password</p>
+                <p style="margin: 6px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #7a829e;">{{ $isGenerated ? 'Temporary password' : 'Password' }}</p>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                         <td style="padding: 16px 18px; background-color: #ffffff; border: 1px dashed #1cb5e0; border-radius: 12px; font-family: 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace; font-size: 20px; font-weight: 700; letter-spacing: 0.12em; color: #000851;">{{ $password }}</td>
@@ -48,8 +50,12 @@
         <tr>
             <td style="padding: 16px 20px; font-size: 14px; line-height: 1.6; color: #6b4a00;">
                 <strong style="color: #8a5a00;">Keep your account safe.</strong>
-                Change this password after you first sign in: open your profile from the menu and choose <em>Update password</em>.
-                {{ config('app.name') }} will never ask for your password by email or phone.
+                @if ($isGenerated)
+                    This password was created for you. Change it after you first sign in: open your profile from the menu and choose <em>Update password</em>.
+                @else
+                    This is the password set when {{ $company->name }} signed up. You can change it any time from your profile, under <em>Update password</em>.
+                @endif
+                Delete this email once you have signed in. {{ config('app.name') }} will never ask for your password by email or phone.
             </td>
         </tr>
     </table>

@@ -18,7 +18,7 @@ function Stepper({ step, furthest, isComplete, onStepClick }) {
                 const canOpen = !isComplete && index <= furthest && index !== step;
 
                 return (
-                    <li key={key} className="relative flex gap-4 pb-6 last:pb-0">
+                    <li key={key} className="relative flex gap-4 pb-6 last:pb-0 [@media(max-height:52rem)]:pb-4 [@media(max-height:40rem)]:pb-3">
                         {index < STEPS.length - 1 && (
                             <span aria-hidden="true" className="absolute start-5 top-11 bottom-0 w-px -translate-x-1/2 bg-white/15 rtl:translate-x-1/2">
                                 <span className={cn('absolute inset-x-0 top-0 bg-brand-cyan transition-[height] duration-700 ease-out', isDone ? 'h-full' : 'h-0')} />
@@ -48,7 +48,7 @@ function Stepper({ step, furthest, isComplete, onStepClick }) {
                                     {label}
                                     {isDone && <span className="sr-only"> (done)</span>}
                                 </span>
-                                <span className="text-[0.8125rem] text-white/55">{summary}</span>
+                                <span className="text-[0.8125rem] text-white/55 [@media(max-height:52rem)]:hidden">{summary}</span>
                             </span>
                         </button>
                     </li>
@@ -61,7 +61,7 @@ function Stepper({ step, furthest, isComplete, onStepClick }) {
 /**
  * The workspace as it is being set up, updating with every answer.
  */
-function WorkspacePreview({ data, host, businessType }) {
+function WorkspacePreview({ data, host, businessType, logoPreview }) {
     const name = data.name.trim();
     const people = [data.admin_name, ...data.team.map((member) => member.name)];
     const chips = [
@@ -71,7 +71,7 @@ function WorkspacePreview({ data, host, businessType }) {
     ].filter((chip) => chip.label);
 
     return (
-        <figure aria-label="Workspace preview" className="flex flex-col gap-5 rounded-3xl bg-white/[0.07] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/12 backdrop-blur-md">
+        <figure aria-label="Workspace preview" className="flex flex-col gap-5 rounded-3xl bg-white/[0.07] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/12 backdrop-blur-md [@media(max-height:46rem)]:gap-4 [@media(max-height:46rem)]:p-4 [@media(max-height:36rem)]:hidden">
             <div className="flex items-center gap-3">
                 <span aria-hidden="true" className="flex gap-1.5">
                     <span className="size-2.5 rounded-full bg-white/20" />
@@ -87,8 +87,19 @@ function WorkspacePreview({ data, host, businessType }) {
             </div>
 
             <div className="flex items-center gap-3.5">
-                <span className="flex size-13 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-brand-cyan to-[#0b2a8a] text-lg font-bold text-white shadow-lg shadow-brand-cyan/20 ring-1 ring-white/25">
-                    {name ? getInitials(name) : <GlobeIcon className="size-5" aria-hidden="true" />}
+                <span
+                    className={cn(
+                        'flex size-13 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-lg font-bold text-white shadow-lg ring-1',
+                        logoPreview ? 'bg-white shadow-black/20 ring-white/40' : 'bg-linear-to-br from-brand-cyan to-[#0b2a8a] shadow-brand-cyan/20 ring-white/25',
+                    )}
+                >
+                    {logoPreview ? (
+                        <img src={logoPreview} alt="" className="size-full object-contain p-1.5 motion-safe:animate-in motion-safe:zoom-in-90" />
+                    ) : name ? (
+                        getInitials(name)
+                    ) : (
+                        <GlobeIcon className="size-5" aria-hidden="true" />
+                    )}
                 </span>
                 <div className="flex min-w-0 flex-col">
                     <span className={cn('truncate text-lg font-bold tracking-tight', !name && 'text-white/45')}>{name || 'Your company'}</span>
@@ -97,7 +108,7 @@ function WorkspacePreview({ data, host, businessType }) {
             </div>
 
             {chips.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 [@media(max-height:46rem)]:hidden">
                     {chips.map(({ icon: Icon, label }) => (
                         <span key={label} className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 text-xs font-semibold text-white/85 ring-1 ring-white/10">
                             <Icon className="size-3.5 text-brand-sun" aria-hidden="true" /> {label}
@@ -141,7 +152,7 @@ const FACTS = [
  * The navy panel beside the form on wide screens: what is being set up,
  * the steps, and a live preview of the workspace.
  */
-export default function OnboardingAside({ step, furthest, isComplete, onStepClick, data, host, businessType }) {
+export default function OnboardingAside({ step, furthest, isComplete, onStepClick, data, host, businessType, logoPreview }) {
     return (
         <aside className="dark relative isolate hidden flex-col overflow-hidden bg-brand-navy text-white lg:sticky lg:top-0 lg:flex lg:h-svh">
             <div aria-hidden="true" className="absolute inset-0 -z-10" style={{ '--mx': 0, '--my': 0 }}>
@@ -150,13 +161,13 @@ export default function OnboardingAside({ step, furthest, isComplete, onStepClic
                 <div className="absolute inset-0 bg-grain opacity-[0.09] mix-blend-overlay" />
             </div>
 
-            <header className="flex items-center px-8 pt-8 xl:px-12 xl:pt-10">
+            <header className="flex shrink-0 items-center px-8 pt-8 xl:px-12 xl:pt-10 [@media(max-height:46rem)]:pt-6">
                 <BrandLogo />
             </header>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto px-8 pt-8 pb-8 xl:px-12 xl:pb-10 [@media(min-height:62rem)]:pt-12">
+            <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-hidden px-8 pt-8 pb-8 xl:px-12 xl:pb-10 [@media(max-height:52rem)]:gap-6 [@media(max-height:46rem)]:pt-6 [@media(max-height:46rem)]:pb-6 [@media(min-height:62rem)]:pt-12">
                 <div className="flex flex-col gap-3">
-                    <h2 className="font-display text-[2.1rem] leading-[1.08] font-semibold tracking-tight text-balance xl:text-[2.5rem]">
+                    <h2 className="font-display text-[2.1rem] leading-[1.08] font-semibold tracking-tight text-balance [@media(max-height:52rem)]:text-[1.8rem] [@media(min-height:58rem)]:xl:text-[2.5rem] [@media(max-height:34rem)]:hidden">
                         Your company,{' '}
                         <span className="font-serif font-normal tracking-normal text-brand-sun italic">{isComplete ? 'up and running.' : 'live in minutes.'}</span>
                     </h2>
@@ -168,8 +179,8 @@ export default function OnboardingAside({ step, furthest, isComplete, onStepClic
                 <Stepper step={step} furthest={furthest} isComplete={isComplete} onStepClick={onStepClick} />
 
                 <div className="mt-auto flex flex-col gap-5">
-                    <WorkspacePreview data={data} host={host} businessType={businessType} />
-                    <ul className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-white/60">
+                    <WorkspacePreview data={data} host={host} businessType={businessType} logoPreview={logoPreview} />
+                    <ul className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-white/60 [@media(max-height:46rem)]:hidden">
                         {FACTS.map(({ icon: Icon, label }) => (
                             <li key={label} className="flex items-center gap-1.5">
                                 <Icon className="size-3.5 text-brand-cyan" aria-hidden="true" /> {label}

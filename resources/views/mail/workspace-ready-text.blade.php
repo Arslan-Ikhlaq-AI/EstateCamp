@@ -9,6 +9,9 @@ Business: {{ $businessType }}
 Currency: {{ $company->default_currency }}
 Time zone: {{ str_replace('_', ' ', $company->timezone) }}
 Super admin: {{ $company->contact_person_name }}
+@if ($company->terms_accepted_at)
+Terms of Service accepted: version {{ $company->terms_version }}, on {{ $company->terms_accepted_at->timezone($company->timezone)->format('j M Y, H:i') }} ({{ route('terms') }})
+@endif
 
 Who can sign in
 (Each person has their own email with their sign-in details. Passwords are never included in this summary.)

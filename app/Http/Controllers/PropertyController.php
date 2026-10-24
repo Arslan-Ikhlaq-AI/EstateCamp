@@ -38,11 +38,6 @@ class PropertyController extends Controller
     public const PER_PAGE_OPTIONS = [10, 25, 50];
 
     /**
-     * Leases ending within this many days count as "ending soon".
-     */
-    public const LEASE_WARNING_DAYS = 90;
-
-    /**
      * Columns matched by the search box.
      */
     private const SEARCHABLE_COLUMNS = ['name', 'code', 'area', 'city', 'building_name', 'makani_number'];
@@ -563,17 +558,9 @@ class PropertyController extends Controller
     private function summary(Company $company): array
     {
         $properties = $company->properties()
-            ->select(['properties.id', 'status', 'ownership_type', 'lease_end_date'])
+            ->select(['properties.id', 'status', 'ownership_type'])
             ->withOccupancy()
             ->get();
-
-        $today = today();
-
-        $documentsNeedingAttention = $company->properties()
-            ->join('property_documents', 'property_documents.property_id', '=', 'properties.id')
-            ->whereNull('property_documents.deleted_at')
-            ->whereDate('property_documents.expires_on', '<=', $today->copy()->addDays(DashboardController::EXPIRY_WARNING_DAYS))
-            ->count();
 
         return [
             'properties' => $properties->count(),
@@ -581,16 +568,17 @@ class PropertyController extends Controller
             'owned' => $properties->where('ownership_type', 'owned')->count(),
             'leased' => $properties->where('ownership_type', 'leased')->count(),
             'rooms' => (int) $properties->sum('rooms_count'),
+            'roomOccupancy' => Room::roomBreakdown(
+                (int) $properties->sum('rooms_count'),
+                (int) $properties->sum('full_rooms_count'),
+                (int) $properties->sum('empty_rooms_count'),
+            ),
             'beds' => Room::bedBreakdown(
                 (int) $properties->sum('beds_total'),
                 (int) $properties->sum('beds_occupied'),
                 (int) $properties->sum('beds_available'),
             ),
             'rentRoll' => (float) $properties->sum('rent_roll'),
-            'leasesEndingSoon' => $properties
-                ->filter(fn (Property $property) => $property->lease_end_date?->between($today, $today->copy()->addDays(self::LEASE_WARNING_DAYS)))
-                ->count(),
-            'documentsNeedingAttention' => $documentsNeedingAttention,
         ];
     }
 
@@ -621,6 +609,11 @@ class PropertyController extends Controller
             'leaseEndsOn' => $property->lease_end_date?->toDateString(),
             'leaseDaysLeft' => $property->lease_end_date === null ? null : (int) today()->diffInDays($property->lease_end_date, false),
             'rooms' => $property->rooms_count,
+            'roomOccupancy' => Room::roomBreakdown(
+                (int) $property->rooms_count,
+                (int) $property->full_rooms_count,
+                (int) $property->empty_rooms_count,
+            ),
             'beds' => Room::bedBreakdown(
                 (int) $property->beds_total,
                 (int) $property->beds_occupied,

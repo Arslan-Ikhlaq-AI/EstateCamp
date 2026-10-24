@@ -17,8 +17,7 @@ import {
 } from 'lucide-react';
 
 /**
- * Leases ending within this many days are flagged. Matches the server's
- * PropertyController::LEASE_WARNING_DAYS.
+ * Leases ending within this many days are flagged.
  */
 const LEASE_WARNING_DAYS = 90;
 

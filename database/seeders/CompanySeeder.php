@@ -51,6 +51,9 @@ class CompanySeeder extends Seeder
                 'postal_code' => '33478',
                 'country_code' => 'AE',
                 'expiry_date' => '2027-12-31',
+                'terms_version' => Company::TERMS_VERSION,
+                'terms_accepted_at' => '2026-10-16 09:00:00',
+                'terms_accepted_ip' => '127.0.0.1',
             ],
         );
     }

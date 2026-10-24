@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Company;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -44,7 +45,7 @@ class CompanyProfileRequest extends FormRequest
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
             'remove_logo' => ['boolean'],
             'trade_license_number' => ['nullable', 'string', 'max:100'],
-            'tax_registration_number' => ['nullable', 'digits:15'],
+            'tax_registration_number' => ['nullable', 'string', 'max:50', 'regex:'.Company::TAX_NUMBER_PATTERN],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
             'contact_person_name' => ['nullable', 'string', 'max:255'],

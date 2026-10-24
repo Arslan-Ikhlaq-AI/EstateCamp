@@ -6,9 +6,14 @@ Hi {{ $user->name }},
 
 Workspace: {{ $company->workspaceUrl() }}
 Email: {{ $user->email }}
-Temporary password: {{ $password }}
+{{ $isGenerated ? 'Temporary password' : 'Password' }}: {{ $password }}
 Role: {{ $role->name }}, {{ Str::lcfirst($role->description) }}
 
-Keep your account safe: change this password after you first sign in (open your profile from the menu and choose Update password). {{ config('app.name') }} will never ask for your password by email or phone.
+@if ($isGenerated)
+Keep your account safe: this password was created for you, so change it after you first sign in (open your profile from the menu and choose Update password).
+@else
+Keep your account safe: this is the password set when {{ $company->name }} signed up. You can change it any time from your profile (Update password).
+@endif
+Delete this email once you have signed in. {{ config('app.name') }} will never ask for your password by email or phone.
 
 Not expecting this? Let {{ $company->email }} know.
