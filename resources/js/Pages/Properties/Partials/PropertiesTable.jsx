@@ -12,7 +12,7 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, MapPinIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, LayoutPanelLeftIcon, MapPinIcon } from 'lucide-react';
 import {
     ComplianceBadge,
     LeaseNote,
@@ -214,7 +214,7 @@ export default function PropertiesTable({ properties, currency, query, onSort, h
                             </TableHead>
                         );
                     })}
-                    <TableHead className={cn('sticky end-0 w-12 pe-4 sm:pe-5 lg:pe-6', HEADER_BACKGROUND)}>
+                    <TableHead className={cn('sticky end-0 pe-4 sm:pe-5 lg:pe-6', HEADER_BACKGROUND)}>
                         <span className="sr-only">{t('properties.columns.actions')}</span>
                     </TableHead>
                 </TableRow>
@@ -236,7 +236,20 @@ export default function PropertiesTable({ properties, currency, query, onSort, h
                             </TableCell>
                         ))}
                         <TableCell className="sticky end-0 bg-card pe-4 text-end group-hover/row:bg-inherit sm:pe-5 lg:pe-6 before:pointer-events-none before:absolute before:inset-y-0 before:-start-4 before:w-4 before:bg-linear-to-l before:from-black/[0.04] before:to-transparent rtl:before:bg-linear-to-r dark:before:from-black/30">
-                            <PropertyActions property={property} />
+                            <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    nativeButton={false}
+                                    render={<Link href={route('properties.allocation', property.id)} />}
+                                    aria-label={`${t('properties.actions.allocation')}: ${property.name}`}
+                                    className="whitespace-nowrap"
+                                >
+                                    <LayoutPanelLeftIcon data-icon="inline-start" className="text-brand-ink" />
+                                    {t('properties.actions.allocation')}
+                                </Button>
+                                <PropertyActions property={property} />
+                            </div>
                         </TableCell>
                     </TableRow>
                 ))}

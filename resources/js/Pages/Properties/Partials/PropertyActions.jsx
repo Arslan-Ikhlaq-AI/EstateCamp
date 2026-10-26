@@ -16,6 +16,7 @@ import {
     CopyIcon,
     DoorOpenIcon,
     FileTextIcon,
+    LayoutPanelLeftIcon,
     MapPinnedIcon,
     MoreHorizontalIcon,
     EyeIcon,
@@ -70,6 +71,10 @@ export default function PropertyActions({ property, onImage = false }) {
                     <DropdownMenuItem render={<Link href={route('properties.edit', property.id)} />}>
                         <PencilIcon />
                         {t('properties.actions.edit')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem render={<Link href={route('properties.allocation', property.id)} />}>
+                        <LayoutPanelLeftIcon />
+                        {t('properties.actions.allocation')}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                         render={<Link href={route('rooms.index', { properties: [property.code] })} />}
