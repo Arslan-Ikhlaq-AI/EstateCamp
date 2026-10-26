@@ -60,7 +60,7 @@ class HeadLeaseController extends Controller
                 ->paginate($filters['perPage'])
                 ->withQueryString()
                 ->through(fn (HeadLease $lease) => [
-                    ...$this->leaseDetails($lease),
+                    ...self::leaseDetails($lease),
                     'paidAmount' => (float) $lease->paid_amount,
                     'nextDueDate' => $lease->next_due_date ? substr($lease->next_due_date, 0, 10) : null,
                 ]),
@@ -160,7 +160,7 @@ class HeadLeaseController extends Controller
         return Inertia::render('HeadLeases/Show', [
             'currency' => $headLease->company->default_currency,
             'lease' => [
-                ...$this->leaseDetails($headLease),
+                ...self::leaseDetails($headLease),
                 'securityDeposit' => $headLease->security_deposit === null ? null : (float) $headLease->security_deposit,
                 'noticePeriodDays' => $headLease->notice_period_days,
                 'notes' => $headLease->notes,
@@ -370,7 +370,7 @@ class HeadLeaseController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function leaseDetails(HeadLease $lease): array
+    public static function leaseDetails(HeadLease $lease): array
     {
         return [
             'id' => $lease->id,

@@ -59,6 +59,7 @@ class PropertyController extends Controller
         $query = $this->filteredQuery($company, $filters)
             ->with(['propertyType:id,name,slug', 'landlord:id,name'])
             ->withOccupancy()
+            ->withUnitOccupancy()
             ->withCount($this->documentCounts());
 
         $this->applySort($query, $filters);
@@ -107,8 +108,9 @@ class PropertyController extends Controller
     }
 
     /**
-     * Show a property: its details and occupancy, which clients rent which
-     * of its units, and its documents.
+     * Show a property: its details, every unit by how full it is, which
+     * clients rent which of its units under which contracts, the landlord
+     * and head leases it is rented under, and its documents.
      */
     public function show(Request $request, Property $property): Response
     {
@@ -118,13 +120,14 @@ class PropertyController extends Controller
             ->whereKey($property->id)
             ->with([
                 'propertyType:id,name,slug',
-                'landlord:id,name',
+                'landlord',
                 'company:id,default_currency',
                 'documents' => fn ($query) => $query->orderBy('id'),
                 'documents.headLease:id,lease_number',
             ])
             ->withOccupancy()
-            ->withCount([...$this->documentCounts(), 'shops', 'apartments'])
+            ->withUnitOccupancy()
+            ->withCount($this->documentCounts())
             ->firstOrFail();
         $lease = $property->currentLease();
 
@@ -134,11 +137,28 @@ class PropertyController extends Controller
                 ...$this->propertyDetails($property),
                 'shops' => $property->shops_count,
                 'apartments' => $property->apartments_count,
+                'occupancy' => $this->occupancyBreakdown($property),
+                'street' => $property->street,
+                'plotNumber' => $property->plot_number,
+                'poBox' => $property->po_box,
                 'totalFloors' => $property->total_floors,
                 'totalUnits' => $property->total_units,
                 'notes' => $property->notes,
                 'lease' => $lease ? ['id' => $lease->id, 'number' => $lease->lease_number] : null,
             ],
+            'landlord' => $this->landlordDetails($property),
+            'leases' => $property->headLeases()
+                ->with(['property:id,name,code', 'landlord:id,name'])
+                ->withSum(['cheques as paid_amount' => fn (Builder $cheques) => $cheques->where('status', 'cleared')], 'amount')
+                ->withMin(['cheques as next_due_date' => fn (Builder $cheques) => $cheques->whereIn('status', ['pending', 'issued'])], 'cheque_date')
+                ->orderByDesc('start_date')
+                ->get()
+                ->map(fn (HeadLease $lease) => [
+                    ...HeadLeaseController::leaseDetails($lease),
+                    'paidAmount' => (float) $lease->paid_amount,
+                    'nextDueDate' => $lease->next_due_date ? substr($lease->next_due_date, 0, 10) : null,
+                ]),
+            'contracts' => $this->contracts($property),
             'clients' => $this->clientShares($property),
             'documents' => $property->documents->map(fn (PropertyDocument $document) => [
                 'id' => $document->id,
@@ -324,6 +344,119 @@ class PropertyController extends Controller
             })
             ->sortBy([['beds', 'desc'], ['monthly', 'desc']])
             ->values()
+            ->all();
+    }
+
+    /**
+     * Every unit in the property, counted explicitly: rooms split into full
+     * (every bed taken), partial (some beds taken) and empty (nobody staying),
+     * and shops and apartments by status. Needs `withOccupancy()` and
+     * `withUnitOccupancy()`.
+     *
+     * @return array{rooms: array{total: int, full: int, partial: int, empty: int}, shops: array<string, int>, apartments: array<string, int>}
+     */
+    private function occupancyBreakdown(Property $property): array
+    {
+        return [
+            'rooms' => [
+                'total' => (int) $property->rooms_count,
+                'full' => (int) $property->full_rooms_count,
+                'partial' => (int) $property->free_rooms_count,
+                'empty' => (int) $property->empty_rooms_count,
+            ],
+            'shops' => $this->statusCounts($property->shops(), Shop::STATUSES),
+            'apartments' => $this->statusCounts($property->apartments(), Apartment::STATUSES),
+        ];
+    }
+
+    /**
+     * How many of `$units` are in each of `$statuses`, with their total.
+     *
+     * @param  HasMany<Shop, Property>|HasMany<Apartment, Property>  $units
+     * @param  list<string>  $statuses
+     * @return array<string, int>
+     */
+    private function statusCounts(HasMany $units, array $statuses): array
+    {
+        $counts = $units->toBase()
+            ->groupBy('status')
+            ->selectRaw('status, count(*) as aggregate')
+            ->pluck('aggregate', 'status')
+            ->map(fn (mixed $aggregate) => (int) $aggregate);
+
+        return [
+            'total' => $counts->sum(),
+            ...array_combine($statuses, array_map(fn (string $status) => $counts->get($status, 0), $statuses)),
+        ];
+    }
+
+    /**
+     * Who the property is leased from: their contact, registration and bank
+     * details, and the other properties the company leases from them. Null
+     * for a property the company owns.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function landlordDetails(Property $property): ?array
+    {
+        $landlord = $property->landlord;
+
+        if ($landlord === null) {
+            return null;
+        }
+
+        return [
+            'id' => $landlord->id,
+            'name' => $landlord->name,
+            'type' => $landlord->landlord_type,
+            'contactName' => $landlord->contact_person_name,
+            'phone' => $landlord->phone,
+            'email' => $landlord->email,
+            'address' => $landlord->address,
+            'tradeLicenseNumber' => $landlord->trade_license_number,
+            'idNumber' => $landlord->id_number,
+            'taxRegistrationNumber' => $landlord->tax_registration_number,
+            'bankName' => $landlord->bank_name,
+            'accountName' => $landlord->account_name,
+            'iban' => $landlord->iban,
+            'notes' => $landlord->notes,
+            'properties' => $landlord->properties()
+                ->whereKeyNot($property->id)
+                ->withOccupancy()
+                ->orderBy('name')
+                ->get()
+                ->map(fn (Property $other) => [
+                    'id' => $other->id,
+                    'name' => $other->name,
+                    'code' => $other->code,
+                    'city' => $other->city,
+                    'area' => $other->area,
+                    'beds' => Room::bedBreakdown((int) $other->beds_total, (int) $other->beds_occupied, (int) $other->beds_available),
+                ])
+                ->all(),
+        ];
+    }
+
+    /**
+     * Every client contract that rents something in the property, live ones
+     * first. Their units, monthly value and the people staying count only
+     * what they rent here.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function contracts(Property $property): array
+    {
+        $here = fn (Builder|HasMany $lines) => $lines->where('contract_lines.property_id', $property->id);
+
+        return Contract::query()
+            ->whereHas('lines', $here)
+            ->with(['client:id,name,client_type', 'lines' => $here])
+            ->withCount(['occupancies as staying_count' => fn (Builder $stays) => $here($stays->whereNull('check_out_date'))])
+            ->orderByRaw("case status when 'active' then 0 when 'draft' then 1 else 2 end")
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (Contract $contract) => ContractController::listDetails($contract))
             ->all();
     }
 
@@ -551,6 +684,27 @@ class PropertyController extends Controller
     }
 
     /**
+     * The properties' rooms, shops and apartments split into full (rooms with
+     * every bed taken, occupied shops and apartments), free (rooms with some
+     * beds taken) and empty (rooms with nobody staying, and shops and
+     * apartments in any other status). Needs `withUnitOccupancy()`.
+     *
+     * @param  Collection<int, Property>  $properties
+     * @return array{full: int, free: int, empty: int}
+     */
+    private function unitOccupancy(Collection $properties): array
+    {
+        $total = fn (string $column) => (int) $properties->sum($column);
+        $occupied = $total('occupied_shops_count') + $total('occupied_apartments_count');
+
+        return [
+            'full' => $total('full_rooms_count') + $occupied,
+            'free' => $total('free_rooms_count'),
+            'empty' => $total('empty_rooms_count') + $total('shops_count') + $total('apartments_count') - $occupied,
+        ];
+    }
+
+    /**
      * Headline figures for the whole portfolio, ignoring the filters.
      *
      * @return array<string, mixed>
@@ -560,6 +714,7 @@ class PropertyController extends Controller
         $properties = $company->properties()
             ->select(['properties.id', 'status', 'ownership_type'])
             ->withOccupancy()
+            ->withUnitOccupancy()
             ->get();
 
         return [
@@ -568,11 +723,9 @@ class PropertyController extends Controller
             'owned' => $properties->where('ownership_type', 'owned')->count(),
             'leased' => $properties->where('ownership_type', 'leased')->count(),
             'rooms' => (int) $properties->sum('rooms_count'),
-            'roomOccupancy' => Room::roomBreakdown(
-                (int) $properties->sum('rooms_count'),
-                (int) $properties->sum('full_rooms_count'),
-                (int) $properties->sum('empty_rooms_count'),
-            ),
+            'shops' => (int) $properties->sum('shops_count'),
+            'apartments' => (int) $properties->sum('apartments_count'),
+            'unitOccupancy' => $this->unitOccupancy($properties),
             'beds' => Room::bedBreakdown(
                 (int) $properties->sum('beds_total'),
                 (int) $properties->sum('beds_occupied'),
@@ -609,11 +762,7 @@ class PropertyController extends Controller
             'leaseEndsOn' => $property->lease_end_date?->toDateString(),
             'leaseDaysLeft' => $property->lease_end_date === null ? null : (int) today()->diffInDays($property->lease_end_date, false),
             'rooms' => $property->rooms_count,
-            'roomOccupancy' => Room::roomBreakdown(
-                (int) $property->rooms_count,
-                (int) $property->full_rooms_count,
-                (int) $property->empty_rooms_count,
-            ),
+            'unitOccupancy' => $this->unitOccupancy(collect([$property])),
             'beds' => Room::bedBreakdown(
                 (int) $property->beds_total,
                 (int) $property->beds_occupied,

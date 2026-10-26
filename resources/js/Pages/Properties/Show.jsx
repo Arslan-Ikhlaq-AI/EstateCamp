@@ -8,20 +8,26 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, FilePlusIcon, PencilIcon, StoreIcon, WrenchIcon } from 'lucide-react';
+import { BanknoteIcon, BedDoubleIcon, ExternalLinkIcon, FilePlusIcon, LayoutGridIcon, PencilIcon, UsersIcon, WrenchIcon } from 'lucide-react';
 import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 import ClientShares from './Partials/ClientShares';
+import LandlordCard from './Partials/LandlordCard';
+import OccupancyBreakdown from './Partials/OccupancyBreakdown';
+import { ClientContracts, HeadLeases } from './Partials/PropertyContracts';
 import { LeaseNote, OwnershipBadge, StatusBadge } from './Partials/PropertyBadges';
 
 /**
- * One property: its photo and details, occupancy and rent, which clients
- * rent which of its units, and its documents.
+ * One property: its photo and details, every room, bed, shop and apartment
+ * by how full it is, which clients rent which units under which contracts,
+ * the landlord and head leases it is rented under, and its documents.
  */
-export default function Show({ property, clients, documents, currency }) {
+export default function Show({ property, landlord, leases, contracts, clients, documents, currency }) {
     const { t, tOr, formatNumber, formatPercent, formatCurrency, formatDate } = useTranslation();
     const { beds } = property;
     const type = property.type ? tOr(`propertyTypes.${property.typeSlug}`, property.type) : null;
     const place = [property.area, property.city].filter(Boolean).join(', ');
+    const activeContracts = contracts.filter((contract) => contract.status === 'active').length;
+    const unitCounts = { rooms: property.rooms, shops: property.shops, apartments: property.apartments };
 
     return (
         <DashboardLayout>
@@ -62,18 +68,19 @@ export default function Show({ property, clients, documents, currency }) {
                     detail={t('properties.stats.occupancyDetail', { occupied: beds.occupied, total: beds.occupied + beds.available })}
                 />
                 <StatCard
-                    icon={DoorOpenIcon}
-                    label={t('propertyShow.roomsAndBeds')}
-                    value={formatNumber(property.rooms)}
-                    detail={t('common.beds', { count: beds.total })}
-                    href={route('rooms.index', { properties: [property.code] })}
+                    icon={LayoutGridIcon}
+                    tone="violet"
+                    label={t('properties.stats.units')}
+                    value={formatNumber(unitCounts.rooms + unitCounts.shops + unitCounts.apartments)}
+                    detail={Object.entries(unitCounts)
+                        .map(([kind, count]) => t(`properties.stats.${kind}`, { count }))
+                        .join(' · ')}
                 />
                 <StatCard
-                    icon={StoreIcon}
-                    label={t('propertyShow.shopsAndApartments')}
-                    value={formatNumber(property.shops + property.apartments)}
-                    detail={t('propertyShow.shopsApartmentsDetail', { shops: property.shops, apartments: property.apartments })}
-                    href={route('shops.index', { properties: [property.code] })}
+                    icon={UsersIcon}
+                    label={t('propertyShow.clientsStat')}
+                    value={formatNumber(clients.length)}
+                    detail={t('propertyShow.clientsDetail', { count: activeContracts })}
                 />
                 <StatCard
                     icon={BanknoteIcon}
@@ -83,6 +90,10 @@ export default function Show({ property, clients, documents, currency }) {
                     detail={t('propertyShow.rentRollDetail')}
                 />
             </section>
+
+            <SectionCard title={t('propertyShow.occupancy.title')} description={t('propertyShow.occupancy.description')}>
+                <OccupancyBreakdown property={property} />
+            </SectionCard>
 
             <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]">
                 <div className="flex min-w-0 flex-col gap-6">
@@ -121,7 +132,20 @@ export default function Show({ property, clients, documents, currency }) {
                                 columns={1}
                                 rows={[
                                     { label: t('propertyShow.details.address'), value: property.address || place },
-                                    property.ownership === 'leased' && { label: t('propertyForm.fields.landlordName'), value: property.landlordName },
+                                    { label: t('propertyForm.fields.building'), value: property.buildingName },
+                                    { label: t('propertyForm.fields.street'), value: property.street },
+                                    { label: t('propertyForm.fields.plot'), value: property.plotNumber },
+                                    { label: t('propertyForm.fields.makani'), value: property.makaniNumber },
+                                    { label: t('propertyForm.fields.poBox'), value: property.poBox },
+                                    {
+                                        label: t('propertyForm.fields.mapUrl'),
+                                        value: property.mapUrl && (
+                                            <a href={property.mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-ink hover:underline">
+                                                {t('propertyShow.details.openMap')}
+                                                <ExternalLinkIcon className="size-3.5" />
+                                            </a>
+                                        ),
+                                    },
                                     property.ownership === 'leased' && {
                                         label: t('propertyShow.details.lease'),
                                         value: property.lease ? (
@@ -143,7 +167,6 @@ export default function Show({ property, clients, documents, currency }) {
                                         label: t('propertyShow.details.contact'),
                                         value: [property.contactName, property.contactPhone].filter(Boolean).join(' · '),
                                     },
-                                    { label: t('propertyForm.fields.makani'), value: property.makaniNumber },
                                 ].filter((row) => row && (row.value || row.label === t('propertyShow.details.address')))}
                             />
                         </div>
@@ -158,6 +181,18 @@ export default function Show({ property, clients, documents, currency }) {
                     )}
                 </aside>
             </div>
+
+            <SectionCard title={t('propertyShow.contracts.title')} description={t('propertyShow.contracts.description')} flush>
+                <ClientContracts contracts={contracts} currency={currency} />
+            </SectionCard>
+
+            {landlord && <LandlordCard landlord={landlord} />}
+
+            {(property.ownership === 'leased' || leases.length > 0) && (
+                <SectionCard title={t('propertyShow.leases.title')} description={t('propertyShow.leases.description')} flush>
+                    <HeadLeases leases={leases} currency={currency} propertyId={property.id} />
+                </SectionCard>
+            )}
         </DashboardLayout>
     );
 }

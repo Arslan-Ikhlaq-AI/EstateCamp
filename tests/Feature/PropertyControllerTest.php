@@ -4,6 +4,7 @@ use App\Models\Company;
 use App\Models\Property;
 use App\Models\PropertyType;
 use App\Models\Room;
+use App\Models\Shop;
 use App\Models\User;
 use Database\Seeders\PortfolioSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -42,7 +43,7 @@ describe('for the seeded demo company', function () {
                 ->where('properties.data.0.typeSlug', 'worker_accommodation')
                 ->where('properties.data.0.ownership', 'owned')
                 ->where('properties.data.0.rooms', 5)
-                ->where('properties.data.0.roomOccupancy', ['full' => 2, 'partial' => 2, 'empty' => 1])
+                ->where('properties.data.0.unitOccupancy', ['full' => 5, 'free' => 2, 'empty' => 4])
                 ->where('properties.data.0.beds', [
                     'total' => 30,
                     'occupied' => 22,
@@ -54,7 +55,7 @@ describe('for the seeded demo company', function () {
                 ->where('properties.data.0.documents', ['total' => 3, 'expiring' => 1, 'expired' => 0])
                 ->where('properties.data.1.name', 'Jebel Ali Staff Residence')
                 ->where('properties.data.1.leaseEndsOn', '2028-12-31')
-                ->where('properties.data.1.roomOccupancy', ['full' => 3, 'partial' => 1, 'empty' => 1])
+                ->where('properties.data.1.unitOccupancy', ['full' => 6, 'free' => 1, 'empty' => 5])
                 ->where('properties.data.1.rentRoll', 6500)
             );
     });
@@ -69,9 +70,31 @@ describe('for the seeded demo company', function () {
                 ->where('summary.owned', 1)
                 ->where('summary.leased', 1)
                 ->where('summary.rooms', 10)
-                ->where('summary.roomOccupancy', ['full' => 5, 'partial' => 3, 'empty' => 2])
+                ->where('summary.shops', 6)
+                ->where('summary.apartments', 7)
+                ->where('summary.unitOccupancy', ['full' => 11, 'free' => 3, 'empty' => 9])
                 ->where('summary.beds.occupancyRate', 87.1)
                 ->where('summary.rentRoll', 17450)
+            );
+    });
+
+    test('shows every room, bed, shop and apartment of a property by how full it is', function () {
+        Shop::factory()->for(Property::where('code', 'HFM-AQZ-01')->sole())->create(['status' => 'inactive'])->delete();
+
+        $this->actingAs($this->superAdmin)
+            ->get(route('properties.show', Property::where('code', 'HFM-AQZ-01')->sole()))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Properties/Show')
+                ->where('property.occupancy', [
+                    'rooms' => ['total' => 5, 'full' => 2, 'partial' => 2, 'empty' => 1],
+                    'shops' => ['total' => 4, 'vacant' => 1, 'occupied' => 2, 'reserved' => 1, 'under_maintenance' => 0, 'inactive' => 0],
+                    'apartments' => ['total' => 2, 'vacant' => 1, 'occupied' => 1, 'reserved' => 0, 'under_maintenance' => 0, 'inactive' => 0],
+                ])
+                ->where('property.beds', ['total' => 30, 'occupied' => 22, 'available' => 2, 'outOfService' => 6, 'occupancyRate' => 91.7])
+                ->where('landlord', null)
+                ->where('leases', [])
+                ->where('contracts', [])
             );
     });
 

@@ -71,9 +71,8 @@ class Property extends Model
     /**
      * Add room and bed totals from the property's rooms: `rooms_count`,
      * `beds_total`, `beds_occupied`, `beds_available` (free beds in active
-     * rooms), `rent_roll` (occupied beds at their room's bed rate), and
-     * `full_rooms_count` and `empty_rooms_count` (rooms with every bed taken,
-     * and with nobody in them). The sums are null for a property without rooms.
+     * rooms) and `rent_roll` (occupied beds at their room's bed rate). The sums
+     * are null for a property without rooms.
      *
      * @param  Builder<Property>  $query
      */
@@ -81,11 +80,7 @@ class Property extends Model
     protected function withOccupancy(Builder $query): void
     {
         $query
-            ->withCount([
-                'rooms',
-                'rooms as full_rooms_count' => fn (Builder $rooms) => $rooms->whereColumn('occupied_count', '>=', 'capacity'),
-                'rooms as empty_rooms_count' => fn (Builder $rooms) => $rooms->where('occupied_count', 0),
-            ])
+            ->withCount('rooms')
             ->withSum('rooms as beds_total', 'capacity')
             ->withSum('rooms as beds_occupied', 'occupied_count')
             ->withSum(
@@ -93,6 +88,28 @@ class Property extends Model
                 DB::raw('capacity - occupied_count'),
             )
             ->withSum('rooms as rent_roll', DB::raw('occupied_count * rent_per_bed'));
+    }
+
+    /**
+     * Add how full the property's units are: `full_rooms_count` (every bed
+     * taken), `free_rooms_count` (some beds taken), `empty_rooms_count` (nobody
+     * staying), and `shops_count` and `apartments_count` with how many of each
+     * are occupied (`occupied_shops_count`, `occupied_apartments_count`).
+     *
+     * @param  Builder<Property>  $query
+     */
+    #[Scope]
+    protected function withUnitOccupancy(Builder $query): void
+    {
+        $query->withCount([
+            'rooms as full_rooms_count' => fn (Builder $rooms) => $rooms->whereColumn('occupied_count', '>=', 'capacity'),
+            'rooms as free_rooms_count' => fn (Builder $rooms) => $rooms->where('occupied_count', '>', 0)->whereColumn('occupied_count', '<', 'capacity'),
+            'rooms as empty_rooms_count' => fn (Builder $rooms) => $rooms->where('occupied_count', 0),
+            'shops',
+            'shops as occupied_shops_count' => fn (Builder $shops) => $shops->where('status', 'occupied'),
+            'apartments',
+            'apartments as occupied_apartments_count' => fn (Builder $apartments) => $apartments->where('status', 'occupied'),
+        ]);
     }
 
     /**

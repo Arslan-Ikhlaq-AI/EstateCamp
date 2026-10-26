@@ -8,7 +8,7 @@ import { Link } from '@inertiajs/react';
 import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, MapPinIcon } from 'lucide-react';
 import { ComplianceBadge, LeaseNote, OwnershipBadge, StatusBadge } from './PropertyBadges';
 import PropertyActions from './PropertyActions';
-import RoomOccupancyCounts from './RoomOccupancy';
+import UnitOccupancyCounts from './UnitOccupancy';
 
 const STAT_TONES = {
     brand: 'bg-brand-cyan/10 text-brand-ink',
@@ -89,7 +89,7 @@ function PropertyGridCard({ property, currency }) {
                     <Stat icon={BanknoteIcon} tone="gold" label={t('properties.card.rentRoll')} value={formatCurrency(property.rentRoll, currency)} />
                 </dl>
 
-                <RoomOccupancyCounts rooms={property.roomOccupancy} />
+                <UnitOccupancyCounts units={property.unitOccupancy} />
 
                 <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t pt-3">
                     <div className="flex flex-wrap items-center gap-2">

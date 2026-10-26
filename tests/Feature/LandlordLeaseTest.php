@@ -231,3 +231,38 @@ test('shows a head lease with its property, what the property holds and its docu
             ->where('documents.0.head_lease_id', $this->currentLease->id)
         );
 });
+
+test('shows a leased property\'s landlord with their details, their other properties and its head leases', function () {
+    $marsaTower = Property::factory()->create([
+        'company_id' => $this->jebelAli->company_id,
+        'name' => 'Marsa Tower',
+        'ownership_type' => 'leased',
+        'landlord_id' => $this->jebelAli->landlord_id,
+    ]);
+    Property::factory()->create(['company_id' => $this->jebelAli->company_id, 'ownership_type' => 'leased', 'landlord_id' => $this->hamdan->id]);
+
+    $this->actingAs($this->superAdmin)
+        ->get(route('properties.show', $this->jebelAli))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Properties/Show')
+            ->where('landlord.name', LandlordSeeder::AL_MARSA)
+            ->where('landlord.type', 'company')
+            ->where('landlord.contactName', 'Khalid Al Marsa')
+            ->where('landlord.phone', '+971 4 456 7890')
+            ->where('landlord.email', 'leasing@almarsa.test')
+            ->where('landlord.address', 'Office 702, Marsa Plaza, Dubai Festival City, Dubai')
+            ->where('landlord.tradeLicenseNumber', 'CN-1187742')
+            ->where('landlord.taxRegistrationNumber', '100456789000003')
+            ->where('landlord.bankName', 'Emirates NBD')
+            ->where('landlord.iban', 'AE070331234567890123456')
+            ->has('landlord.properties', 1)
+            ->where('landlord.properties.0.id', $marsaTower->id)
+            ->has('leases', 2)
+            ->where('leases.0.number', 'HL-2026-0001')
+            ->where('leases.0.status', 'active')
+            ->where('leases.0.landlordName', LandlordSeeder::AL_MARSA)
+            ->where('leases.1.number', 'HL-2025-0001')
+            ->where('leases.1.status', 'expired')
+        );
+});

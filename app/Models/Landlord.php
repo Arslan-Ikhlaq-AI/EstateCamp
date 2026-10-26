@@ -47,4 +47,14 @@ class Landlord extends Model
     {
         return $this->hasMany(HeadLease::class);
     }
+
+    /**
+     * The properties leased from this landlord.
+     *
+     * @return HasMany<Property, $this>
+     */
+    public function properties(): HasMany
+    {
+        return $this->hasMany(Property::class);
+    }
 }

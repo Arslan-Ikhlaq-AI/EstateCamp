@@ -67,21 +67,6 @@ class Room extends Model
     }
 
     /**
-     * Rooms split into full (every bed taken), partial (some beds taken) and
-     * empty (nobody staying).
-     *
-     * @return array{full: int, partial: int, empty: int}
-     */
-    public static function roomBreakdown(int $total, int $full, int $empty): array
-    {
-        return [
-            'full' => $full,
-            'partial' => $total - $full - $empty,
-            'empty' => $empty,
-        ];
-    }
-
-    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

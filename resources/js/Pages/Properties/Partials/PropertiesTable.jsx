@@ -20,7 +20,7 @@ import {
     StatusBadge,
 } from './PropertyBadges';
 import PropertyActions from './PropertyActions';
-import RoomOccupancyCounts from './RoomOccupancy';
+import UnitOccupancyCounts from './UnitOccupancy';
 
 /**
  * Table columns in display order. `sort` is the server sort key a header
@@ -32,7 +32,7 @@ export const TABLE_COLUMNS = [
     { id: 'type' },
     { id: 'ownership', sort: 'lease_end' },
     { id: 'occupancy', sort: 'occupancy' },
-    { id: 'roomOccupancy', sort: 'rooms' },
+    { id: 'units' },
     { id: 'rentRoll', sort: 'rent_roll', align: 'end' },
     { id: 'compliance' },
     { id: 'status' },
@@ -163,8 +163,8 @@ function Cell({ column, property, currency }) {
             );
         case 'occupancy':
             return <OccupancyCell beds={property.beds} />;
-        case 'roomOccupancy':
-            return <RoomOccupancyCounts rooms={property.roomOccupancy} className="flex-nowrap" />;
+        case 'units':
+            return <UnitOccupancyCounts units={property.unitOccupancy} className="flex-nowrap" />;
         case 'rentRoll':
             return (
                 <span className="font-bold tabular-nums">

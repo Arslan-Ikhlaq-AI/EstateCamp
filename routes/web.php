@@ -34,6 +34,7 @@ use App\Http\Controllers\ReceivablesReportController;
 use App\Http\Controllers\RegionalOfficeController;
 use App\Http\Controllers\RentalPaymentController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RoomAllocationController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\RoomRentalController;
 use App\Http\Controllers\RoomTypeController;
@@ -104,6 +105,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // The rest of the app, for everyone but staff whose sign-in covers only the staff pages.
     Route::middleware('can:use-app')->group(function () {
         Route::resource('properties', PropertyController::class)->except(['destroy'])->whereNumber('property');
+        Route::get('properties/{property}/allocation', [RoomAllocationController::class, 'show'])->whereNumber('property')->name('properties.allocation');
         Route::resource('rooms', RoomController::class)->except(['show', 'destroy']);
         Route::resource('apartments', ApartmentController::class)->except(['destroy']);
         Route::resource('shops', ShopController::class)->except(['destroy']);

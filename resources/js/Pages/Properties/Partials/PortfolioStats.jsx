@@ -1,7 +1,7 @@
 import StatCard from '@/Components/StatCard';
 import { useTranslation } from '@/hooks/use-translation';
-import { BanknoteIcon, BedDoubleIcon, Building2Icon, DoorOpenIcon } from 'lucide-react';
-import { RoomOccupancyBar, RoomOccupancyLegend } from './RoomOccupancy';
+import { BanknoteIcon, BedDoubleIcon, Building2Icon, LayoutGridIcon } from 'lucide-react';
+import { UnitOccupancyBar, UnitOccupancyLegend } from './UnitOccupancy';
 
 /**
  * Headline figures for the whole portfolio, unaffected by the list filters.
@@ -25,9 +25,17 @@ export default function PortfolioStats({ summary, currency }) {
                     leased: summary.leased,
                 })}
             />
-            <StatCard icon={DoorOpenIcon} tone="violet" label={t('properties.stats.rooms')} value={formatNumber(summary.rooms)}>
-                <RoomOccupancyBar rooms={summary.roomOccupancy} />
-                <RoomOccupancyLegend rooms={summary.roomOccupancy} />
+            <StatCard
+                icon={LayoutGridIcon}
+                tone="violet"
+                label={t('properties.stats.units')}
+                value={formatNumber(summary.rooms + summary.shops + summary.apartments)}
+                detail={['rooms', 'shops', 'apartments']
+                    .map((kind) => t(`properties.stats.${kind}`, { count: summary[kind] }))
+                    .join(' · ')}
+            >
+                <UnitOccupancyBar units={summary.unitOccupancy} />
+                <UnitOccupancyLegend units={summary.unitOccupancy} />
             </StatCard>
             <StatCard
                 icon={BedDoubleIcon}

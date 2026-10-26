@@ -401,6 +401,40 @@ test('shows which clients rent which units of a property', function () {
         );
 });
 
+test('lists the contracts renting a property with only what they rent there', function () {
+    $contract = Contract::where('contract_number', 'CTR-2026-0001')->sole();
+    ContractLine::factory()->for($contract)->create([
+        'property_id' => $this->jebelAli->id,
+        'unit_type' => 'shop',
+        'shop_id' => $this->jebelAli->shops()->where('shop_number', 'G-02')->value('id'),
+        'quantity' => 1,
+        'monthly_rate' => 6100,
+    ]);
+
+    $this->actingAs($this->superAdmin)
+        ->get(route('properties.show', $this->alQuoz))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('contracts', 5)
+            ->where('contracts.0.number', 'CTR-2026-0008')
+            ->where('contracts.3.number', 'CTR-2026-0001')
+            ->where('contracts.3.client.name', ClientSeeder::GULF_BUILDERS)
+            ->where('contracts.3.units', ['beds' => 16, 'rooms' => 0, 'apartments' => 1, 'shops' => 0])
+            ->where('contracts.3.monthlyValue', 14700)
+            ->where('contracts.4.number', 'CTR-2026-0011')
+            ->where('contracts.4.status', 'draft')
+        );
+
+    $this->actingAs($this->superAdmin)
+        ->get(route('properties.show', $this->jebelAli))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('contracts', 7)
+            ->where('contracts.5.number', 'CTR-2026-0001')
+            ->where('contracts.5.units', ['beds' => 0, 'rooms' => 0, 'apartments' => 0, 'shops' => 1])
+            ->where('contracts.5.monthlyValue', 6100)
+        );
+});
+
 test('lists only the rooms a client holds when filtered by client', function () {
     $this->actingAs($this->superAdmin)
         ->get(route('rooms.index', ['clients' => [$this->gulfBuilders->id]]))
