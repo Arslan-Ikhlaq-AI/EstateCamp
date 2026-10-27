@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiltersByPeriod;
+use App\Http\Requests\BillingPaymentRequest;
 use App\Models\Apartment;
+use App\Models\Contract;
 use App\Models\ContractLine;
 use App\Models\Occupancy;
 use App\Models\Property;
@@ -13,15 +15,15 @@ use App\Models\Shop;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
  * Who holds each room, shop and apartment of a property over a period: a
- * company under contract, an individual (renting straight from the company
- * or under a contract of their own), or nobody. Units are taken whole; beds
- * are not counted.
+ * client under contract, a company on a short-term rental without a
+ * contract, or nobody. Units are taken whole; beds are not counted.
  */
 class RoomAllocationController extends Controller
 {
@@ -34,12 +36,18 @@ class RoomAllocationController extends Controller
     private const OUT_OF_SERVICE = ['inactive', 'under_maintenance'];
 
     /**
+     * Cheque stages where the company has the cheque but not yet the money.
+     */
+    private const CHEQUES_IN_HAND = ['received', 'deposited'];
+
+    /**
      * Show the property's rooms, shops and apartments with whoever holds
      * them in the chosen period (`?period=`, this month by default; any month
      * or range of days, past or future), what each was set up at and actually
      * brings in, and a summary of each kind. A holder counts when they hold
      * the unit on any day of the period, so a contract ending this month
-     * leaves its unit available next month.
+     * leaves its unit available next month. The billing tab has each
+     * holder's bill for the period (see accounts()).
      */
     public function show(Request $request, Property $property): Response
     {
@@ -59,7 +67,7 @@ class RoomAllocationController extends Controller
             ->whereDate('start_date', '<=', $to)
             ->whereDate('end_date', '>=', $from)
             ->whereHas('contract')
-            ->with(['contract:id,client_id,contract_number,status,terminated_on', 'contract.client:id,name,client_type'])
+            ->with(['contract:id,client_id,contract_number,status,terminated_on', 'contract.client:id,name'])
             ->get()
             ->filter(fn (ContractLine $line) => ($lastDay = $this->lastDay($line)) !== null && $lastDay->gte($from) && $lastDay->gte($line->start_date));
 
@@ -84,7 +92,131 @@ class RoomAllocationController extends Controller
             'includesToday' => CarbonImmutable::today()->betweenIncluded($from, $to),
             ...$kinds,
             'summaries' => array_map(fn (array $rows) => $this->summary($rows, $from, $to), $kinds),
+            'accounts' => $this->accounts($property, $kinds, $from, $to),
+            'collectionMethods' => BillingPaymentRequest::METHODS,
         ]);
+    }
+
+    /**
+     * The billing tab: one account for each contract and short-term rental
+     * holding units here in the period, with those units and its statement
+     * for the period, plus earlier ones here that still owe money, so an
+     * unpaid balance follows into the next month's bill. A short-term
+     * rental is billed as a whole, never room by room; a contract's
+     * statement covers the whole contract, also where it rents in other
+     * properties.
+     *
+     * @param  array<string, list<array<string, mixed>>>  $kinds
+     * @return list<array<string, mixed>>
+     */
+    private function accounts(Property $property, array $kinds, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $units = [];
+
+        foreach ($kinds as $kind => $rows) {
+            foreach ($rows as $row) {
+                foreach ($row['holdings'] as $holding) {
+                    $units[$holding['reference']['kind'].':'.$holding['reference']['id']][] = [
+                        ...Arr::only($row, ['id', 'number', 'block', 'floor', 'type', 'bedrooms']),
+                        'kind' => $kind,
+                        ...Arr::only($holding, ['startsOn', 'endsOn', 'monthly', 'isLatest']),
+                    ];
+                }
+            }
+        }
+
+        $heldIds = fn (string $kind) => collect(array_keys($units))
+            ->filter(fn (string $key) => str_starts_with($key, "{$kind}:"))
+            ->map(fn (string $key) => (int) substr($key, strlen($kind) + 1))
+            ->values();
+        $inHand = fn (Builder $cheques) => $cheques->whereIn('status', self::CHEQUES_IN_HAND)->whereDate('cheque_date', '<=', $to);
+
+        $contracts = Contract::query()
+            ->where('company_id', $property->company_id)
+            ->where(fn (Builder $query) => $query
+                ->whereKey($heldIds('contract'))
+                ->orWhere(fn (Builder $owing) => $owing
+                    ->whereIn('status', ['ended', 'terminated'])
+                    ->whereHas('lines', fn (Builder $lines) => $lines->where('property_id', $property->id))
+                    ->whereHas('invoices', fn (Builder $invoices) => $invoices->whereIn('status', ['issued', 'partially_paid']))))
+            ->with([
+                'client:id,name',
+                'lines',
+                'invoices' => fn ($invoices) => $invoices->whereNot('status', 'void'),
+                'invoices.allocations.payment:id,payment_number,received_on,method,status',
+            ])
+            ->withCount(['cheques as cheques_in_hand_count' => $inHand])
+            ->withSum(['cheques as cheques_in_hand_amount' => $inHand], 'amount')
+            ->get()
+            ->map(fn (Contract $contract) => $this->account($contract, $units["contract:{$contract->id}"] ?? [], $from, $to, [
+                'billingCycle' => $contract->billing_cycle,
+                'endsOn' => $this->contractLastDay($contract)?->toDateString(),
+                'isBilled' => $contract->status !== 'draft',
+                'otherProperties' => $contract->lines->pluck('property_id')->unique()->reject(fn ($id) => (int) $id === $property->id)->count(),
+            ]));
+
+        $rentals = RoomRental::query()
+            ->where('property_id', $property->id)
+            ->whereDate('start_date', '<=', $to)
+            ->with(['client:id,name', 'payments'])
+            ->withCount(['cheques as cheques_in_hand_count' => $inHand])
+            ->withSum(['cheques as cheques_in_hand_amount' => $inHand], 'amount')
+            ->get()
+            ->map(fn (RoomRental $rental) => $this->account($rental, $units["rental:{$rental->id}"] ?? [], $from, $to, [
+                'billingCycle' => 'monthly',
+                'endsOn' => $rental->lastDay()?->toDateString(),
+                'isBilled' => true,
+                'otherProperties' => 0,
+                'monthly' => round((float) $rental->monthly_rent, 2),
+            ]));
+
+        return $contracts->concat($rentals)
+            ->filter(fn (array $account) => $account['units'] !== [] || $account['statement']['toPay'] > 0)
+            ->sortBy(fn (array $account) => mb_strtolower($account['client']['name']).' '.$account['number'], SORT_NATURAL)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * One account on the billing tab: who it bills, the units it holds here
+     * in the period and its rent a month for them, the cheques the company
+     * holds towards it, and its statement for the period.
+     *
+     * @param  list<array<string, mixed>>  $units
+     * @param  array<string, mixed>  $details
+     * @return array<string, mixed>
+     */
+    private function account(Contract|RoomRental $agreement, array $units, CarbonImmutable $from, CarbonImmutable $to, array $details): array
+    {
+        $isContract = $agreement instanceof Contract;
+
+        return [
+            'key' => ($isContract ? 'contract' : 'rental').':'.$agreement->id,
+            'kind' => $isContract ? 'contract' : 'rental',
+            'id' => $agreement->id,
+            'number' => $isContract ? $agreement->contract_number : $agreement->rental_number,
+            'status' => $agreement->status,
+            'client' => $agreement->client->only(['id', 'name']),
+            'startsOn' => $agreement->start_date->toDateString(),
+            'units' => $units,
+            'monthly' => round(collect($units)->where('isLatest', true)->sum('monthly'), 2),
+            'chequesInHand' => ['count' => (int) $agreement->cheques_in_hand_count, 'amount' => round((float) $agreement->cheques_in_hand_amount, 2)],
+            'statement' => $agreement->billingStatement($from, $to),
+            ...$details,
+        ];
+    }
+
+    /**
+     * The last day a contract runs: its end date, or the day before it was
+     * terminated. Null for a contract marked terminated without a date.
+     */
+    private function contractLastDay(Contract $contract): ?CarbonImmutable
+    {
+        if ($contract->status !== 'terminated') {
+            return $contract->end_date->toImmutable();
+        }
+
+        return $contract->terminated_on?->toImmutable()->subDay();
     }
 
     /**
@@ -112,7 +244,8 @@ class RoomAllocationController extends Controller
     /**
      * Each room with whoever holds it in the period: contract lines for the
      * room (whole, or beds in it), contracts whose property-wide beds had
-     * people staying in it, and individuals renting in it.
+     * people staying in it, and short-term rentals holding it. A rental's
+     * monthly rent is shared equally between its rooms.
      *
      * @param  Collection<int, ContractLine>  $lines
      * @return list<array<string, mixed>>
@@ -146,17 +279,17 @@ class RoomAllocationController extends Controller
         RoomRental::query()
             ->where('property_id', $property->id)
             ->whereDate('start_date', '<=', $to)
-            ->with('client:id,name,client_type')
+            ->with(['client:id,name', 'rooms:rooms.id'])
             ->get()
             ->reject(fn (RoomRental $rental) => $rental->lastDay()?->lt($from) ?? false)
-            ->each(fn (RoomRental $rental) => $holdings->push([$rental->room_id, [
-                'category' => 'individual',
+            ->each(fn (RoomRental $rental) => $rental->rooms->each(fn (Room $room) => $holdings->push([$room->id, [
+                'category' => 'short_term',
                 'client' => $rental->client->only(['id', 'name']),
                 'reference' => ['kind' => 'rental', 'id' => $rental->id, 'number' => $rental->rental_number, 'status' => $rental->status],
                 'startsOn' => $rental->start_date->toDateString(),
                 'endsOn' => $rental->lastDay()?->toDateString(),
-                'monthly' => (float) $rental->monthly_rent,
-            ]]));
+                'monthly' => round((float) $rental->monthly_rent / max(1, $rental->rooms->count()), 2),
+            ]])));
 
         $byRoom = $holdings->groupBy(0, preserveKeys: false);
 
@@ -215,8 +348,7 @@ class RoomAllocationController extends Controller
 
     /**
      * A contract line's hold on a unit, at its rate for `$quantity` of what
-     * it rents, until its last day. A company client's contract counts as a
-     * contract; an individual's as an individual.
+     * it rents, until its last day.
      *
      * @return array{category: string, client: array{id: int, name: string}, reference: array{kind: string, id: int, number: string, status: string}, startsOn: string, endsOn: string, monthly: float}
      */
@@ -225,7 +357,7 @@ class RoomAllocationController extends Controller
         $contract = $line->contract;
 
         return [
-            'category' => $contract->client->client_type === 'individual' ? 'individual' : 'contract',
+            'category' => 'contract',
             'client' => $contract->client->only(['id', 'name']),
             'reference' => ['kind' => 'contract', 'id' => $contract->id, 'number' => $contract->contract_number, 'status' => $contract->status],
             'startsOn' => $line->start_date->toDateString(),
@@ -296,12 +428,12 @@ class RoomAllocationController extends Controller
      * For one kind of unit in the period: how many units each kind of holder
      * has, how many are empty (and of those, available to let) and how many
      * come free during it; the standard rent of the let and available units;
-     * what contracts and individuals pay a month under the latest holdings
+     * what contracts and short-term rentals pay a month under the latest holdings
      * and how that compares with the standard rent; and the rent due for the
      * period, each holding charged for the days of each month it covers.
      *
      * @param  list<array<string, mixed>>  $rows
-     * @return array{total: int, contract: int, individual: int, empty: int, available: int, freeing: int, clients: array{contract: int, individual: int}, standardRent: array{let: float, available: float}, rent: array{contract: float, individual: float, overall: float}, difference: float, expected: float}
+     * @return array{total: int, contract: int, short_term: int, empty: int, available: int, freeing: int, clients: array{contract: int, short_term: int}, standardRent: array{let: float, available: float}, rent: array{contract: float, short_term: float, overall: float}, difference: float, expected: float}
      */
     private function summary(array $rows, CarbonImmutable $from, CarbonImmutable $to): array
     {
@@ -318,13 +450,13 @@ class RoomAllocationController extends Controller
         return [
             'total' => $rows->count(),
             'contract' => $rows->where('allocation', 'contract')->count(),
-            'individual' => $rows->where('allocation', 'individual')->count(),
+            'short_term' => $rows->where('allocation', 'short_term')->count(),
             'empty' => $rows->where('allocation', 'empty')->count(),
             'available' => $available->count(),
             'freeing' => $rows->whereNotNull('freeFrom')->count(),
-            'clients' => ['contract' => $clients('contract'), 'individual' => $clients('individual')],
+            'clients' => ['contract' => $clients('contract'), 'short_term' => $clients('short_term')],
             'standardRent' => ['let' => $standardLet, 'available' => round($available->sum('standardRent'), 2)],
-            'rent' => ['contract' => $rent('contract'), 'individual' => $rent('individual'), 'overall' => $overall],
+            'rent' => ['contract' => $rent('contract'), 'short_term' => $rent('short_term'), 'overall' => $overall],
             'difference' => round($overall - $standardLet, 2),
             'expected' => round($holdings->sum(fn (array $holding) => $this->rentForDays($holding, $from, $to)), 2),
         ];

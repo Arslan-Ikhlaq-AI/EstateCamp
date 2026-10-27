@@ -302,11 +302,14 @@ class Property extends Model
      * Create or update the head lease behind a leased property from its
      * landlord, lease dates and the lease terms entered with it. A new lease
      * is active unless it has already ended; its cheque schedule is built,
-     * and rebuilt when the dates or rent change (unless a cheque has reached the bank).
+     * and rebuilt when the dates or rent change (unless a cheque has reached
+     * the bank). Cheque details and photos entered with the property, keyed
+     * by place in the schedule ("rent:3"), are recorded on its cheques.
      *
      * @param  array{ejari_number?: ?string, annual_rent: numeric, payments_per_year: int, security_deposit?: ?numeric, notice_period_days?: ?int}  $terms
+     * @param  array<string, array<string, mixed>>  $chequeEntries
      */
-    public function syncHeadLease(array $terms): HeadLease
+    public function syncHeadLease(array $terms, array $chequeEntries = [], ?User $by = null): HeadLease
     {
         $lease = $this->currentLease() ?? new HeadLease;
 
@@ -327,8 +330,8 @@ class Property extends Model
 
         $lease->save();
 
-        if ($lease->wasRecentlyCreated || $lease->wasChanged(['start_date', 'end_date', 'annual_rent', 'payments_per_year', 'security_deposit'])) {
-            $lease->syncCheques();
+        if ($chequeEntries !== [] || $lease->wasRecentlyCreated || $lease->wasChanged(['start_date', 'end_date', 'annual_rent', 'payments_per_year', 'security_deposit'])) {
+            $lease->syncCheques($chequeEntries, $by);
         }
 
         return $lease;

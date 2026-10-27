@@ -17,6 +17,7 @@ use App\Models\Invoice;
 use App\Models\Occupancy;
 use App\Models\Property;
 use App\Models\Room;
+use App\Models\RoomRental;
 use App\Models\Shop;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -504,7 +505,8 @@ class ContractController extends Controller
 
     /**
      * Clients, and each property's rentable units with their list prices and
-     * how much of each other live contracts already hold, for the form.
+     * how much of each other live contracts and short-term rentals already
+     * hold, for the form.
      *
      * @return array<string, mixed>
      */
@@ -517,7 +519,7 @@ class ContractController extends Controller
             ->when($contract, fn (Builder $query) => $query->whereNot('contract_id', $contract->id))
             ->get(['unit_type', 'room_id', 'apartment_id', 'shop_id', 'quantity']);
         $heldBeds = $held->where('unit_type', 'bed')->whereNotNull('room_id')->groupBy('room_id')->map->sum('quantity');
-        $heldRooms = $held->where('unit_type', 'room')->pluck('room_id')->flip();
+        $heldRooms = $held->where('unit_type', 'room')->pluck('room_id')->concat(RoomRental::heldRoomIds($company->id))->flip();
         $heldApartments = $held->whereNotNull('apartment_id')->pluck('apartment_id')->flip();
         $heldShops = $held->whereNotNull('shop_id')->pluck('shop_id')->flip();
 

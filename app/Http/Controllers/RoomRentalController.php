@@ -5,28 +5,29 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\RoomRentalEndRequest;
 use App\Http\Requests\RoomRentalRequest;
-use App\Models\Bed;
 use App\Models\Cheque;
 use App\Models\Client;
 use App\Models\Company;
-use App\Models\Occupant;
 use App\Models\RentalPayment;
 use App\Models\Room;
 use App\Models\RoomRental;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Individual rentals: beds and rooms rented straight to individuals
- * without a contract, with where each tenant's rent stands, their
- * receipts and cheques, and moving them out.
+ * Short-term rentals: whole rooms rented to companies for a few months
+ * without a contract, with where each tenant's rent stands, their receipts
+ * and cheques, and moving them out.
  */
 class RoomRentalController extends Controller
 {
@@ -52,7 +53,6 @@ class RoomRentalController extends Controller
         $filters = $this->listFilters($request, [
             'status' => RoomRental::STATUSES,
             'standing' => RoomRental::STANDINGS,
-            'unit' => RoomRental::UNIT_TYPES,
             'properties' => $properties->pluck('code')->all(),
         ]);
         $propertyIds = $properties->whereIn('code', $filters['properties'])->modelKeys();
@@ -75,7 +75,6 @@ class RoomRentalController extends Controller
             'facets' => [
                 'status' => $this->facetOptions(RoomRental::STATUSES, $this->countBy($this->filteredQuery($company, $filters, $propertyIds, $standings, except: 'status'), 'status')),
                 'standing' => $this->facetOptions(RoomRental::STANDINGS, $standingCounts),
-                'unit' => $this->facetOptions(RoomRental::UNIT_TYPES, $this->countBy($this->filteredQuery($company, $filters, $propertyIds, $standings, except: 'unit'), 'unit_type')),
                 'properties' => $properties->map(fn ($property) => ['value' => $property->code, 'label' => $property->name, 'count' => $propertyCounts->get($property->id, 0)])->values(),
             ],
             'summary' => $this->summary($company, $standings),
@@ -84,85 +83,87 @@ class RoomRentalController extends Controller
     }
 
     /**
-     * Show the form for renting a bed or room to an individual. `?room=`
-     * opens it on a room.
+     * Show the form for renting rooms short-term to a company. `?room=`
+     * opens it on a room, `?property=` on a property and `?client=` on a
+     * company.
      */
     public function create(Request $request): Response
     {
         $company = $this->currentCompany($request);
+        $rooms = RoomRental::roomsToRent($company);
+        $room = $rooms->firstWhere('id', $request->integer('room'));
+        $propertyId = $room?->property_id ?? $rooms->firstWhere('property_id', $request->integer('property'))?->property_id;
 
         return Inertia::render('Rentals/Form', [
             'rental' => null,
             'currency' => $company->default_currency,
-            'defaults' => ['room_id' => $request->integer('room') ?: null, 'client_id' => $request->integer('client') ?: null],
-            'tenants' => $company->clients()
-                ->where('client_type', 'individual')
+            'defaults' => [
+                'client_id' => $request->integer('client') ?: null,
+                'property_id' => $propertyId,
+                'room_ids' => $room ? [$room->id] : [],
+            ],
+            'companies' => $company->clients()
+                ->where('client_type', 'company')
                 ->where('status', 'active')
-                ->whereDoesntHave('occupants', fn (Builder $occupants) => $occupants->whereHas('currentStay'))
-                ->with(['occupants' => fn (HasMany $occupants) => $occupants->orderBy('id')->select(['id', 'client_id', 'gender'])])
                 ->orderBy('name')
-                ->get(['id', 'name', 'phone', 'id_type', 'id_number'])
-                ->map(fn (Client $client) => [
-                    'id' => $client->id,
-                    'name' => $client->name,
-                    'phone' => $client->phone,
-                    'idNumber' => $client->id_number,
-                    'gender' => $client->occupants->first()?->gender,
-                ]),
-            'rooms' => RoomRental::roomsToRent($company)->map(fn (Room $room) => [
-                'id' => $room->id,
-                'number' => $room->room_number,
-                'block' => $room->block,
-                'floor' => $room->floor_number,
-                'capacity' => $room->capacity,
-                'genderPolicy' => $room->gender_policy,
-                'rentPerBed' => $room->rent_per_bed === null ? null : (float) $room->rent_per_bed,
-                'property' => $room->property->only(['id', 'name', 'code']),
-                'beds' => $room->beds->map(fn (Bed $bed) => ['id' => $bed->id, 'label' => $bed->label])->values(),
-                'canRentWhole' => $room->beds->count() === $room->active_beds_count,
-            ]),
-            'idTypes' => Client::ID_TYPES,
+                ->get(['id', 'name', 'phone']),
+            'properties' => $rooms->groupBy('property_id')->map(fn (Collection $rooms) => [
+                ...$rooms->first()->property->only(['id', 'name', 'code']),
+                'rooms' => $rooms->map(fn (Room $room) => [
+                    'id' => $room->id,
+                    'number' => $room->room_number,
+                    'block' => $room->block,
+                    'floor' => $room->floor_number,
+                    'capacity' => $room->capacity,
+                    'rent' => $room->rent_per_bed === null ? null : round((float) $room->rent_per_bed * $room->capacity, 2),
+                ])->values(),
+            ])->values(),
+            'maxMonths' => RoomRental::MAX_TERM_MONTHS,
+            'paymentMethods' => RoomRental::FIRST_PAYMENT_METHODS,
         ]);
     }
 
     /**
-     * Rent the bed or room and check the tenant in. A new tenant is added
-     * as an individual client, and as the occupant of the bed.
+     * Rent the rooms to the company. A new company is added as a client.
+     * Unless the first payment is left for later, the first month's rent,
+     * and any deposit, are recorded as paid today.
      */
     public function store(RoomRentalRequest $request): RedirectResponse
     {
         $company = $this->currentCompany($request);
-        $bed = Bed::query()->with('room')->findOrFail($request->integer('bed_id'));
 
-        $rental = DB::transaction(function () use ($request, $company, $bed) {
+        $rental = DB::transaction(function () use ($request, $company) {
             $client = $request->validated('client_mode') === 'new'
-                ? $this->newTenant($company, $request->validated('new_client'))
+                ? $this->newCompanyClient($company, $request->validated('new_client'))
                 : $company->clients()->findOrFail($request->integer('client_id'));
-
-            $occupant = $client->occupants()->whereDoesntHave('currentStay')->orderBy('id')->first()
-                ?? $this->occupantFor($client, $request->tenantGender());
 
             $rental = new RoomRental($request->terms());
             $rental->forceFill([
                 'company_id' => $company->id,
                 'rental_number' => RoomRental::nextNumber($company->id),
                 'client_id' => $client->id,
-                'occupant_id' => $occupant->id,
-                'property_id' => $bed->room->property_id,
-                'room_id' => $bed->room_id,
-                'bed_id' => $bed->id,
-                'unit_type' => $request->validated('unit_type'),
+                'property_id' => $request->integer('property_id'),
                 'status' => 'active',
                 'created_by' => $request->user()->id,
             ])->save();
+            $rental->rooms()->attach($request->validated('room_ids'), ['company_id' => $company->id]);
 
-            $rental->checkIn();
+            if ($request->validated('first_payment') === 'now') {
+                $this->recordFirstPayment($rental, $request->validated('payment_method'), $request->validated('payment_reference'), $request->user());
+            }
 
             return $rental;
         });
 
+        $rooms = $rental->rooms()->orderBy('room_number')->pluck('room_number');
+        $paid = match (true) {
+            $request->validated('first_payment') !== 'now' => ' Record their first payment.',
+            $rental->security_deposit > 0 => ' The first month’s rent and the deposit are recorded as paid.',
+            default => ' The first month’s rent is recorded as paid.',
+        };
+
         return to_route('rentals.show', $rental)
-            ->with('success', "{$rental->rental_number} was created and {$rental->client->name} is checked into room {$bed->room->room_number}, bed {$bed->label}. Record their first payment.");
+            ->with('success', "{$rental->rental_number} was created: {$rental->client->name} rents ".Str::plural('room', $rooms->count()).' '.$rooms->join(', ')." until {$rental->end_date->format('j M Y')}.{$paid}");
     }
 
     /**
@@ -175,8 +176,7 @@ class RoomRentalController extends Controller
 
         $roomRental->load([
             ...self::listRelations(),
-            'client:id,name,phone,email,nationality,id_type,id_number',
-            'occupant:id,full_name,gender',
+            'client:id,name,contact_person_name,phone,email',
             'createdBy:id,name',
             'payments' => fn (HasMany $payments) => $payments->with('receivedBy:id,name')->orderByDesc('paid_on')->orderByDesc('id'),
         ]);
@@ -187,8 +187,7 @@ class RoomRentalController extends Controller
             'currency' => $roomRental->company->default_currency,
             'rental' => [
                 ...self::listDetails($roomRental, $standing),
-                'client' => $roomRental->client->only(['id', 'name', 'phone', 'email', 'nationality', 'id_type', 'id_number']),
-                'occupant' => ['id' => $roomRental->occupant->id, 'gender' => $roomRental->occupant->gender],
+                'client' => $roomRental->client->only(['id', 'name', 'contact_person_name', 'phone', 'email']),
                 'notes' => $roomRental->notes,
                 'createdBy' => $roomRental->createdBy?->name,
                 'createdAt' => $roomRental->created_at?->toDateString(),
@@ -229,18 +228,18 @@ class RoomRentalController extends Controller
                 ...self::listDetails($roomRental, $roomRental->rentStanding()),
                 'canChangeRent' => ! $roomRental->payments()->where('purpose', 'rent')->where('status', 'cleared')->exists(),
                 'form' => [
+                    'months' => $roomRental->termMonths() ?? 1,
+                    'start_date' => $roomRental->start_date->toDateString(),
                     'monthly_rent' => (float) $roomRental->monthly_rent,
                     'security_deposit' => (float) $roomRental->security_deposit,
-                    'start_date' => $roomRental->start_date->toDateString(),
-                    'end_date' => $roomRental->end_date?->toDateString(),
-                    'notes' => $roomRental->notes,
                 ],
             ],
             'currency' => $roomRental->company->default_currency,
             'defaults' => null,
-            'tenants' => [],
-            'rooms' => [],
-            'idTypes' => Client::ID_TYPES,
+            'companies' => [],
+            'properties' => [],
+            'maxMonths' => RoomRental::MAX_TERM_MONTHS,
+            'paymentMethods' => [],
         ]);
     }
 
@@ -259,15 +258,7 @@ class RoomRentalController extends Controller
             throw ValidationException::withMessages(['monthly_rent' => 'Rent has already been paid on this rental, so its rent and start date stay as they are. To change the rent, move the tenant out and start a new rental.']);
         }
 
-        DB::transaction(function () use ($roomRental, $terms) {
-            $startChanged = $terms['start_date'] !== $roomRental->start_date->toDateString();
-            $roomRental->fill($terms)->save();
-
-            if ($startChanged) {
-                $roomRental->occupancy()->whereNull('check_out_date')->update(['check_in_date' => $roomRental->start_date]);
-                $roomRental->room->recalculateOccupancy();
-            }
-        });
+        $roomRental->fill($terms)->save();
 
         return to_route('rentals.show', $roomRental)->with('success', "{$roomRental->rental_number} was updated.");
     }
@@ -298,8 +289,7 @@ class RoomRentalController extends Controller
         return [
             'client:id,name,phone',
             'property' => fn ($query) => $query->withTrashed()->select(['id', 'name', 'code']),
-            'room' => fn ($query) => $query->withTrashed()->select(['id', 'room_number', 'capacity']),
-            'bed:id,label',
+            'rooms' => fn ($query) => $query->withTrashed()->select(['rooms.id', 'room_number', 'capacity'])->orderBy('room_number'),
         ];
     }
 
@@ -315,11 +305,11 @@ class RoomRentalController extends Controller
             'id' => $rental->id,
             'number' => $rental->rental_number,
             'status' => $rental->status,
-            'unitType' => $rental->unit_type,
             'tenant' => $rental->client?->only(['id', 'name', 'phone']),
             'property' => $rental->property?->only(['id', 'name', 'code']),
-            'room' => $rental->room ? ['id' => $rental->room->id, 'number' => $rental->room->room_number, 'capacity' => $rental->room->capacity] : null,
-            'bed' => $rental->bed?->label,
+            'rooms' => $rental->rooms->map(fn (Room $room) => ['id' => $room->id, 'number' => $room->room_number, 'capacity' => $room->capacity])->values()->all(),
+            'months' => $rental->termMonths(),
+            'termOver' => $rental->isActive() && $rental->end_date?->lt(today()) === true,
             'monthlyRent' => (float) $rental->monthly_rent,
             'securityDeposit' => (float) $rental->security_deposit,
             'startDate' => $rental->start_date->toDateString(),
@@ -375,7 +365,8 @@ class RoomRentalController extends Controller
     /**
      * Each month of rent from the start (the latest STATEMENT_MONTHS), with
      * what it costs, what has been paid towards it and whether it is paid,
-     * part paid, unpaid or still to come; the next month to fall due ends it.
+     * part paid, unpaid or still to come. A running rental shows every month
+     * of its term; an open-ended one ends with the next month to fall due.
      *
      * @param  array<string, mixed>  $standing
      * @return list<array{start: string, end: string, amount: float, paid: float, status: string}>
@@ -383,7 +374,7 @@ class RoomRentalController extends Controller
     private function statement(RoomRental $rental, array $standing): array
     {
         $today = CarbonImmutable::today();
-        $through = $rental->isActive() ? $today->addMonthNoOverflow() : ($rental->lastDay() ?? $today);
+        $through = $rental->lastDay() ?? $today->addMonthNoOverflow();
         $remaining = $standing['paid'];
         $lines = [];
 
@@ -410,8 +401,9 @@ class RoomRentalController extends Controller
     }
 
     /**
-     * Headline figures: rentals running, their monthly rent, rent owed and
-     * overdue, deposits held and what was collected this month.
+     * Headline figures: rentals running and the rooms they hold, their
+     * monthly rent, rent owed and overdue, deposits held and what was
+     * collected this month.
      *
      * @param  array<int, array<string, mixed>>  $standings
      * @return array<string, mixed>
@@ -430,7 +422,7 @@ class RoomRentalController extends Controller
 
         return [
             'active' => $active()->count(),
-            'rooms' => $active()->where('unit_type', 'room')->count(),
+            'rooms' => DB::table('room_rental_rooms')->whereIn('room_rental_id', $active()->select('room_rentals.id'))->count(),
             'monthlyRent' => round((float) $active()->sum('monthly_rent'), 2),
             'arrears' => ['count' => $owed->count(), 'amount' => round($owed->sum('arrears'), 2), 'overdue' => $owed->where('standing', 'overdue')->count()],
             'depositsHeld' => round($depositsPaid - (float) $active()->sum('deposit_refunded'), 2),
@@ -457,58 +449,48 @@ class RoomRentalController extends Controller
             ->when($search !== '', fn (Builder $query) => $query->where(fn (Builder $query) => $query
                 ->whereLike('rental_number', "%{$search}%")
                 ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%")->orWhereLike('phone', "%{$search}%")->orWhereLike('id_number', "%{$search}%"))
-                ->orWhereHas('room', fn (Builder $rooms) => $rooms->whereLike('room_number', "%{$search}%"))))
+                ->orWhereHas('rooms', fn (Builder $rooms) => $rooms->whereLike('room_number', "%{$search}%"))))
             ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('status', $filters['status']))
-            ->when($except !== 'unit' && $filters['unit'] !== [], fn (Builder $query) => $query->whereIn('unit_type', $filters['unit']))
             ->when($except !== 'properties' && $filters['properties'] !== [], fn (Builder $query) => $query->whereIn('property_id', $propertyIds))
             ->when($except !== 'standing' && $filters['standing'] !== [], fn (Builder $query) => $query->whereKey($standingIds()));
     }
 
     /**
-     * Add a new individual client from the rental form.
-     *
-     * @param  array<string, mixed>  $details
+     * Receipts for the first month's rent, and the deposit when there is
+     * one, paid today.
      */
-    private function newTenant(Company $company, array $details): Client
+    private function recordFirstPayment(RoomRental $rental, string $method, ?string $reference, User $by): void
     {
+        $purposes = array_filter(['rent' => (float) $rental->monthly_rent, 'deposit' => (float) $rental->security_deposit]);
+
+        foreach ($purposes as $purpose => $amount) {
+            $rental->recordPayment(['paid_on' => today(), 'amount' => $amount, 'purpose' => $purpose, 'method' => $method, 'reference' => $reference], $by);
+        }
+    }
+
+    /**
+     * Add a new company client from the rental form: its name and phone,
+     * and whichever other details were given.
+     *
+     * @param  array{name: string, phone: string, contact_person_name?: ?string, email?: ?string, trade_license_number?: ?string, tax_registration_number?: ?string, address?: ?string}  $details
+     */
+    private function newCompanyClient(Company $company, array $details): Client
+    {
+        $optional = fn (string $key) => filled($details[$key] ?? null) ? trim($details[$key]) : null;
+
         $client = new Client([
-            'client_type' => 'individual',
+            'client_type' => 'company',
             'name' => trim($details['name']),
-            'contact_person_name' => trim($details['name']),
-            'phone' => $details['phone'] ?? null,
-            'email' => $details['email'] ?? null,
-            'nationality' => $details['nationality'] ?? null,
-            'id_type' => $details['id_type'],
-            'id_number' => trim($details['id_number']),
+            'phone' => trim($details['phone']),
+            'contact_person_name' => $optional('contact_person_name'),
+            'email' => $optional('email'),
+            'trade_license_number' => $optional('trade_license_number'),
+            'tax_registration_number' => $optional('tax_registration_number'),
+            'address' => $optional('address'),
             'status' => 'active',
         ]);
         $client->forceFill(['company_id' => $company->id])->save();
 
         return $client;
-    }
-
-    /**
-     * The tenant as the person staying in the bed, from their client details.
-     */
-    private function occupantFor(Client $client, string $gender): Occupant
-    {
-        $idTaken = $client->id_number && Occupant::query()
-            ->where('company_id', $client->company_id)
-            ->where('id_type', $client->id_type)
-            ->where('id_number', $client->id_number)
-            ->exists();
-
-        $occupant = new Occupant([
-            'client_id' => $client->id,
-            'full_name' => $client->name,
-            'gender' => $gender,
-            'nationality' => $client->nationality,
-            'id_type' => $idTaken ? null : $client->id_type,
-            'id_number' => $idTaken ? null : $client->id_number,
-            'phone' => $client->phone,
-        ]);
-        $occupant->forceFill(['company_id' => $client->company_id])->save();
-
-        return $occupant;
     }
 }

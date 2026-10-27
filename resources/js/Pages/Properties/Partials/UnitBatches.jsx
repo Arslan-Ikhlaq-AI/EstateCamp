@@ -14,6 +14,12 @@ const KINDS = {
     apartments: { icon: HouseIcon, fallback: 'A-101', index: 'apartments.index' },
 };
 
+/**
+ * The most units one batch can hold, the same as the most units a property
+ * can have (the server allows no more).
+ */
+const MAX_BATCH_SIZE = 10000;
+
 export const emptyUnits = () => ({ rooms: [], shops: [], apartments: [] });
 
 /**
@@ -30,7 +36,7 @@ export function unitNumbers(first, count) {
 
     const [, prefix, digits] = match;
 
-    return Array.from({ length: Math.min(total, 100) }, (_, offset) => prefix + String(Number(digits) + offset).padStart(digits.length, '0'));
+    return Array.from({ length: Math.min(total, MAX_BATCH_SIZE) }, (_, offset) => prefix + String(Number(digits) + offset).padStart(digits.length, '0'));
 }
 
 export const unitCount = (batches) => batches.reduce((sum, batch) => sum + unitNumbers(batch.first_number, batch.count).length, 0);
@@ -60,7 +66,10 @@ function newBatch(kind, batches, summary, options) {
     return { count: '1', first_number, bedrooms: '1', bathrooms: '1', furnishing_status: null, monthly_rent: '', area_sqm: '', floor_number: '' };
 }
 
-function BatchFields({ kind, batch, index, onChange, errors, options, currency }) {
+/**
+ * One batch's fields. `maxCount` is the most units the batch can hold.
+ */
+function BatchFields({ kind, batch, index, onChange, errors, options, currency, maxCount }) {
     const { t, tOr } = useTranslation();
     const id = (field) => `units-${kind}-${index}-${field}`;
     const error = (field) => errors[`units.${kind}.${index}.${field}`];
@@ -68,7 +77,7 @@ function BatchFields({ kind, batch, index, onChange, errors, options, currency }
 
     return (
         <FieldGroup className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-            <TextField {...bind('count')} type="number" inputMode="numeric" min={1} max={100} label={t('propertyForm.units.count')} required />
+            <TextField {...bind('count')} type="number" inputMode="numeric" min={1} max={maxCount} label={t('propertyForm.units.count')} required />
             <TextField {...bind('first_number')} label={t('propertyForm.units.firstNumber')} description={t('propertyForm.units.firstNumberHint')} required />
 
             {kind === 'rooms' && (
@@ -240,6 +249,7 @@ export default function UnitBatches({ units, onChange, errors, options, currency
                                     errors={errors}
                                     options={options}
                                     currency={currency}
+                                    maxCount={remaining === null ? MAX_BATCH_SIZE : Math.min(Math.max(numbers.length + remaining, 1), MAX_BATCH_SIZE)}
                                 />
                             </section>
                         );

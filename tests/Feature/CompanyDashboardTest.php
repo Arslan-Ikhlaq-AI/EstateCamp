@@ -167,7 +167,7 @@ test('breaks down invoices, payments, balances, stays and recent activity', func
             ->where('finance.topDebtors.4.name', 'Daniel Okafor')
             ->where('finance.topDebtors.4.overdue', 0)
             ->has('occupancyTrend', 6)
-            ->where('occupancyTrend.5', ['month' => '2026-10', 'staying' => 28])
+            ->where('occupancyTrend.5', ['month' => '2026-10', 'staying' => 27])
             ->has('activity', 10)
             ->where('activity.0.type', 'payment')
             ->where('activity.0.status', 'pending')

@@ -1,4 +1,4 @@
-import ChequeScheduleFields, { ChequePlanCard, TermPicker } from '@/Components/ChequeScheduleFields';
+import ChequeScheduleFields, { ChequeCountPicker, ChequePlanCard, TermPicker } from '@/Components/ChequeScheduleFields';
 import { ChoiceField, FormSection, MoneyField, SelectField, TextareaField, TextField } from '@/Components/FormFields';
 import FormShell from '@/Components/FormShell';
 import DashboardLayout from '@/Layouts/DashboardLayout';
@@ -160,12 +160,14 @@ export default function Form({
                         <TermPicker startDate={data.start_date} endDate={data.end_date} onChange={(value) => setData('end_date', value)} />
                         <MoneyField {...bind('annual_rent')} label={t('leasing.headLeases.form.fields.annualRent')} currency={currency} suffix={t('leasing.common.perYear')} placeholder="780000" />
                         <MoneyField {...bind('security_deposit')} label={t('leasing.common.securityDeposit')} currency={currency} optional />
-                        <ChoiceField
+                        <ChequeCountPicker
                             id="payments_per_year"
                             label={t('leasing.headLeases.form.fields.paymentsPerYear')}
                             value={data.payments_per_year}
-                            onChange={(value) => setData('payments_per_year', Number(value))}
-                            options={paymentsPerYear.map((count) => ({ value: count, label: t('leasing.headLeases.form.cheques', { count }) }))}
+                            onChange={(value) => setData('payments_per_year', value)}
+                            options={paymentsPerYear}
+                            annualRent={data.annual_rent}
+                            currency={currency}
                             error={errors.payments_per_year}
                             className="sm:col-span-2"
                         />

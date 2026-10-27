@@ -4,32 +4,34 @@ namespace Database\Seeders;
 
 use App\Models\Client;
 use App\Models\Company;
-use App\Models\Occupant;
+use App\Models\Room;
 use App\Models\RoomRental;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 
 /**
- * Individuals renting the private room at the Jebel Ali residence without
- * a contract. A past tenant stayed from February to June, paid every month
- * and had her deposit handed back. Today's tenant moved in at the start of
- * July: she paid the deposit and three months' rent, still owes this
- * month's, and has handed over a post-dated cheque for next month.
+ * Companies renting the private room at the Jebel Ali residence short-term,
+ * without a contract. A past tenant took it for six months from February,
+ * paid every month, left after five and had its deposit handed back.
+ * Today's tenant took it for six months from the start of July: it paid the
+ * deposit and three months' rent, still owes this month's, and has handed
+ * over a post-dated cheque for next month.
  *
  * Dates follow today, so the story reads the same whenever it is seeded.
- * Safe to re-run: tenants are matched on their passport. Requires
- * OccupancySeeder.
+ * Safe to re-run: tenants are matched on their name. Requires RoomSeeder.
  */
 class RoomRentalSeeder extends Seeder
 {
-    public const PAST_TENANT = 'Fatima Noor';
+    public const PAST_TENANT = 'Coastline Marine Services L.L.C.';
 
-    public const TENANT = 'Maria Santos';
+    public const TENANT = 'BrightPath Events L.L.C.';
 
     private const ROOM = '102';
 
     private const RENT = 1500;
+
+    private const TERM_MONTHS = 6;
 
     /**
      * Run the database seeds.
@@ -39,18 +41,10 @@ class RoomRentalSeeder extends Seeder
         $company = CompanySeeder::demoCompany();
         $user = $company->users()->orderBy('id')->first();
         $room = $company->properties()->where('code', PropertySeeder::JEBEL_ALI)->firstOrFail()->rooms()->where('room_number', self::ROOM)->firstOrFail();
-        $bedId = $room->beds()->where('is_active', true)->orderBy('id')->value('id');
         $thisMonth = CarbonImmutable::today()->startOfMonth();
         $movedIn = $thisMonth->subMonthsNoOverflow(3);
 
-        $past = $this->rental($company, $user, self::PAST_TENANT, 'Pakistani', 'FN7781204', '+971 52 660 4182', [
-            'room_id' => $room->id,
-            'property_id' => $room->property_id,
-            'bed_id' => $bedId,
-            'unit_type' => 'bed',
-            'start_date' => $thisMonth->subMonthsNoOverflow(8),
-            'notes' => 'Nurse at the nearby clinic; moved to staff housing in July.',
-        ]);
+        $past = $this->rental($company, $user, $room, self::PAST_TENANT, 'Hassan Ali', '+971 4 881 2290', $thisMonth->subMonthsNoOverflow(8), 'Boat crew between charters; left a month early.');
 
         if ($past?->wasRecentlyCreated) {
             $this->pay($past, $user, 'deposit', 'cash', $past->start_date->toImmutable(), self::RENT);
@@ -62,14 +56,7 @@ class RoomRentalSeeder extends Seeder
             $past->end($movedIn, self::RENT, 'bank_transfer', 'Room left clean; deposit returned in full.');
         }
 
-        $current = $this->rental($company, $user, self::TENANT, 'Filipino', 'P9031677', '+971 56 218 7740', [
-            'room_id' => $room->id,
-            'property_id' => $room->property_id,
-            'bed_id' => $bedId,
-            'unit_type' => 'room',
-            'start_date' => $movedIn,
-            'notes' => 'Pays at the office at the start of each month.',
-        ]);
+        $current = $this->rental($company, $user, $room, self::TENANT, 'Leila Haddad', '+971 56 218 7740', $movedIn, 'Event staff for the winter season. Pays at the office at the start of each month.');
 
         if ($current?->wasRecentlyCreated) {
             $this->pay($current, $user, 'deposit', 'bank_transfer', $movedIn, self::RENT);
@@ -92,56 +79,43 @@ class RoomRentalSeeder extends Seeder
     }
 
     /**
-     * The tenant's rental, created and checked in the first time, or null
+     * The company's rental of the room, created the first time, or null
      * when it already exists.
-     *
-     * @param  array<string, mixed>  $place
      */
-    private function rental(Company $company, ?User $user, string $name, string $nationality, string $passport, string $phone, array $place): ?RoomRental
+    private function rental(Company $company, ?User $user, Room $room, string $name, string $contact, string $phone, CarbonImmutable $start, string $notes): ?RoomRental
     {
-        $client = $company->clients()->where('id_type', 'passport')->where('id_number', $passport)->first();
+        $client = $company->clients()->where('name', $name)->first();
 
         if ($client && $client->roomRentals()->exists()) {
             return null;
         }
 
         $client ??= (new Client([
-            'client_type' => 'individual',
+            'client_type' => 'company',
             'name' => $name,
-            'contact_person_name' => $name,
+            'contact_person_name' => $contact,
             'phone' => $phone,
-            'email' => strtolower(str_replace(' ', '.', $name)).'@example.test',
-            'id_type' => 'passport',
-            'id_number' => $passport,
-            'nationality' => $nationality,
-            'address' => 'Jebel Ali Staff Residence, Dubai',
             'status' => 'active',
-            'notes' => 'Rents a room directly, without a contract.',
+            'notes' => 'Rents rooms short-term, without a contract.',
         ]))->forceFill(['company_id' => $company->id]);
         $client->save();
 
-        $occupant = (new Occupant([
-            'client_id' => $client->id,
-            'full_name' => $name,
-            'gender' => 'female',
-            'nationality' => $nationality,
-            'id_type' => 'passport',
-            'id_number' => $passport,
-            'phone' => $phone,
-        ]))->forceFill(['company_id' => $company->id]);
-        $occupant->save();
-
-        $rental = new RoomRental(['monthly_rent' => self::RENT, 'security_deposit' => self::RENT, 'start_date' => $place['start_date'], 'notes' => $place['notes']]);
+        $rental = new RoomRental([
+            'monthly_rent' => self::RENT,
+            'security_deposit' => self::RENT,
+            'start_date' => $start,
+            'end_date' => RoomRental::endDateFor($start, self::TERM_MONTHS),
+            'notes' => $notes,
+        ]);
         $rental->forceFill([
-            ...array_diff_key($place, array_flip(['start_date', 'notes'])),
             'company_id' => $company->id,
-            'rental_number' => RoomRental::nextNumber($company->id, $place['start_date']),
+            'rental_number' => RoomRental::nextNumber($company->id, $start),
             'client_id' => $client->id,
-            'occupant_id' => $occupant->id,
+            'property_id' => $room->property_id,
             'status' => 'active',
             'created_by' => $user?->id,
         ])->save();
-        $rental->checkIn();
+        $rental->rooms()->attach($room->id, ['company_id' => $company->id]);
 
         return $rental;
     }

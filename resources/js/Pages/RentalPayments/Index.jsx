@@ -18,7 +18,7 @@ const PURPOSE_ICONS = { rent: BanknoteIcon, deposit: ShieldCheckIcon, other: Tag
 const STATUS_ICONS = { cleared: CircleCheckIcon, void: BanIcon };
 
 /**
- * Rent collections: every receipt for what individual tenants paid, with
+ * Rent collections: every receipt for what short-term tenants paid, with
  * the period filter, and the tenants' cheques still waiting to clear.
  */
 export default function Index({ company, filters, period, facets, summary, payments }) {
@@ -60,7 +60,7 @@ export default function Index({ company, filters, period, facets, summary, payme
                         <Link href={route('rentals.show', payment.rental.id)} dir="auto" className="truncate font-medium underline-offset-4 hover:text-brand-ink hover:underline">
                             {payment.rental.tenant?.name ?? payment.rental.number}
                         </Link>
-                        <span className="truncate text-xs text-muted-foreground">{[payment.rental.number, payment.rental.room && t('finance.receipts.room', { room: payment.rental.room }), payment.rental.property].filter(Boolean).join(' · ')}</span>
+                        <span className="truncate text-xs text-muted-foreground">{[payment.rental.number, payment.rental.rooms.length > 0 && t('finance.rentals.place', { count: payment.rental.rooms.length, rooms: payment.rental.rooms.join(', ') }), payment.rental.property].filter(Boolean).join(' · ')}</span>
                     </div>
                 ) : (
                     '—'

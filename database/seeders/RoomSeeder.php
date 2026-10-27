@@ -74,7 +74,7 @@ class RoomSeeder extends Seeder
                 ],
                 'rooms' => [
                     ['room_number' => '101', 'type' => 'private_room', 'floor_number' => 1, 'gender_policy' => 'male', 'capacity' => 1, 'occupied_count' => 1, 'area_sqm' => 16, 'rent_per_bed' => 1500, 'notes' => 'Next to reception and the mail room.'],
-                    ['room_number' => '102', 'type' => 'private_room', 'floor_number' => 1, 'gender_policy' => 'female', 'capacity' => 1, 'occupied_count' => 0, 'area_sqm' => 16, 'rent_per_bed' => 1500, 'notes' => 'Rented directly to individual tenants, without a contract.'],
+                    ['room_number' => '102', 'type' => 'private_room', 'floor_number' => 1, 'gender_policy' => 'female', 'capacity' => 1, 'occupied_count' => 0, 'area_sqm' => 16, 'rent_per_bed' => 1500, 'notes' => 'Rented short-term to companies, without a contract.'],
                     ['room_number' => '103', 'type' => 'shared_room', 'floor_number' => 1, 'gender_policy' => 'female', 'capacity' => 2, 'occupied_count' => 2, 'area_sqm' => 22, 'rent_per_bed' => 1100, 'notes' => 'Twin room with a shared wardrobe.'],
                     ['room_number' => '201', 'type' => 'shared_room', 'floor_number' => 2, 'gender_policy' => 'male', 'capacity' => 2, 'occupied_count' => 1, 'area_sqm' => 22, 'rent_per_bed' => 1100, 'notes' => 'One bed is still available.'],
                     ['room_number' => '202', 'type' => 'private_room', 'floor_number' => 2, 'gender_policy' => 'male', 'capacity' => 1, 'occupied_count' => 1, 'area_sqm' => 18, 'rent_per_bed' => 1700, 'notes' => 'Corner room with a balcony.'],

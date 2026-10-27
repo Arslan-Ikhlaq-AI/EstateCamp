@@ -164,6 +164,25 @@ test('keeps a schedule that already has paid cheques when the rent changes', fun
         ->and((float) $this->currentLease->cheques()->where('purpose', 'rent')->max('amount'))->toBe(195000.0);
 });
 
+test('keeps a cheque\'s saved details when the form leaves them out', function () {
+    $input = validLeaseInput($this->alQuoz, $this->hamdan, ['end_date' => '2028-10-31']);
+
+    $this->actingAs($this->superAdmin)
+        ->post(route('head-leases.store'), $input)
+        ->assertSessionHasNoErrors();
+
+    $lease = HeadLease::where('property_id', $this->alQuoz->id)->sole();
+    $secondYear = fn () => $lease->cheques()->where('purpose', 'rent')->where('sequence', 13)->sole();
+    $secondYear()->applyEntry(['cheque_number' => '402700', 'bank_name' => 'Emirates NBD']);
+
+    $this->actingAs($this->superAdmin)
+        ->put(route('head-leases.update', $lease), [...$input, 'cheques' => [['key' => 'rent:13', 'cheque_date' => '2027-11-01', 'amount' => 10000]]])
+        ->assertSessionHasNoErrors();
+
+    expect($secondYear()->cheque_number)->toBe('402700')
+        ->and($secondYear()->bank_name)->toBe('Emirates NBD');
+});
+
 test('starts a renewal with the next term prefilled', function () {
     $this->actingAs($this->superAdmin)
         ->get(route('head-leases.create', ['renew' => $this->currentLease->id]))

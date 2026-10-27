@@ -58,8 +58,8 @@ describe('the company summary', function () {
                 ->where('prepared', ['date' => '2026-10-17', 'time' => '14:00', 'by' => $this->admin->name])
                 ->where('cash.client_payment', ['count' => 4, 'amount' => 27875])
                 ->where('previousCash.rental_payment', ['count' => 1, 'amount' => 1500])
-                ->where('occupancy.beds.occupied', 28)
-                ->where('occupancy.beds.occupancyRate', 90.3)
+                ->where('occupancy.beds.occupied', 27)
+                ->where('occupancy.beds.occupancyRate', 87.1)
                 ->where('billing.receivables', [
                     'invoices' => ['count' => 5, 'amount' => 39500],
                     'overdue' => ['count' => 4, 'amount' => 37800],
@@ -83,7 +83,7 @@ describe('the company summary', function () {
                 ->where('period.kind', 'all')
                 ->where('previousPeriod', null)
                 ->where('previousCash', null)
-                ->where('occupancy.checkIns', 30)
+                ->where('occupancy.checkIns', 28)
                 ->where('tenancy.signed', 9)
             );
     });
@@ -162,7 +162,7 @@ describe('receivables', function () {
     });
 
     test('ages each unpaid month of rent from the day it fell due, settling the oldest first', function () {
-        $rental = RoomRental::factory()->create(['start_date' => '2026-07-01', 'monthly_rent' => 1000]);
+        $rental = RoomRental::factory()->create(['start_date' => '2026-07-01', 'end_date' => '2026-12-31', 'monthly_rent' => 1000]);
         $rental->recordPayment(['paid_on' => '2026-07-01', 'amount' => 1500, 'purpose' => 'rent', 'method' => 'cash']);
 
         $unpaid = collect($rental->unpaidRent())->map(fn (array $month) => [$month['dueOn']->toDateString(), $month['amount']])->all();
@@ -177,20 +177,20 @@ describe('occupancy', function () {
             ->get(route('reports.occupancy'))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Occupancy')
-                ->where('summary.staying', 28)
-                ->where('summary.beds', ['total' => 37, 'occupied' => 28, 'available' => 3, 'outOfService' => 6, 'occupancyRate' => 90.3])
+                ->where('summary.staying', 27)
+                ->where('summary.beds', ['total' => 37, 'occupied' => 27, 'available' => 4, 'outOfService' => 6, 'occupancyRate' => 87.1])
                 ->where('properties.0.beds.occupancyRate', 91.7)
                 ->where('properties.0.potentialRent', 12000)
                 ->has('roomTypes', 3)
-                ->has('vacancies', 3)
+                ->has('vacancies', 4)
                 ->where('vacancies.0.number', '101')
                 ->where('vacancies.0.free', 1)
-                ->where('gender', ['male' => 25, 'female' => 3])
+                ->where('gender', ['male' => 25, 'female' => 2])
                 ->where('nationalities.0', ['nationality' => 'Indian', 'group' => 'named', 'count' => 9])
                 ->where('clients.0.name', 'Gulf Builders Contracting L.L.C.')
                 ->where('clients.0.staying', 15)
                 ->has('trend', 12)
-                ->where('trend.11', ['month' => '2026-10', 'staying' => 28])
+                ->where('trend.11', ['month' => '2026-10', 'staying' => 27])
             );
     });
 
@@ -198,10 +198,10 @@ describe('occupancy', function () {
         $this->actingAs($this->admin)
             ->get(route('reports.occupancy', ['period' => '2026-02']))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('summary.checkIns', 12)
+                ->where('summary.checkIns', 11)
                 ->where('summary.checkOuts', 0)
                 ->where('trend.0.month', '2025-03')
-                ->where('trend.11', ['month' => '2026-02', 'staying' => 20])
+                ->where('trend.11', ['month' => '2026-02', 'staying' => 19])
             );
     });
 });

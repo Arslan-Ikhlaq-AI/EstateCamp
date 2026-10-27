@@ -430,7 +430,13 @@ export const leasing = {
                 last: 'Last cheque',
                 each: 'Each rent cheque',
             },
-            term: { label: 'Duration', years: { one: '{count} year', other: '{count} years' } },
+            term: {
+                label: 'Duration',
+                unitLabel: 'Duration in',
+                units: { years: 'Years', months: 'Months' },
+                hint: 'Counted from the start date, and sets the end date.',
+                pickStart: 'Pick the start date first.',
+            },
             perYearHint: { one: '{count} cheque a year', other: '{count} cheques a year' },
             empty: {
                 title: 'No cheques yet',
@@ -1198,7 +1204,13 @@ export const leasing = {
                 last: 'آخر شيك',
                 each: 'كل شيك إيجار',
             },
-            term: { label: 'المدة', years: { zero: 'لا سنوات', one: 'سنة واحدة', two: 'سنتان', few: '{count} سنوات', many: '{count} سنة', other: '{count} سنة' } },
+            term: {
+                label: 'المدة',
+                unitLabel: 'المدة بـ',
+                units: { years: 'سنوات', months: 'أشهر' },
+                hint: 'تُحسب من تاريخ البدء، وتحدد تاريخ الانتهاء.',
+                pickStart: 'اختر تاريخ البدء أولًا.',
+            },
             perYearHint: { zero: 'لا شيكات سنويًا', one: 'شيك واحد سنويًا', two: 'شيكان سنويًا', few: '{count} شيكات سنويًا', many: '{count} شيكًا سنويًا', other: '{count} شيك سنويًا' },
             empty: {
                 title: 'لا توجد شيكات بعد',

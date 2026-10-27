@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\ContractLine;
+use App\Models\Occupancy;
 use App\Models\Occupant;
 use App\Models\RentalPayment;
 use App\Models\Room;
@@ -26,13 +27,14 @@ beforeEach(function () {
     $this->admin = User::where('email', 'omar.rahman@horizonfm.test')->sole();
     $this->company = Company::findOrFail($this->admin->company_id);
     $this->room = fn (string $property, string $number) => $this->company->properties()->where('code', $property)->sole()->rooms()->where('room_number', $number)->sole();
-    // A single room for women, and a four-bed room for men.
+    // A single room and a twin room at Jebel Ali, and a four-bed room at Al Quoz.
     $this->privateRoom = ($this->room)(PropertySeeder::JEBEL_ALI, '102');
+    $this->twinRoom = ($this->room)(PropertySeeder::JEBEL_ALI, '103');
     $this->dormRoom = ($this->room)(PropertySeeder::AL_QUOZ, '103');
 });
 
 /**
- * A new tenant renting the private room's bed from the start of October.
+ * A new company renting both Jebel Ali rooms for three months from the start of October.
  *
  * @return array<string, mixed>
  */
@@ -40,24 +42,26 @@ function rentalInput(array $overrides = []): array
 {
     return [
         'client_mode' => 'new',
-        'new_client' => ['name' => 'Grace Wanjiru', 'phone' => '+971 55 120 3344', 'nationality' => 'Kenyan', 'id_type' => 'passport', 'id_number' => 'K1234567'],
-        'gender' => 'female',
-        'unit_type' => 'bed',
-        'bed_id' => test()->privateRoom->beds()->orderBy('id')->value('id'),
-        'monthly_rent' => 1500,
-        'security_deposit' => 1500,
+        'new_client' => ['name' => 'BrightPath Events L.L.C.', 'phone' => '+971 55 120 3344'],
+        'property_id' => test()->privateRoom->property_id,
+        'room_ids' => [test()->privateRoom->id, test()->twinRoom->id],
+        'months' => 3,
         'start_date' => '2026-10-01',
+        'monthly_rent' => 3700,
+        'security_deposit' => 3700,
+        'first_payment' => 'later',
         ...$overrides,
     ];
 }
 
 /**
- * An individual renting a bed in `$room`, checked in, with rent receipts for `$paid` and a deposit receipt for `$depositPaid`.
+ * A company renting `$rooms` short-term, with rent receipts for `$paid` and a deposit receipt for `$depositPaid`.
+ *
+ * @param  Room|list<Room>  $rooms
  */
-function rentedBed(Room $room, array $attributes = [], float $paid = 0, float $depositPaid = 0): RoomRental
+function rentedRooms(Room|array $rooms, array $attributes = [], float $paid = 0, float $depositPaid = 0): RoomRental
 {
-    $rental = RoomRental::factory()->create(['room_id' => $room->id, ...$attributes]);
-    $rental->checkIn();
+    $rental = RoomRental::factory()->forRooms(...(is_array($rooms) ? $rooms : [$rooms]))->create($attributes);
 
     foreach (array_filter(['rent' => $paid, 'deposit' => $depositPaid]) as $purpose => $amount) {
         $rental->recordPayment(['paid_on' => $rental->start_date, 'amount' => $amount, 'purpose' => $purpose, 'method' => 'cash']);
@@ -66,97 +70,133 @@ function rentedBed(Room $room, array $attributes = [], float $paid = 0, float $d
     return $rental;
 }
 
-describe('renting a bed or room', function () {
-    test('rents a bed to a new individual and checks them in', function () {
+describe('renting rooms short-term', function () {
+    test('rents whole rooms to a new company for a term of months, checking nobody in', function () {
         $response = $this->actingAs($this->admin)->post(route('rentals.store'), rentalInput());
 
         $rental = RoomRental::sole();
-        $response->assertSessionHasNoErrors()->assertRedirect(route('rentals.show', $rental));
+        $response->assertSessionHasNoErrors()
+            ->assertRedirect(route('rentals.show', $rental))
+            ->assertSessionHas('success', 'RNT-2026-0001 was created: BrightPath Events L.L.C. rents rooms 102, 103 until 31 Dec 2026. Record their first payment.');
 
-        expect($rental->rental_number)->toBe('RNT-2026-0001')
-            ->and($rental->status)->toBe('active')
-            ->and($rental->client->client_type)->toBe('individual')
-            ->and($rental->client->name)->toBe('Grace Wanjiru')
-            ->and($rental->occupant->gender)->toBe('female')
-            ->and($rental->occupant->client_id)->toBe($rental->client_id)
-            ->and($rental->occupancy->check_in_date->toDateString())->toBe('2026-10-01')
-            ->and($rental->occupancy->contract_line_id)->toBeNull()
-            ->and($this->privateRoom->fresh()->occupied_count)->toBe(1);
+        expect($rental->status)->toBe('active')
+            ->and($rental->client->only(['client_type', 'name', 'phone']))->toBe(['client_type' => 'company', 'name' => 'BrightPath Events L.L.C.', 'phone' => '+971 55 120 3344'])
+            ->and($rental->property_id)->toBe($this->privateRoom->property_id)
+            ->and($rental->rooms()->pluck('rooms.id')->sort()->values()->all())->toBe([$this->privateRoom->id, $this->twinRoom->id])
+            ->and($rental->end_date->toDateString())->toBe('2026-12-31')
+            ->and($rental->termMonths())->toBe(3)
+            ->and(Occupancy::count())->toBe(0);
     });
 
-    test('rents to an individual already on file as the person who stayed before', function () {
-        $client = Client::factory()->individual()->create(['company_id' => $this->company->id]);
-        $occupant = Occupant::factory()->female()->create(['client_id' => $client->id]);
+    test('records the first month and the deposit as paid now, with the new company’s other details', function () {
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput([
+                'new_client' => [...rentalInput()['new_client'], 'contact_person_name' => 'Leila Haddad', 'email' => 'ops@brightpath.test', 'trade_license_number' => 'CN-5521870', 'tax_registration_number' => '100778899000003'],
+                'months' => 4,
+                'first_payment' => 'now',
+                'payment_method' => 'bank_transfer',
+                'payment_reference' => 'TRF-88120',
+            ]))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', fn (string $message) => str_ends_with($message, 'until 31 Jan 2027. The first month’s rent and the deposit are recorded as paid.'));
+
+        $rental = RoomRental::sole();
+        $rent = RentalPayment::where('purpose', 'rent')->sole();
+
+        expect($rental->client->only(['contact_person_name', 'email', 'trade_license_number', 'tax_registration_number', 'address']))
+            ->toBe(['contact_person_name' => 'Leila Haddad', 'email' => 'ops@brightpath.test', 'trade_license_number' => 'CN-5521870', 'tax_registration_number' => '100778899000003', 'address' => null])
+            ->and($rental->termMonths())->toBe(4)
+            ->and((float) $rent->amount)->toBe(3700.0)
+            ->and($rent->only(['method', 'reference']))->toBe(['method' => 'bank_transfer', 'reference' => 'TRF-88120'])
+            ->and($rent->paid_on->toDateString())->toBe('2026-10-17')
+            ->and($rent->period_end->toDateString())->toBe('2026-10-31')
+            ->and($rental->depositStanding()['paid'])->toBe(3700.0)
+            ->and($rental->rentStanding()['nextDue']->toDateString())->toBe('2026-11-01');
 
         $this->actingAs($this->admin)
-            ->post(route('rentals.store'), rentalInput(['client_mode' => 'existing', 'client_id' => $client->id, 'gender' => 'male']))
+            ->post(route('rentals.store'), rentalInput(['room_ids' => [$this->dormRoom->id], 'property_id' => $this->dormRoom->property_id, 'first_payment' => 'now', 'payment_method' => null]))
+            ->assertSessionHasErrors('payment_method');
+    });
+
+    test('rents to a company already on file, but not to a person', function () {
+        $company = Client::factory()->create(['company_id' => $this->company->id]);
+        $person = Client::factory()->individual()->create(['company_id' => $this->company->id, 'name' => 'Grace Wanjiru']);
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['client_mode' => 'existing', 'client_id' => $person->id]))
+            ->assertSessionHasErrors(['client_id' => 'Grace Wanjiru is a person. Short-term rentals are for companies.']);
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['client_mode' => 'existing', 'client_id' => $company->id]))
             ->assertSessionHasNoErrors();
 
-        expect(RoomRental::sole()->occupant_id)->toBe($occupant->id)
-            ->and(Occupant::count())->toBe(1);
+        expect(RoomRental::sole()->client_id)->toBe($company->id)
+            ->and(Client::count())->toBe(2);
     });
 
-    test('refuses a company client, who rents under a contract', function () {
-        $client = Client::factory()->create(['company_id' => $this->company->id, 'name' => 'Gulf Builders L.L.C.']);
-
-        $this->actingAs($this->admin)
-            ->post(route('rentals.store'), rentalInput(['client_mode' => 'existing', 'client_id' => $client->id]))
-            ->assertSessionHasErrors(['client_id' => 'Gulf Builders L.L.C. is a company. Companies rent under a contract.']);
-    });
-
-    test('refuses a tenant into a room for the other gender', function () {
-        $this->actingAs($this->admin)
-            ->post(route('rentals.store'), rentalInput(['gender' => 'male']))
-            ->assertSessionHasErrors(['bed_id' => 'Room 102 is for women only.']);
-    });
-
-    test('refuses a bed someone is staying in', function () {
-        rentedBed($this->privateRoom);
-
-        $this->actingAs($this->admin)
-            ->post(route('rentals.store'), rentalInput(['new_client' => [...rentalInput()['new_client'], 'id_number' => 'K7654321']]))
-            ->assertSessionHasErrors(['bed_id' => 'Bed 1 in room 102 is taken.']);
-    });
-
-    test('refuses a room a contract rents, and a whole room someone already shares', function () {
+    test('refuses rooms a contract or another rental holds, and rooms in another property', function () {
         $contract = Contract::factory()->active()->create(['client_id' => Client::factory()->create(['company_id' => $this->company->id])->id]);
         ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->privateRoom->property_id, 'room_id' => $this->privateRoom->id, 'unit_type' => 'room', 'quantity' => 1]);
-        rentedBed($this->dormRoom);
-        $dormBed = $this->dormRoom->beds()->whereDoesntHave('occupancies')->orderBy('id')->value('id');
 
         $this->actingAs($this->admin)
             ->post(route('rentals.store'), rentalInput())
-            ->assertSessionHasErrors(['bed_id' => 'Room 102 is rented under a contract or by another tenant.']);
+            ->assertSessionHasErrors(['room_ids' => 'Room 102 is no longer free. Choose another.']);
+
+        rentedRooms($this->twinRoom, ['start_date' => '2026-10-01']);
 
         $this->actingAs($this->admin)
-            ->post(route('rentals.store'), rentalInput(['gender' => 'male', 'unit_type' => 'room', 'bed_id' => $dormBed]))
-            ->assertSessionHasErrors(['bed_id' => 'Someone is already staying in room 103, so it cannot be rented whole.']);
+            ->post(route('rentals.store'), rentalInput(['room_ids' => [$this->twinRoom->id]]))
+            ->assertSessionHasErrors(['room_ids' => 'Room 103 is no longer free. Choose another.']);
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['room_ids' => [$this->dormRoom->id]]))
+            ->assertSessionHasErrors(['room_ids' => 'Choose rooms in this property.']);
     });
 
-    test('keeps a room rented whole to an individual out of contract bed lines', function () {
-        rentedBed($this->dormRoom, ['unit_type' => 'room']);
-        $contract = Contract::factory()->active()->create(['client_id' => Client::factory()->create(['company_id' => $this->company->id])->id, 'start_date' => '2026-01-01', 'end_date' => '2026-12-31']);
+    test('keeps rooms held short-term out of contracts', function () {
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01']);
+        $client = Client::factory()->create(['company_id' => $this->company->id]);
+        $contract = Contract::factory()->active()->create(['client_id' => $client->id, 'start_date' => '2026-01-01', 'end_date' => '2026-12-31']);
         $line = ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->dormRoom->property_id]);
+        $dates = ['start_date' => '2026-11-01', 'end_date' => '2027-10-31'];
 
         expect($line->availableBeds()->pluck('room_id')->unique()->all())->not->toContain($this->dormRoom->id);
-    });
-
-    test('shows the form with the rooms open to individuals', function () {
-        rentedBed($this->privateRoom);
 
         $this->actingAs($this->admin)
-            ->get(route('rentals.create'))
+            ->post(route('contracts.store'), [
+                'client_id' => $client->id,
+                ...$dates,
+                'billing_cycle' => 'monthly',
+                'payment_terms_days' => 7,
+                'lines' => [['unit_type' => 'room', 'property_id' => $this->dormRoom->property_id, 'room_id' => $this->dormRoom->id, 'quantity' => 1, 'monthly_rate' => 2400, 'billing_basis' => 'contracted', 'vat_rate' => 0, ...$dates]],
+            ])
+            ->assertSessionHasErrors(['lines.0.room_id' => "Rented short-term under {$rental->rental_number} until 31 Dec 2026."]);
+    });
+
+    test('shows the form with the free rooms of each property, and frees rooms once the term is over', function () {
+        rentedRooms($this->privateRoom, ['start_date' => '2026-10-01']);
+        rentedRooms($this->twinRoom, ['start_date' => '2026-07-01']);
+
+        $this->actingAs($this->admin)
+            ->get(route('rentals.create', ['room' => $this->twinRoom->id]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Rentals/Form')
-                ->where('rooms', fn ($rooms) => collect($rooms)->doesntContain('id', $this->privateRoom->id) && collect($rooms)->contains('id', $this->dormRoom->id))
+                ->where('defaults.property_id', $this->twinRoom->property_id)
+                ->where('defaults.room_ids', [$this->twinRoom->id])
+                ->where('properties', function ($properties) {
+                    $rooms = collect(collect($properties)->firstWhere('id', $this->privateRoom->property_id)['rooms'])->pluck('id');
+
+                    return $rooms->contains($this->twinRoom->id) && $rooms->doesntContain($this->privateRoom->id);
+                })
+                ->where('maxMonths', RoomRental::MAX_TERM_MONTHS)
             );
     });
 });
 
 describe('rent', function () {
     test('works out what is owed, paid to date and overdue once the grace days pass', function () {
-        $rental = rentedBed($this->dormRoom, ['start_date' => '2026-08-01', 'monthly_rent' => 1000], paid: 1000);
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-08-01', 'end_date' => '2027-01-31', 'monthly_rent' => 1000], paid: 1000);
 
         $this->actingAs($this->admin)
             ->get(route('rentals.show', $rental))
@@ -169,9 +209,11 @@ describe('rent', function () {
                 ->where('rental.standing.paidThrough', '2026-08-31')
                 ->where('rental.standing.nextDue', '2026-09-01')
                 ->where('rental.standing.standing', 'overdue')
+                ->has('statement', 6)
                 ->where('statement.0.status', 'paid')
                 ->where('statement.2.status', 'unpaid')
                 ->where('statement.3.status', 'upcoming')
+                ->where('statement.5.end', '2027-01-31')
             );
 
         expect($rental->rentStanding(CarbonImmutable::parse('2026-09-06'))['standing'])->toBe('due')
@@ -179,13 +221,13 @@ describe('rent', function () {
     });
 
     test('charges a month cut short by the end date for its days', function () {
-        $rental = rentedBed($this->dormRoom, ['start_date' => '2026-10-01', 'end_date' => '2026-11-15', 'monthly_rent' => 3000]);
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'end_date' => '2026-11-15', 'monthly_rent' => 3000]);
 
         expect($rental->rentDue(CarbonImmutable::parse('2026-11-20')))->toBe(4500.0);
     });
 
     test('records a cash payment as a receipt for the months it pays', function () {
-        $rental = rentedBed($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 1000]);
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 1000]);
 
         $this->actingAs($this->admin)
             ->post(route('rentals.payments.store', $rental), ['purpose' => 'rent', 'method' => 'cash', 'amount' => 2000, 'paid_on' => '2026-10-17'])
@@ -201,7 +243,7 @@ describe('rent', function () {
     });
 
     test('takes a cheque into the register, makes it a receipt when it clears and voids it when it bounces', function () {
-        $rental = rentedBed($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 1000]);
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 1000]);
 
         $this->actingAs($this->admin)
             ->post(route('rentals.payments.store', $rental), ['purpose' => 'rent', 'method' => 'cheque', 'amount' => 1000, 'cheque_number' => '445566', 'bank_name' => 'Mashreq', 'cheque_date' => '2026-10-15'])
@@ -228,7 +270,7 @@ describe('rent', function () {
     });
 
     test('lists a tenant’s cheque in the register under their rental', function () {
-        $rental = rentedBed($this->dormRoom);
+        $rental = rentedRooms($this->dormRoom);
         $rental->receiveCheque(['purpose' => 'rent', 'cheque_date' => '2026-11-01', 'amount' => 900, 'cheque_number' => '318842', 'bank_name' => 'Emirates NBD']);
 
         $this->actingAs($this->admin)
@@ -241,7 +283,7 @@ describe('rent', function () {
     });
 
     test('voids a receipt made by mistake but leaves one from a cheque to the cheque', function () {
-        $rental = rentedBed($this->dormRoom, paid: 900);
+        $rental = rentedRooms($this->dormRoom, paid: 900);
         $receipt = RentalPayment::sole();
 
         $this->actingAs($this->admin)->post(route('rental-payments.void', $receipt), ['reason' => 'Recorded twice'])->assertSessionHasNoErrors();
@@ -260,7 +302,7 @@ describe('rent', function () {
 
 describe('a running rental', function () {
     test('moves the tenant out, handing back the deposit', function () {
-        $rental = rentedBed($this->dormRoom, ['start_date' => '2026-09-01', 'monthly_rent' => 900], paid: 1800, depositPaid: 900);
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-09-01', 'monthly_rent' => 900], paid: 1800, depositPaid: 900);
 
         $this->actingAs($this->admin)
             ->post(route('rentals.end', $rental), ['moved_out_on' => '2026-10-17', 'deposit_refunded' => 600, 'deposit_refund_method' => 'cash'])
@@ -271,13 +313,12 @@ describe('a running rental', function () {
         expect($rental->status)->toBe('ended')
             ->and($rental->moved_out_on->toDateString())->toBe('2026-10-17')
             ->and((float) $rental->deposit_refunded)->toBe(600.0)
-            ->and($rental->occupancy->check_out_date->toDateString())->toBe('2026-10-17')
-            ->and($this->dormRoom->fresh()->occupied_count)->toBe(0)
-            ->and($rental->depositStanding()['held'])->toBe(300.0);
+            ->and($rental->depositStanding()['held'])->toBe(300.0)
+            ->and(RoomRental::heldRoomIds($this->company->id))->toBe([]);
     });
 
     test('hands back no more deposit than was paid', function () {
-        $rental = rentedBed($this->dormRoom, ['security_deposit' => 900], depositPaid: 500);
+        $rental = rentedRooms($this->dormRoom, ['security_deposit' => 900], depositPaid: 500);
 
         $this->actingAs($this->admin)
             ->post(route('rentals.end', $rental), ['moved_out_on' => '2026-10-20', 'deposit_refunded' => 900, 'deposit_refund_method' => 'cash'])
@@ -286,36 +327,54 @@ describe('a running rental', function () {
         expect($rental->fresh()->status)->toBe('active');
     });
 
-    test('ends the rental when the tenant is checked out from their occupant page', function () {
-        $rental = rentedBed($this->dormRoom, ['start_date' => '2026-09-01']);
+    test('ends an older per-bed rental when its tenant is checked out from their occupant page', function () {
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-09-01']);
+        $stay = (new Occupancy(['check_in_date' => '2026-09-01']))->forceFill([
+            'company_id' => $this->company->id,
+            'occupant_id' => Occupant::factory()->create(['client_id' => $rental->client_id])->id,
+            'bed_id' => $this->dormRoom->beds()->orderBy('id')->value('id'),
+            'room_rental_id' => $rental->id,
+        ]);
+        $stay->save();
 
         $this->actingAs($this->admin)
-            ->patch(route('occupancies.check-out', $rental->occupancy), ['check_out_date' => '2026-10-17'])
+            ->patch(route('occupancies.check-out', $stay), ['check_out_date' => '2026-10-17'])
             ->assertSessionHasNoErrors();
 
         expect($rental->fresh()->status)->toBe('ended')
             ->and($rental->fresh()->moved_out_on->toDateString())->toBe('2026-10-17');
     });
 
-    test('keeps the rent and start date once rent is paid, but lets the end date change', function () {
-        $rental = rentedBed($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 900], paid: 900);
-        $terms = ['monthly_rent' => 900, 'security_deposit' => 900, 'start_date' => '2026-10-01'];
+    test('keeps the rent and start date once rent is paid, but lets the term grow', function () {
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 900], paid: 900);
+        $terms = ['months' => 3, 'monthly_rent' => 900, 'security_deposit' => 900, 'start_date' => '2026-10-01'];
 
         $this->actingAs($this->admin)
             ->put(route('rentals.update', $rental), [...$terms, 'monthly_rent' => 1100])
             ->assertSessionHasErrors('monthly_rent');
 
         $this->actingAs($this->admin)
-            ->put(route('rentals.update', $rental), [...$terms, 'end_date' => '2027-03-31'])
+            ->put(route('rentals.update', $rental), [...$terms, 'months' => 6])
             ->assertSessionHasNoErrors();
 
         expect($rental->fresh()->end_date->toDateString())->toBe('2027-03-31')
             ->and((float) $rental->fresh()->monthly_rent)->toBe(900.0);
     });
 
+    test('will not grow a term into a room rented to someone else since', function () {
+        $finished = rentedRooms($this->dormRoom, ['start_date' => '2026-07-01', 'monthly_rent' => 900]);
+        rentedRooms($this->dormRoom, ['start_date' => '2026-10-01']);
+
+        $this->actingAs($this->admin)
+            ->put(route('rentals.update', $finished), ['months' => 6, 'monthly_rent' => 900, 'security_deposit' => 2400, 'start_date' => '2026-07-01'])
+            ->assertSessionHasErrors(['months' => 'Room 103 has since been rented to someone else, so the term cannot be made longer.']);
+
+        expect($finished->fresh()->end_date->toDateString())->toBe('2026-09-30');
+    });
+
     test('lists rentals and narrows them to those overdue', function () {
-        $paidUp = rentedBed($this->privateRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 1500], paid: 1500);
-        $overdue = rentedBed($this->dormRoom, ['start_date' => '2026-09-01', 'monthly_rent' => 900], paid: 900);
+        $paidUp = rentedRooms([$this->privateRoom, $this->twinRoom], ['start_date' => '2026-10-01', 'monthly_rent' => 1500], paid: 1500);
+        $overdue = rentedRooms($this->dormRoom, ['start_date' => '2026-09-01', 'monthly_rent' => 900], paid: 900);
 
         $this->actingAs($this->admin)
             ->get(route('rentals.index', ['standing' => ['overdue']]))
@@ -324,7 +383,9 @@ describe('a running rental', function () {
                 ->component('Rentals/Index')
                 ->where('rentals.total', 1)
                 ->where('rentals.data.0.number', $overdue->rental_number)
+                ->where('rentals.data.0.rooms.0.number', '103')
                 ->where('summary.active', 2)
+                ->where('summary.rooms', 3)
                 ->where('summary.arrears', ['count' => 1, 'amount' => 900, 'overdue' => 1])
                 ->where('facets.standing', [['value' => 'paid_up', 'count' => 1], ['value' => 'due', 'count' => 0], ['value' => 'overdue', 'count' => 1]])
             );
@@ -332,8 +393,8 @@ describe('a running rental', function () {
         expect($paidUp->rentStanding()['standing'])->toBe('paid_up');
     });
 
-    test('shows an individual’s rentals on their client page', function () {
-        $rental = rentedBed($this->dormRoom, ['start_date' => '2026-09-01', 'monthly_rent' => 900], paid: 900);
+    test('shows a company’s rentals on their client page', function () {
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-09-01', 'monthly_rent' => 900], paid: 900);
 
         $this->actingAs($this->admin)
             ->get(route('clients.show', $rental->client_id))
@@ -345,7 +406,7 @@ describe('a running rental', function () {
     });
 
     test('hides another company’s rentals and receipts', function () {
-        $rental = rentedBed(Room::factory()->create(), paid: 900);
+        $rental = rentedRooms(Room::factory()->create(), paid: 900);
         $receipt = RentalPayment::sole();
 
         $this->actingAs($this->admin)->get(route('rentals.show', $rental))->assertNotFound();

@@ -60,7 +60,7 @@ describe('the overview', function () {
         $pastTenant = RoomRental::whereHas('client', fn ($clients) => $clients->where('name', RoomRentalSeeder::PAST_TENANT))->sole();
 
         $this->actingAs($this->admin)
-            ->get(route('payments.overview', ['period' => 'all', 'direction' => ['out'], 'category' => ['deposit_refund'], 'search' => 'Fatima']))
+            ->get(route('payments.overview', ['period' => 'all', 'direction' => ['out'], 'category' => ['deposit_refund'], 'search' => 'Coastline']))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('transactions.total', 1)
                 ->where('transactions.data.0.party', RoomRentalSeeder::PAST_TENANT)

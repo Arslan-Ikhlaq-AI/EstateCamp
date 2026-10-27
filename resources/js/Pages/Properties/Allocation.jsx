@@ -17,9 +17,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTranslation } from '@/hooks/use-translation';
 import { downloadCsv } from '@/lib/csv';
 import { Head, Link, router } from '@inertiajs/react';
-import { BanknoteIcon, ChevronDownIcon, DownloadIcon, EyeIcon, FilePlusIcon, FileSpreadsheetIcon, UserPlusIcon } from 'lucide-react';
+import { BanknoteIcon, ChevronDownIcon, DownloadIcon, EyeIcon, FilePlusIcon, FileSpreadsheetIcon, KeyRoundIcon, ReceiptTextIcon } from 'lucide-react';
 import { useState } from 'react';
 import AllocationPanel, { AllocationBar, KIND_ICONS, allocationCsv } from './Partials/AllocationPanel';
+import BillingPanel from './Partials/BillingPanel';
 
 const KINDS = ['rooms', 'shops', 'apartments'];
 
@@ -93,10 +94,11 @@ function ExportMenu({ property, rows, summaries, currency, period, periodLabel, 
 /**
  * A property's room allocation over a period: how many rooms, shops and
  * apartments are available, then a tab per kind listing every unit with who
- * holds it — a company under contract, an individual, or nobody — its
- * standard and actual rent, and a summary.
+ * holds it — a contract, a short-term rental, or nobody — its
+ * standard and actual rent, and a summary. The billing tab bills each
+ * company for the period as a whole and collects its payments.
  */
-export default function Allocation({ property, period, includesToday, rooms, shops, apartments, summaries, currency }) {
+export default function Allocation({ property, period, includesToday, rooms, shops, apartments, summaries, accounts, collectionMethods, currency }) {
     const { t, tOr, formatNumber, formatCurrency } = useTranslation();
     const { range } = usePeriodLabel();
     const periodLabel = range(period);
@@ -109,10 +111,10 @@ export default function Allocation({ property, period, includesToday, rooms, sho
     const rent = KINDS.reduce(
         (total, key) => ({
             contract: total.contract + summaries[key].rent.contract,
-            individual: total.individual + summaries[key].rent.individual,
+            shortTerm: total.shortTerm + summaries[key].rent.short_term,
             overall: total.overall + summaries[key].rent.overall,
         }),
-        { contract: 0, individual: 0, overall: 0 },
+        { contract: 0, shortTerm: 0, overall: 0 },
     );
 
     return (
@@ -129,9 +131,9 @@ export default function Allocation({ property, period, includesToday, rooms, sho
                             <EyeIcon data-icon="inline-start" />
                             {t('propertyAllocation.viewProperty')}
                         </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create')} />}>
-                            <UserPlusIcon data-icon="inline-start" />
-                            {t('propertyAllocation.rentToIndividual')}
+                        <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { property: property.id })} />}>
+                            <KeyRoundIcon data-icon="inline-start" />
+                            {t('propertyAllocation.rentShortTerm')}
                         </Button>
                         <Button variant="brand" nativeButton={false} render={<Link href={route('contracts.create')} />}>
                             <FilePlusIcon data-icon="inline-start" />
@@ -179,7 +181,7 @@ export default function Allocation({ property, period, includesToday, rooms, sho
                     value={formatCurrency(rent.overall, currency)}
                     detail={t('propertyAllocation.stats.rentDetail', {
                         contract: formatCurrency(rent.contract, currency),
-                        individual: formatCurrency(rent.individual, currency),
+                        shortTerm: formatCurrency(rent.shortTerm, currency),
                     })}
                 />
             </section>
@@ -199,6 +201,11 @@ export default function Allocation({ property, period, includesToday, rooms, sho
                             </TabsTrigger>
                         );
                     })}
+                    <TabsTrigger value="billing" className="h-9 flex-none gap-2 px-3.5 text-[0.875rem] data-active:[&_svg]:text-brand-ink">
+                        <ReceiptTextIcon data-icon="inline-start" />
+                        {t('propertyAllocation.billing.tab')}
+                        <span className="rounded-full bg-foreground/[0.07] px-1.5 text-xs leading-5 font-semibold tabular-nums">{formatNumber(accounts.length)}</span>
+                    </TabsTrigger>
                 </TabsList>
 
                 {KINDS.map((key) => (
@@ -214,6 +221,17 @@ export default function Allocation({ property, period, includesToday, rooms, sho
                         />
                     </TabsContent>
                 ))}
+
+                <TabsContent value="billing">
+                    <BillingPanel
+                        accounts={accounts}
+                        currency={currency}
+                        propertyId={property.id}
+                        period={period}
+                        periodLabel={periodLabel}
+                        methods={collectionMethods}
+                    />
+                </TabsContent>
             </Tabs>
         </DashboardLayout>
     );

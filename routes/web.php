@@ -28,6 +28,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentOverviewController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PropertyBillingController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyTypeController;
 use App\Http\Controllers\ReceivablesReportController;
@@ -107,6 +108,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('can:use-app')->group(function () {
         Route::resource('properties', PropertyController::class)->except(['destroy'])->whereNumber('property');
         Route::get('properties/{property}/allocation', [RoomAllocationController::class, 'show'])->whereNumber('property')->name('properties.allocation');
+        Route::post('properties/{property}/billing', [PropertyBillingController::class, 'store'])->whereNumber('property')->name('properties.billing.store');
         Route::get('properties/{property}/tenant-contracts', [TenantContractController::class, 'show'])->whereNumber('property')->name('properties.tenant-contracts');
         Route::resource('rooms', RoomController::class)->except(['show', 'destroy']);
         Route::resource('apartments', ApartmentController::class)->except(['destroy']);

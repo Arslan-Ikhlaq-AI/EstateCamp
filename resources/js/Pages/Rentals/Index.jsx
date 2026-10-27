@@ -10,13 +10,11 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
-    BedSingleIcon,
     Building2Icon,
     CircleAlertIcon,
     CircleCheckIcon,
     CircleSlashIcon,
     ClockIcon,
-    DoorClosedIcon,
     EyeIcon,
     HandCoinsIcon,
     KeyRoundIcon,
@@ -28,11 +26,10 @@ import {
 
 const STANDING_ICONS = { paid_up: CircleCheckIcon, due: ClockIcon, overdue: CircleAlertIcon };
 const STATUS_ICONS = { active: KeyRoundIcon, ended: CircleSlashIcon };
-const UNIT_ICONS = { bed: BedSingleIcon, room: DoorClosedIcon };
 
 /**
- * Individual rentals: beds and rooms rented straight to individuals,
- * without a contract, with where each tenant's rent stands.
+ * Short-term rentals: whole rooms rented to companies for a few months,
+ * without a contract, with where each company's rent stands.
  */
 export default function Index({ company, filters, facets, summary, rentals }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
@@ -56,7 +53,11 @@ export default function Index({ company, filters, facets, summary, rentals }) {
                         {rental.number}
                     </Link>
                     <span className="text-xs text-muted-foreground tabular-nums">
-                        {rental.movedOutOn ? t('finance.rentals.stayed', { from: formatDate(rental.startDate), to: formatDate(rental.movedOutOn) }) : t('finance.rentals.since', { date: formatDate(rental.startDate) })}
+                        {rental.movedOutOn
+                            ? t('finance.rentals.stayed', { from: formatDate(rental.startDate), to: formatDate(rental.movedOutOn) })
+                            : rental.endDate
+                              ? t('finance.rentals.term', { from: formatDate(rental.startDate), to: formatDate(rental.endDate) })
+                              : t('finance.rentals.since', { date: formatDate(rental.startDate) })}
                     </span>
                 </div>
             ),
@@ -97,7 +98,7 @@ export default function Index({ company, filters, facets, summary, rentals }) {
                 </div>
             ),
         },
-        { id: 'status', header: t('leasing.common.status'), cell: (rental) => <RentalStatusBadge status={rental.status} /> },
+        { id: 'status', header: t('leasing.common.status'), cell: (rental) => <RentalStatusBadge status={rental.status} termOver={rental.termOver} /> },
     ];
 
     return (
@@ -145,13 +146,11 @@ export default function Index({ company, filters, facets, summary, rentals }) {
                         facets={{
                             standing: facets.standing.map((option) => ({ ...option, label: t(`finance.rentals.standing.${option.value}`), icon: STANDING_ICONS[option.value] })),
                             status: facets.status.map((option) => ({ ...option, label: t(`finance.rentals.status.${option.value}`), icon: STATUS_ICONS[option.value] })),
-                            unit: facets.unit.map((option) => ({ ...option, label: t(`finance.rentals.units.${option.value}`), icon: UNIT_ICONS[option.value] })),
                             properties: facets.properties.map((option) => ({ ...option, icon: Building2Icon })),
                         }}
                         labels={{
                             standing: t('finance.rentals.filters.standing'),
                             status: t('leasing.common.status'),
-                            unit: t('finance.rentals.filters.unit'),
                             properties: t('finance.rentals.filters.properties'),
                         }}
                         only={['rentals', 'facets']}

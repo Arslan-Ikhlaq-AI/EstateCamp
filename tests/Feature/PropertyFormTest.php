@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\Landlord;
 use App\Models\Property;
@@ -174,6 +175,20 @@ describe('for the seeded demo company', function () {
             ->and($property->total_units)->toBe(8);
     });
 
+    test('adds a batch of more than a hundred rooms', function () {
+        $this->actingAs($this->superAdmin)
+            ->post(route('properties.store'), validPropertyInput([
+                'total_units' => 150,
+                'units' => ['rooms' => [['count' => 150, 'first_number' => '101', 'room_type_id' => RoomType::value('id'), 'capacity' => 1]]],
+            ]))
+            ->assertRedirect(route('properties.index'));
+
+        $property = Property::where('code', 'HFM-SNP-01')->sole();
+
+        expect($property->rooms()->count())->toBe(150)
+            ->and($property->rooms()->orderByDesc('room_number')->value('room_number'))->toBe('250');
+    });
+
     test('counts the property\'s saved units against its number of units', function () {
         $property = Property::where('code', 'HFM-JBA-01')->sole();
         $originalTotal = $property->total_units;
@@ -250,6 +265,59 @@ describe('for the seeded demo company', function () {
             ->and($lease->cheques()->where('purpose', 'rent')->count())->toBe(4);
     });
 
+    test('records the cheque details and photos entered with a leased property', function () {
+        $this->travelTo('2026-10-17');
+        Storage::fake('local');
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('properties.store'), validPropertyInput([
+                'cheques' => [[
+                    'key' => 'rent:1',
+                    'cheque_number' => '000123',
+                    'bank_name' => 'Emirates NBD',
+                    'front_image' => UploadedFile::fake()->image('front.jpg'),
+                    'back_image' => UploadedFile::fake()->image('back.jpg'),
+                ]],
+            ]))
+            ->assertRedirect(route('properties.index'));
+
+        $property = Property::where('code', 'HFM-SNP-01')->sole();
+        $lease = $property->headLeases()->sole();
+        $cheque = $lease->cheques()->where('purpose', 'rent')->where('sequence', 1)->sole();
+
+        expect($cheque->cheque_number)->toBe('000123')
+            ->and($cheque->bank_name)->toBe('Emirates NBD')
+            ->and($cheque->status)->toBe('issued')
+            ->and($lease->cheques()->where('purpose', 'rent')->where('status', 'pending')->count())->toBe(7);
+
+        Storage::disk('local')->assertExists([$cheque->front_image_path, $cheque->back_image_path]);
+
+        $this->actingAs($this->superAdmin)
+            ->get(route('properties.edit', $property))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('property.lease.cheques', 8)
+                ->where('property.lease.cheques.0.key', 'rent:1')
+                ->where('property.lease.cheques.0.cheque_number', '000123')
+                ->where('property.lease.hasLockedCheques', false)
+            );
+    });
+
+    test('splits the rent into a number of cheques a year that does not divide twelve months', function () {
+        $this->actingAs($this->superAdmin)
+            ->post(route('properties.store'), validPropertyInput(['lease_end_date' => '2026-12-31', 'annual_rent' => 250000, 'payments_per_year' => 5]))
+            ->assertRedirect(route('properties.index'));
+
+        $rent = Property::where('code', 'HFM-SNP-01')->sole()->headLeases()->sole()->cheques()->where('purpose', 'rent')->orderBy('sequence')->get();
+
+        expect($rent->map(fn (Cheque $cheque) => [$cheque->period_start->toDateString(), $cheque->period_end->toDateString()])->all())->toBe([
+            ['2026-01-01', '2026-02-28'],
+            ['2026-03-01', '2026-04-30'],
+            ['2026-05-01', '2026-07-31'],
+            ['2026-08-01', '2026-09-30'],
+            ['2026-10-01', '2026-12-31'],
+        ])->and($rent->map(fn (Cheque $cheque) => (float) $cheque->amount)->unique()->values()->all())->toBe([50000.0]);
+    });
+
     test('rejects invalid input', function (array $overrides, string $field) {
         $this->actingAs($this->superAdmin)
             ->post(route('properties.store'), validPropertyInput($overrides))
@@ -269,8 +337,10 @@ describe('for the seeded demo company', function () {
         'apartment batch without bedrooms' => [['units' => ['apartments' => [['count' => 1, 'first_number' => 'A-1', 'bathrooms' => 1]]]], 'units.apartments.0.bedrooms'],
         'document without a file' => [['documents' => [['document_type' => 'insurance_policy']]], 'documents.0.file'],
         'leased without an annual rent' => [['annual_rent' => null], 'annual_rent'],
+        'more than twelve cheques a year' => [['payments_per_year' => 13], 'payments_per_year'],
         'missing the required documents' => [['documents' => []], 'documents'],
         'more units than the property holds' => [['total_units' => 2, 'units' => ['shops' => [['count' => 3, 'first_number' => 'S-01']]]], 'total_units'],
+        'batch larger than any property' => [['units' => ['shops' => [['count' => 10001, 'first_number' => 'S-01']]]], 'units.shops.0.count'],
     ]);
 
     test('shows the edit form filled with the property and its documents', function () {
@@ -285,6 +355,7 @@ describe('for the seeded demo company', function () {
                 ->where('property.lease_end_date', '2028-12-31')
                 ->where('property.landlord_id', Landlord::where('name', 'Al Marsa Properties L.L.C.')->value('id'))
                 ->has('property.documents', 3)
+                ->has('banks')
             );
     });
 

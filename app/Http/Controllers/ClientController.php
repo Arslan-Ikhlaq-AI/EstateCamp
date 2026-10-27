@@ -187,7 +187,7 @@ class ClientController extends Controller
                 'status' => $payment->status,
                 'amount' => (float) $payment->amount,
             ]),
-            // Beds or rooms an individual rents without a contract.
+            // Rooms the client rents short-term, without a contract.
             'rentals' => $client->roomRentals()
                 ->with(RoomRentalController::listRelations())
                 ->withSum(['payments as rent_paid' => fn (Builder $payments) => $payments->where('status', 'cleared')->where('purpose', 'rent')], 'amount')

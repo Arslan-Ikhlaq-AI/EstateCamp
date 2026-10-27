@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
 import { Progress } from '@/components/ui/progress';
@@ -11,9 +11,10 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { addMonths } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { addDays, agreementYear, currentChequeYear, isChequeReady } from '@/lib/cheques';
+import { shrinkImage } from '@/lib/images';
 import { cn } from '@/lib/utils';
 import { CameraIcon, ChevronDownIcon, CircleCheckIcon, LockIcon, RefreshCwIcon, ShieldCheckIcon, XIcon } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * Banks most UAE cheques are drawn on, suggested in the bank field along
@@ -83,7 +84,7 @@ export function ChequePhotoInput({ id, label, required, file, url, removed, onFi
                 className="sr-only"
                 onChange={(event) => {
                     if (event.target.files[0]) {
-                        onFile(event.target.files[0]);
+                        shrinkImage(event.target.files[0]).then(onFile);
                     }
 
                     event.target.value = '';
@@ -95,31 +96,150 @@ export function ChequePhotoInput({ id, label, required, file, url, removed, onFi
 }
 
 /**
- * Quick buttons that set the end date from the start date: one, two, three
- * or five years.
+ * The longest term the duration field sets: 50 years.
+ */
+const MAX_TERM_MONTHS = 600;
+
+/**
+ * The whole months a term runs, ending the day before the start date's day
+ * that many months on (1 Jan to 31 Dec is 12 months), or null when the
+ * dates are not a whole number of months apart.
+ */
+function termMonths(startDate, endDate) {
+    if (!startDate || !endDate || endDate < startDate) {
+        return null;
+    }
+
+    const [startYear, startMonth] = startDate.split('-').map(Number);
+    const [endYear, endMonth] = endDate.split('-').map(Number);
+    const months = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
+
+    return [months - 1, months].find((count) => count > 0 && addDays(addMonths(startDate, count), -1) === endDate) ?? null;
+}
+
+const termAmount = (months, unit) => (months === null ? '' : String(unit === 'years' ? months / 12 : months));
+
+/**
+ * How long the term runs, typed as a number of years or months, which sets
+ * the end date from the start date. Moving the start date keeps the term;
+ * changing the end date shows the term the dates now make, in months when
+ * it is not whole years, or nothing when it is not whole months.
  */
 export function TermPicker({ startDate, endDate, onChange }) {
     const { t } = useTranslation();
-    const terms = [1, 2, 3, 5];
-    const current = startDate && endDate ? terms.find((years) => addDays(addMonths(startDate, 12 * years), -1) === endDate) : undefined;
+    const months = termMonths(startDate, endDate);
+    const [unit, setUnit] = useState(months !== null && months % 12 !== 0 ? 'months' : 'years');
+    const [amount, setAmount] = useState(termAmount(months, unit));
+    const lastStartDate = useRef(startDate);
+
+    // Sets the end date `value` years or months on; false when that is no term.
+    const apply = (value, inUnit) => {
+        const count = Number(value) * (inUnit === 'years' ? 12 : 1);
+
+        if (!startDate || value === '' || !Number.isInteger(Number(value)) || count < 1 || count > MAX_TERM_MONTHS) {
+            return false;
+        }
+
+        onChange(addDays(addMonths(startDate, count), -1));
+
+        return true;
+    };
+
+    useEffect(() => {
+        const hasStartMoved = lastStartDate.current !== startDate;
+        lastStartDate.current = startDate;
+
+        if (hasStartMoved && apply(amount, unit)) {
+            return;
+        }
+
+        const shownUnit = months !== null && months % 12 !== 0 ? 'months' : unit;
+        setUnit(shownUnit);
+        setAmount(termAmount(months, shownUnit));
+    }, [startDate, endDate]);
 
     return (
         <Field className="sm:col-span-2">
-            <FieldLabel id="term-label">{t('leasing.cheques.term.label')}</FieldLabel>
+            <FieldLabel htmlFor="term-amount">{t('leasing.cheques.term.label')}</FieldLabel>
+            <div className="flex flex-wrap items-center gap-2">
+                <Input
+                    id="term-amount"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={unit === 'years' ? MAX_TERM_MONTHS / 12 : MAX_TERM_MONTHS}
+                    step={1}
+                    placeholder={unit === 'years' ? '1' : '12'}
+                    value={amount}
+                    onChange={(event) => {
+                        setAmount(event.target.value);
+                        apply(event.target.value, unit);
+                    }}
+                    disabled={!startDate}
+                    className="w-28 tabular-nums"
+                />
+                <ToggleGroup
+                    aria-label={t('leasing.cheques.term.unitLabel')}
+                    variant="outline"
+                    spacing={0}
+                    value={[unit]}
+                    onValueChange={([next]) => {
+                        if (next) {
+                            setUnit(next);
+                            apply(amount, next);
+                        }
+                    }}
+                    disabled={!startDate}
+                >
+                    {['years', 'months'].map((option) => (
+                        <ToggleGroupItem key={option} value={option} className="px-4 aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-primary">
+                            {t(`leasing.cheques.term.units.${option}`)}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
+            </div>
+            <FieldDescription>{t(startDate ? 'leasing.cheques.term.hint' : 'leasing.cheques.term.pickStart')}</FieldDescription>
+        </Field>
+    );
+}
+
+/**
+ * How many cheques a year the rent is split into, as a row of numbered
+ * buttons, with what each cheque comes to once the annual rent is known.
+ */
+export function ChequeCountPicker({ id, label, value, onChange, options, annualRent, currency, error, className }) {
+    const { t, formatMoney, formatNumber } = useTranslation();
+    const rent = Number(annualRent);
+    const count = Number(value);
+
+    return (
+        <Field data-invalid={error ? true : undefined} className={className}>
+            <FieldLabel id={`${id}-label`}>{label}</FieldLabel>
             <ToggleGroup
-                aria-labelledby="term-label"
+                aria-labelledby={`${id}-label`}
                 variant="outline"
-                value={current ? [String(current)] : []}
-                onValueChange={([years]) => years && startDate && onChange(addDays(addMonths(startDate, 12 * Number(years)), -1))}
-                disabled={!startDate}
-                className="w-full flex-wrap"
+                spacing={1.5}
+                value={value ? [String(value)] : []}
+                onValueChange={([next]) => next !== undefined && onChange(Number(next))}
+                className="grid w-full grid-cols-6 sm:grid-cols-12"
             >
-                {terms.map((years) => (
-                    <ToggleGroupItem key={years} value={String(years)} className="aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-primary">
-                        {t('leasing.cheques.term.years', { count: years })}
+                {options.map((option) => (
+                    <ToggleGroupItem
+                        key={option}
+                        value={String(option)}
+                        aria-label={t('leasing.headLeases.form.cheques', { count: option })}
+                        className="h-10 w-full font-semibold tabular-nums aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-primary"
+                    >
+                        {formatNumber(option)}
                     </ToggleGroupItem>
                 ))}
             </ToggleGroup>
+            {!error && count > 0 && (
+                <FieldDescription>
+                    {rent > 0 ? t('leasing.headLeases.instalments', { count, amount: formatMoney(rent / count, currency) }) : t('leasing.cheques.plan.perYear', { count })}
+                </FieldDescription>
+            )}
+            <FieldError>{error}</FieldError>
         </Field>
     );
 }

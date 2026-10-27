@@ -2,16 +2,16 @@
 
 namespace Database\Factories;
 
-use App\Models\Bed;
 use App\Models\Client;
-use App\Models\Occupant;
+use App\Models\Property;
 use App\Models\Room;
 use App\Models\RoomRental;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * An individual renting the first bed of a new room. Call checkIn() on the
- * rental to put them in the bed, as the rental form does.
+ * A company renting short-term for three months, without rooms. Use
+ * forRooms() to give it the rooms it holds, as the rental form does.
  *
  * @extends Factory<RoomRental>
  */
@@ -25,27 +25,26 @@ class RoomRentalFactory extends Factory
     public function definition(): array
     {
         return [
-            'room_id' => Room::factory()->state(['status' => 'active', 'occupied_count' => 0, 'gender_policy' => 'mixed']),
-            // The rental, its client and occupant share the room's company (enforced by composite foreign keys).
-            'company_id' => fn (array $attributes) => Room::query()->whereKey($attributes['room_id'])->value('company_id'),
-            'property_id' => fn (array $attributes) => Room::query()->whereKey($attributes['room_id'])->value('property_id'),
-            'bed_id' => fn (array $attributes) => Bed::query()->where('room_id', $attributes['room_id'])->orderBy('id')->value('id'),
-            'client_id' => fn (array $attributes) => Client::factory()->individual()->create(['company_id' => $attributes['company_id']])->id,
-            'occupant_id' => fn (array $attributes) => Occupant::factory()->create(['client_id' => $attributes['client_id']])->id,
+            'property_id' => Property::factory(),
+            // The rental and its client share the property's company (enforced by composite foreign keys).
+            'company_id' => fn (array $attributes) => Property::query()->whereKey($attributes['property_id'])->value('company_id'),
+            'client_id' => fn (array $attributes) => Client::factory()->create(['company_id' => $attributes['company_id']])->id,
             'rental_number' => fake()->unique()->numerify('RNT-####-####'),
-            'unit_type' => 'bed',
-            'monthly_rent' => 900,
-            'security_deposit' => 900,
+            'monthly_rent' => 2400,
+            'security_deposit' => 2400,
             'start_date' => '2026-01-01',
+            'end_date' => fn (array $attributes) => RoomRental::endDateFor(CarbonImmutable::parse($attributes['start_date']), 3)->toDateString(),
             'status' => 'active',
         ];
     }
 
     /**
-     * Renting the whole room.
+     * Holding these rooms, all in the first room's property.
      */
-    public function wholeRoom(): static
+    public function forRooms(Room ...$rooms): static
     {
-        return $this->state(fn (array $attributes) => ['unit_type' => 'room', 'monthly_rent' => 2400]);
+        return $this
+            ->state(['property_id' => $rooms[0]->property_id, 'company_id' => $rooms[0]->company_id])
+            ->afterCreating(fn (RoomRental $rental) => $rental->rooms()->attach(array_map(fn (Room $room) => $room->id, $rooms), ['company_id' => $rental->company_id]));
     }
 }

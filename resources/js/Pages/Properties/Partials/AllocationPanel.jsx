@@ -10,21 +10,21 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { CalendarClockIcon, DoorOpenIcon, FileTextIcon, HouseIcon, PlusIcon, StoreIcon, UserRoundIcon } from 'lucide-react';
+import { CalendarClockIcon, DoorOpenIcon, FileTextIcon, HouseIcon, KeyRoundIcon, PlusIcon, StoreIcon } from 'lucide-react';
 import { useState } from 'react';
 import { StatusBadge } from './PropertyBadges';
 
 export const KIND_ICONS = { rooms: DoorOpenIcon, shops: StoreIcon, apartments: HouseIcon };
 
 /**
- * How a unit is held, each with its colour: green for a company under
- * contract, violet for an individual, gold for nobody. Rows are tinted to
- * match, and the label always shows too, so colour never carries it alone.
+ * How a unit is held, each with its colour: green under contract, violet
+ * on a short-term rental, gold for nobody. Rows are tinted to match, and
+ * the label always shows too, so colour never carries it alone.
  */
 export const ALLOCATIONS = [
     { key: 'contract', swatch: 'bg-success', pill: 'bg-success/12 text-success', row: 'bg-success/[0.06] hover:bg-success/[0.1]' },
     {
-        key: 'individual',
+        key: 'short_term',
         swatch: 'bg-violet-500',
         pill: 'bg-violet-500/12 text-violet-700 dark:text-violet-300',
         row: 'bg-violet-500/[0.06] hover:bg-violet-500/[0.1]',
@@ -38,13 +38,13 @@ const PER_PAGE = 50;
 
 const HOLDING_ROUTES = { contract: 'contracts.show', rental: 'rentals.show' };
 
-const HOLDING_ICONS = { contract: FileTextIcon, rental: UserRoundIcon };
+const HOLDING_ICONS = { contract: FileTextIcon, rental: KeyRoundIcon };
 
 /**
  * The block, floor and type of a unit as short phrases, such as
  * "Block A", "Floor 1" and "Dormitory".
  */
-function unitDetails(kind, row, t, tOr) {
+export function unitDetails(kind, row, t, tOr) {
     return [
         row.block && t('propertyAllocation.unit.block', { block: row.block }),
         row.floor !== null && t('propertyAllocation.unit.floor', { floor: row.floor }),
@@ -107,7 +107,7 @@ function summaryLines(kind, summary, periodLabel, t) {
     return [
         { group: 'units', label: t(`propertyAllocation.summary.total.${kind}`), value: summary.total, isTotal: true },
         { group: 'units', label: t('propertyAllocation.summary.underContract'), value: summary.contract, swatch: 'bg-success' },
-        { group: 'units', label: t('propertyAllocation.summary.withIndividuals'), value: summary.individual, swatch: 'bg-violet-500' },
+        { group: 'units', label: t('propertyAllocation.summary.shortTerm'), value: summary.short_term, swatch: 'bg-violet-500' },
         { group: 'units', label: t('propertyAllocation.summary.empty'), value: summary.empty, swatch: 'bg-gold' },
         { group: 'units', label: t('propertyAllocation.summary.available'), value: summary.available, isIndented: true },
         { group: 'units', label: t('propertyAllocation.summary.freeing', { period: periodLabel }), value: summary.freeing, isIndented: true },
@@ -121,8 +121,8 @@ function summaryLines(kind, summary, periodLabel, t) {
         },
         {
             group: 'rent',
-            label: t('propertyAllocation.summary.individualRent', { count: summary.clients.individual }),
-            value: summary.rent.individual,
+            label: t('propertyAllocation.summary.shortTermRent', { count: summary.clients.short_term }),
+            value: summary.rent.short_term,
             isMoney: true,
             swatch: 'bg-violet-500',
         },
@@ -135,7 +135,7 @@ function summaryLines(kind, summary, periodLabel, t) {
 }
 
 /**
- * A stacked bar of contract, individual and empty units.
+ * A stacked bar of contract, short-term and empty units.
  */
 export function AllocationBar({ summary, className }) {
     const { t } = useTranslation();
@@ -153,7 +153,7 @@ export function AllocationBar({ summary, className }) {
     );
 }
 
-function AllocationPill({ allocation }) {
+export function AllocationPill({ allocation }) {
     const { t } = useTranslation();
     const { swatch, pill } = ALLOCATION_STYLES[allocation];
 
@@ -218,8 +218,8 @@ function CustomerCell({ holdings }) {
 }
 
 /**
- * A button for each holding that opens its contract, or the individual's
- * rental with the renter, ready to view.
+ * A button for each holding that opens its contract or short-term rental,
+ * ready to view.
  */
 function OpenCell({ holdings }) {
     const { t } = useTranslation();
@@ -327,7 +327,7 @@ function SummaryLine({ line, currency }) {
 /**
  * The totals under a tab, set out as a statement: the units by who holds
  * them, then the rent — standard against actual, what contracts and
- * individuals pay, and what the month should bring in.
+ * short-term rentals pay, and what the month should bring in.
  */
 function AllocationSummary({ kind, summary, currency, periodLabel }) {
     const { t } = useTranslation();

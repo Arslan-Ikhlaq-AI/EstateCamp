@@ -52,7 +52,7 @@ class RentalPaymentController extends Controller
             ],
             'summary' => $this->summary($company, $period),
             'payments' => $this->filteredQuery($company, $filters, $period)
-                ->with(['rental:id,rental_number,client_id,room_id,property_id', 'rental.client:id,name', 'rental.room:id,room_number', 'rental.property:id,name'])
+                ->with(['rental:id,rental_number,client_id,property_id', 'rental.client:id,name', 'rental.rooms' => fn ($rooms) => $rooms->withTrashed()->select(['rooms.id', 'room_number'])->orderBy('room_number'), 'rental.property:id,name'])
                 ->orderByDesc('paid_on')
                 ->orderByDesc('id')
                 ->paginate($filters['perPage'])
@@ -155,7 +155,7 @@ class RentalPaymentController extends Controller
                 'id' => $rental->id,
                 'number' => $rental->rental_number,
                 'tenant' => $rental->relationLoaded('client') ? $rental->client?->only(['id', 'name']) : null,
-                'room' => $rental->relationLoaded('room') ? $rental->room?->room_number : null,
+                'rooms' => $rental->relationLoaded('rooms') ? $rental->rooms->pluck('room_number')->all() : [],
                 'property' => $rental->relationLoaded('property') ? $rental->property?->name : null,
             ] : null,
         ];

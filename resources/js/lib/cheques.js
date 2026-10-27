@@ -163,8 +163,31 @@ export function planContractCheques(data) {
 }
 
 /**
+ * A head lease's instalment periods, as HeadLease::chequePeriods(): each
+ * lease year holds `perYear` of them, whole months from the start date and
+ * as evenly spread as whole months allow.
+ */
+export function leasePeriods(start, end, perYear) {
+    const monthsIn = (index) => 12 * Math.floor(index / perYear) + Math.floor((12 * (index % perYear)) / perYear);
+    const periods = [];
+
+    for (let index = 0; index < 600; index++) {
+        const from = addMonths(start, monthsIn(index));
+
+        if (from > end) {
+            break;
+        }
+
+        const to = addDays(addMonths(start, monthsIn(index + 1)), -1);
+        periods.push({ start: from, end: to > end ? end : to });
+    }
+
+    return periods;
+}
+
+/**
  * A head lease's cheques to the landlord: the deposit, then an equal share
- * of the annual rent every 12 / payments-per-year months.
+ * of the annual rent for each of the year's `payments_per_year` instalments.
  */
 export function planLeaseCheques(data) {
     const { start_date, end_date, annual_rent, payments_per_year } = data;
@@ -176,7 +199,7 @@ export function planLeaseCheques(data) {
     }
 
     const amount = round2(rent / perYear);
-    const rows = chequePeriods(start_date, end_date, 12 / perYear, false).map((period, index) => ({
+    const rows = leasePeriods(start_date, end_date, perYear).map((period, index) => ({
         key: chequeKey('rent', index + 1),
         purpose: 'rent',
         sequence: index + 1,
@@ -292,9 +315,11 @@ export function initialChequeEntries(cheques = [], plan = []) {
 /**
  * The rows the form shows: the plan merged with what was entered. Once a
  * cheque has reached the bank the server keeps the stored schedule, so the
- * stored cheques are shown instead of the plan.
+ * stored cheques are shown instead of the plan. Each row keeps its stored
+ * cheque (`saved`, or null) so only changes need sending.
  */
 export function scheduleRows(plan, entries, stored = [], isKept = false) {
+    const savedByKey = Object.fromEntries(stored.map((cheque) => [cheque.key, cheque]));
     const base = isKept
         ? stored.map((cheque) => ({
               key: cheque.key,
@@ -316,28 +341,39 @@ export function scheduleRows(plan, entries, stored = [], isKept = false) {
             chequeDate: entry.cheque_date || row.chequeDate,
             amount: entry.amount !== '' && entry.amount !== null ? Number(entry.amount) : row.amount,
             locked: entry.locked,
+            saved: savedByKey[row.key] ?? null,
         };
     });
 }
 
+const CHEQUE_DETAILS = ['cheque_number', 'bank_name', 'account_holder'];
+
 /**
- * What the form sends: one entry per cheque still to present, in order.
+ * What the form sends: one entry per cheque still to present, in order,
+ * with its date and amount. The details, photos and photo removals are
+ * only sent when they differ from the stored cheque (the server keeps what
+ * is left out), so a long schedule with little entered stays small.
  */
 export function chequePayload(rows) {
     return rows
         .filter((row) => !row.locked)
-        .map((row) => ({
-            key: row.key,
-            cheque_date: row.chequeDate,
-            amount: row.amount,
-            cheque_number: row.entry.cheque_number,
-            bank_name: row.entry.bank_name,
-            account_holder: row.entry.account_holder,
-            front_image: row.entry.front_image,
-            back_image: row.entry.back_image,
-            remove_front_image: row.entry.remove_front_image,
-            remove_back_image: row.entry.remove_back_image,
-        }));
+        .map(({ key, chequeDate, amount, entry, saved }) => {
+            const payload = { key, cheque_date: chequeDate, amount };
+
+            CHEQUE_DETAILS.filter((field) => (entry[field] ?? '') !== (saved?.[field] ?? '')).forEach((field) => {
+                payload[field] = entry[field];
+            });
+
+            ['front_image', 'back_image'].filter((field) => entry[field]).forEach((field) => {
+                payload[field] = entry[field];
+            });
+
+            ['remove_front_image', 'remove_back_image'].filter((field) => entry[field]).forEach((field) => {
+                payload[field] = true;
+            });
+
+            return payload;
+        });
 }
 
 /**

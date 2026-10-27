@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBillingStatement;
 use App\Models\Concerns\HasDocumentNumber;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -13,17 +14,18 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * An individual renting a bed, or a whole room, straight from the company
- * without a contract. The person is checked into one bed for as long as
- * they stay; a whole-room rental keeps the room's other beds for them too.
+ * A short-term rental: a company taking one or more whole rooms of a
+ * property for a few months, straight from the company without a contract.
+ * It works like a contract, with a start date, a term in months and a
+ * monthly rent, but nobody is checked in and nothing is invoiced.
  *
  * Rent falls due monthly from the start date, a month in advance: each
  * month that has begun is owed, and a month cut short by the agreed end or
@@ -42,13 +44,16 @@ use Illuminate\Validation\ValidationException;
 class RoomRental extends Model
 {
     /** @use HasFactory<RoomRentalFactory> */
-    use HasDocumentNumber, HasFactory;
+    use HasBillingStatement, HasDocumentNumber, HasFactory;
 
     public const NUMBER_PREFIX = 'RNT';
 
     public const NUMBER_COLUMN = 'rental_number';
 
-    public const UNIT_TYPES = ['bed', 'room'];
+    /**
+     * The longest stay a short-term rental is agreed for, in months.
+     */
+    public const MAX_TERM_MONTHS = 24;
 
     public const STATUSES = ['active', 'ended'];
 
@@ -61,6 +66,12 @@ class RoomRental extends Model
     public const PAYMENT_METHODS = ['cash', 'bank_transfer', 'card', 'cheque'];
 
     public const REFUND_METHODS = ['cash', 'bank_transfer', 'cheque'];
+
+    /**
+     * How the first month can be paid on the rental form. A cheque goes
+     * through the cheque register from the rental's page instead.
+     */
+    public const FIRST_PAYMENT_METHODS = ['cash', 'bank_transfer', 'card'];
 
     /**
      * Days after a month's rent falls due before it counts as overdue.
@@ -94,6 +105,29 @@ class RoomRental extends Model
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    /**
+     * The last day of a term of `$months` months from `$start`.
+     */
+    public static function endDateFor(CarbonInterface $start, int $months): CarbonImmutable
+    {
+        return CarbonImmutable::parse($start)->addMonthsNoOverflow($months)->subDay();
+    }
+
+    /**
+     * How many whole months the agreed term runs, or null when it is
+     * open-ended or not a whole number of months.
+     */
+    public function termMonths(): ?int
+    {
+        if ($this->end_date === null) {
+            return null;
+        }
+
+        $months = (int) $this->start_date->diffInMonths($this->end_date->copy()->addDay());
+
+        return $months > 0 && self::endDateFor($this->start_date, $months)->isSameDay($this->end_date) ? $months : null;
     }
 
     /**
@@ -302,6 +336,60 @@ class RoomRental extends Model
     }
 
     /**
+     * The company's bill: the rent of each month begun by `$through`,
+     * falling due on its first day, for all the rental's rooms together.
+     * The deposit is collected on its own.
+     *
+     * @return list<array{key: string, type: string, id: ?int, number: ?string, start: CarbonImmutable, end: CarbonImmutable, chargedOn: CarbonImmutable, amount: float, isPlanned: bool}>
+     */
+    public function billingCharges(CarbonInterface $through): array
+    {
+        return array_map(fn (array $period) => [
+            'key' => 'rent-'.$period['start']->toDateString(),
+            'type' => 'rent',
+            'id' => null,
+            'number' => null,
+            'start' => $period['start'],
+            'end' => $period['end'],
+            'chargedOn' => $period['start'],
+            'amount' => $period['amount'],
+            'isPlanned' => false,
+        ], $this->rentPeriods($through));
+    }
+
+    /**
+     * The rent receipts not voided. Uses loaded `payments` when present.
+     *
+     * @return list<array{key: string, id: int, number: string, paidOn: CarbonImmutable, method: string, amount: float}>
+     */
+    public function billingPayments(): array
+    {
+        return ($this->relationLoaded('payments') ? $this->payments : $this->payments()->get())
+            ->filter(fn (RentalPayment $payment) => $payment->status === 'cleared' && $payment->purpose === 'rent')
+            ->sortBy([['paid_on', 'asc'], ['id', 'asc']])
+            ->map(fn (RentalPayment $payment) => [
+                'key' => "receipt-{$payment->id}",
+                'id' => $payment->id,
+                'number' => $payment->receipt_number,
+                'paidOn' => $payment->paid_on->toImmutable(),
+                'method' => $payment->method,
+                'amount' => (float) $payment->amount,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * A rent receipt dated today.
+     */
+    protected function recordCollection(float $amount, CarbonInterface $through, string $method, ?User $by): RentalPayment
+    {
+        $this->unsetRelation('payments');
+
+        return $this->recordPayment(['paid_on' => today(), 'amount' => $amount, 'purpose' => 'rent', 'method' => $method], $by);
+    }
+
+    /**
      * Record money paid in cash, by card or transfer as a receipt. Rent
      * receipts note the months they pay for.
      *
@@ -387,27 +475,9 @@ class RoomRental extends Model
     }
 
     /**
-     * Check the tenant into their bed from the start date.
-     */
-    public function checkIn(): Occupancy
-    {
-        $stay = new Occupancy(['check_in_date' => $this->start_date]);
-        $stay->forceFill([
-            'company_id' => $this->company_id,
-            'occupant_id' => $this->occupant_id,
-            'bed_id' => $this->bed_id,
-            'room_rental_id' => $this->id,
-        ])->save();
-
-        $this->room->recalculateOccupancy();
-
-        return $stay;
-    }
-
-    /**
-     * The tenant moves out on `$on`: they are checked out of the bed, the
-     * rental ends (rent stops the night before) and any deposit handed back
-     * is recorded.
+     * The tenant moves out on `$on`: the rental ends (rent stops the night
+     * before) and any deposit handed back is recorded. Anyone still staying
+     * under an older rental is checked out.
      *
      * @throws ValidationException When the rental has already ended or the refund is more than the deposit held.
      */
@@ -424,9 +494,10 @@ class RoomRental extends Model
         }
 
         DB::transaction(function () use ($on, $refund, $refundMethod, $note) {
-            $this->occupancy()->whereNull('check_out_date')->get()->each(function (Occupancy $stay) use ($on) {
+            $this->occupancies()->whereNull('check_out_date')->with('bed.room')->get()->each(function (Occupancy $stay) use ($on) {
                 $earliest = $stay->check_in_date->copy()->addDay();
                 $stay->update(['check_out_date' => $on->lt($earliest) ? $earliest : $on]);
+                $stay->bed?->room?->recalculateOccupancy();
             });
 
             $this->forceFill([
@@ -437,15 +508,33 @@ class RoomRental extends Model
                 'deposit_refund_method' => $refund > 0 ? $refundMethod : null,
                 'notes' => filled($note) ? trim(implode("\n", array_filter([$this->notes, trim($note)]))) : $this->notes,
             ])->save();
-
-            $this->room->recalculateOccupancy();
         });
     }
 
     /**
-     * Rooms an individual cannot rent from: those any running or draft
-     * contract rents (whole, or beds in them), and those another active
-     * rental holds whole.
+     * Rooms a live short-term rental of the company holds: one still running
+     * or yet to start.
+     *
+     * @return list<int>
+     */
+    public static function heldRoomIds(int $companyId, ?int $exceptRentalId = null): array
+    {
+        return DB::table('room_rental_rooms')
+            ->whereIn('room_rental_id', self::query()
+                ->where('company_id', $companyId)
+                ->live()
+                ->when($exceptRentalId, fn (Builder $query) => $query->whereKeyNot($exceptRentalId))
+                ->select('id'))
+            ->pluck('room_id')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Rooms a short-term rental cannot take: those a running or draft
+     * contract rents (whole, or beds in them), and those another live
+     * rental holds.
      *
      * @return list<int>
      */
@@ -458,19 +547,13 @@ class RoomRental extends Model
             ->whereHas('contract', fn (Builder $contracts) => $contracts->whereIn('status', ['draft', 'active']))
             ->pluck('room_id');
 
-        $rentedWhole = self::query()
-            ->where('company_id', $companyId)
-            ->active()
-            ->where('unit_type', 'room')
-            ->when($exceptRentalId, fn (Builder $query) => $query->whereKeyNot($exceptRentalId))
-            ->pluck('room_id');
-
-        return $underContract->concat($rentedWhole)->unique()->values()->all();
+        return $underContract->concat(self::heldRoomIds($companyId, $exceptRentalId))->unique()->values()->all();
     }
 
     /**
-     * Active rooms of the company with free beds an individual could rent,
-     * with those beds, ordered by property and room number.
+     * Active rooms of the company a short-term rental could take whole: not
+     * held by a contract or another rental, with nobody staying in them,
+     * ordered by property and room number.
      *
      * @return Collection<int, Room>
      */
@@ -479,16 +562,9 @@ class RoomRental extends Model
         return $company->rooms()
             ->where('status', 'active')
             ->whereKeyNot(self::unavailableRoomIds($company->id))
-            ->with([
-                'property:id,name,code',
-                'beds' => fn (HasMany $beds) => $beds
-                    ->where('is_active', true)
-                    ->whereDoesntHave('occupancies', fn (Builder $stays) => $stays->whereNull('check_out_date'))
-                    ->orderBy('id'),
-            ])
-            ->withCount(['beds as active_beds_count' => fn (Builder $beds) => $beds->where('is_active', true)])
+            ->whereDoesntHave('beds.occupancies', fn (Builder $stays) => $stays->whereNull('check_out_date'))
+            ->with('property:id,name,code')
             ->get()
-            ->filter(fn (Room $room) => $room->beds->isNotEmpty())
             ->sortBy(fn (Room $room) => [$room->property->name, $room->room_number])
             ->values();
     }
@@ -503,6 +579,18 @@ class RoomRental extends Model
     }
 
     /**
+     * Active rentals whose term has not run out: they hold their rooms.
+     *
+     * @param  Builder<RoomRental>  $query
+     */
+    #[Scope]
+    protected function live(Builder $query): void
+    {
+        $query->where('room_rentals.status', 'active')
+            ->where(fn (Builder $query) => $query->whereNull('room_rentals.end_date')->orWhereDate('room_rentals.end_date', '>=', today()));
+    }
+
+    /**
      * @return BelongsTo<Company, $this>
      */
     public function company(): BelongsTo
@@ -511,23 +599,13 @@ class RoomRental extends Model
     }
 
     /**
-     * The individual who rents and pays.
+     * The company that rents and pays.
      *
      * @return BelongsTo<Client, $this>
      */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
-    }
-
-    /**
-     * The same person as they stay in the bed.
-     *
-     * @return BelongsTo<Occupant, $this>
-     */
-    public function occupant(): BelongsTo
-    {
-        return $this->belongsTo(Occupant::class);
     }
 
     /**
@@ -539,29 +617,23 @@ class RoomRental extends Model
     }
 
     /**
-     * @return BelongsTo<Room, $this>
-     */
-    public function room(): BelongsTo
-    {
-        return $this->belongsTo(Room::class);
-    }
-
-    /**
-     * @return BelongsTo<Bed, $this>
-     */
-    public function bed(): BelongsTo
-    {
-        return $this->belongsTo(Bed::class);
-    }
-
-    /**
-     * The tenant's stay in their bed.
+     * The whole rooms the rental holds, all in its property.
      *
-     * @return HasOne<Occupancy, $this>
+     * @return BelongsToMany<Room, $this>
      */
-    public function occupancy(): HasOne
+    public function rooms(): BelongsToMany
     {
-        return $this->hasOne(Occupancy::class);
+        return $this->belongsToMany(Room::class, 'room_rental_rooms');
+    }
+
+    /**
+     * People checked into beds under an older, per-bed rental.
+     *
+     * @return HasMany<Occupancy, $this>
+     */
+    public function occupancies(): HasMany
+    {
+        return $this->hasMany(Occupancy::class);
     }
 
     /**

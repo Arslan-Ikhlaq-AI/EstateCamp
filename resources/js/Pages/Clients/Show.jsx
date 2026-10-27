@@ -58,7 +58,7 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
                             <ReceiptIcon data-icon="inline-start" />
                             {t('leasing.payments.add')}
                         </Button>
-                        {!isCompany && (
+                        {isCompany && (
                             <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { client: client.id })} />}>
                                 <KeyRoundIcon data-icon="inline-start" />
                                 {t('finance.rentals.add')}

@@ -7,6 +7,7 @@ import { ToneBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -21,7 +22,7 @@ import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
-import { BanIcon, CalendarCheckIcon, CalendarClockIcon, CircleAlertIcon, DoorOpenIcon, MoreHorizontalIcon, PencilIcon, PrinterIcon, ReceiptIcon, ShieldCheckIcon } from 'lucide-react';
+import { BanIcon, CalendarCheckIcon, CalendarClockIcon, CalendarX2Icon, CircleAlertIcon, DoorOpenIcon, MoreHorizontalIcon, PencilIcon, PrinterIcon, ReceiptIcon, ShieldCheckIcon } from 'lucide-react';
 import { useState } from 'react';
 import { EndRentalDialog, RecordPaymentDialog, VoidReceiptDialog } from './Partials/RentalDialogs';
 
@@ -67,9 +68,9 @@ function ReceiptActions({ payment, onVoid }) {
 }
 
 /**
- * One individual rental: where the tenant's rent stands, each month of
- * rent and what was paid towards it, their receipts and cheques, and
- * recording a payment or moving them out.
+ * One short-term rental: where the company's rent stands, each month of
+ * the term and what was paid towards it, its receipts and cheques, and
+ * recording a payment or moving the company out.
  */
 export default function Show({ rental, statement, payments, cheques, pendingCheques, banks, chequeStatuses, methods, refundMethods, currency }) {
     const { t, formatMoney, formatDate, formatCurrency } = useTranslation();
@@ -153,7 +154,7 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
                 title={rental.number}
                 badge={
                     <>
-                        <RentalStatusBadge status={rental.status} />
+                        <RentalStatusBadge status={rental.status} termOver={rental.termOver} />
                         <RentStandingBadge standing={standing.standing} />
                     </>
                 }
@@ -188,6 +189,13 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
             />
 
             <FlashMessages errorKeys={['moved_out_on', 'deposit_refunded', 'reason', 'monthly_rent']} />
+
+            {rental.termOver && (
+                <Alert>
+                    <CalendarX2Icon />
+                    <AlertDescription>{t('finance.rentals.termOverHint')}</AlertDescription>
+                </Alert>
+            )}
 
             <section aria-label={t('finance.rentals.show.figures')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 <StatCard
@@ -284,10 +292,9 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
                                         </Link>
                                     ),
                                 },
+                                { label: t('finance.rentals.form.contact'), value: rental.client.contact_person_name },
                                 { label: t('finance.rentals.form.phone'), value: rental.client.phone },
                                 { label: t('finance.rentals.form.email'), value: rental.client.email },
-                                { label: t('finance.rentals.form.nationality'), value: rental.client.nationality },
-                                { label: t('finance.rentals.form.idNumber'), value: rental.client.id_number ? `${t(`leasing.idTypes.${rental.client.id_type}`)} · ${rental.client.id_number}` : null },
                             ]}
                         />
                     </SectionCard>
@@ -297,6 +304,7 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
                             columns={1}
                             rows={[
                                 { label: t('finance.rentals.columns.place'), value: `${place(rental)} · ${rental.property?.name ?? ''}` },
+                                ...(rental.months ? [{ label: t('finance.rentals.show.term'), value: t('finance.rentals.months', { count: rental.months }) }] : []),
                                 { label: t('finance.rentals.form.monthlyRent'), value: formatMoney(rental.monthlyRent, currency) },
                                 { label: t('finance.rentals.form.deposit'), value: rental.securityDeposit > 0 ? formatMoney(rental.securityDeposit, currency) : null },
                                 { label: t('finance.rentals.form.startDate'), value: formatDate(rental.startDate) },

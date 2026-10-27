@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBillingStatement;
 use App\Models\Concerns\HasCheques;
 use App\Models\Concerns\HasDocumentNumber;
 use Carbon\CarbonImmutable;
@@ -45,7 +46,7 @@ use Illuminate\Validation\ValidationException;
 class Contract extends Model
 {
     /** @use HasFactory<ContractFactory> */
-    use HasCheques, HasDocumentNumber, HasFactory, SoftDeletes;
+    use HasBillingStatement, HasCheques, HasDocumentNumber, HasFactory, SoftDeletes;
 
     public const NUMBER_PREFIX = 'CTR';
 
@@ -405,6 +406,127 @@ class Contract extends Model
 
             return $invoice;
         });
+    }
+
+    /**
+     * The client's bill: every invoice not voided, rent on the first day
+     * of its period and gas on the day it was issued, then, while the
+     * contract runs, each billing period begun by `$through` that is not
+     * invoiced yet, at what its invoice is planned to come to (the first
+     * also collects the deposit). Uses loaded `invoices` when present.
+     *
+     * @return list<array{key: string, type: string, id: ?int, number: ?string, start: CarbonImmutable, end: CarbonImmutable, chargedOn: CarbonImmutable, amount: float, isPlanned: bool}>
+     */
+    public function billingCharges(CarbonInterface $through): array
+    {
+        $through = CarbonImmutable::parse($through)->startOfDay();
+        $invoices = ($this->relationLoaded('invoices') ? $this->invoices : $this->invoices()->get())->reject(fn (Invoice $invoice) => $invoice->status === 'void');
+        $charges = $invoices
+            ->map(fn (Invoice $invoice) => [
+                'key' => "invoice-{$invoice->id}",
+                'type' => $invoice->kind,
+                'id' => $invoice->id,
+                'number' => $invoice->invoice_number,
+                'start' => $invoice->period_start->toImmutable(),
+                'end' => $invoice->period_end->toImmutable(),
+                'chargedOn' => ($invoice->kind === 'rent' ? $invoice->period_start : $invoice->issue_date)->toImmutable(),
+                'amount' => (float) $invoice->total,
+                'isPlanned' => false,
+            ])
+            ->filter(fn (array $charge) => $charge['chargedOn']->lte($through))
+            ->values();
+
+        if ($this->status === 'active') {
+            $lastEnd = $invoices->where('kind', 'rent')->max('period_end');
+            $start = $lastEnd ? $lastEnd->toImmutable()->addDay() : $this->start_date->toImmutable();
+            $months = self::BILLING_CYCLES[$this->billing_cycle];
+
+            for ($guard = 0; $guard < 600 && $start->lte($this->end_date) && $start->lte($through); $guard++) {
+                $end = $start->addMonthsNoOverflow($months)->subDay();
+                $end = $end->gt($this->end_date) ? $this->end_date->toImmutable() : $end;
+                $planned = ['id' => null, 'number' => null, 'start' => $start, 'end' => $end, 'chargedOn' => $start, 'isPlanned' => true];
+
+                if ($start->equalTo($this->start_date) && (float) $this->security_deposit > 0) {
+                    $charges->push([...$planned, 'key' => 'planned-deposit', 'type' => 'deposit', 'amount' => round((float) $this->security_deposit, 2)]);
+                }
+
+                $charges->push([...$planned, 'key' => "planned-{$start->toDateString()}", 'type' => 'rent', 'amount' => $this->plannedChequeAmount($start, $end)]);
+                $start = $end->addDay();
+            }
+        }
+
+        return $charges->sortBy([['chargedOn', 'asc'], ['start', 'asc']])->values()->all();
+    }
+
+    /**
+     * Cleared payments allocated to the contract's invoices, each counting
+     * what it put towards them. Uses loaded `invoices.allocations.payment`
+     * when present.
+     *
+     * @return list<array{key: string, id: int, number: string, paidOn: CarbonImmutable, method: string, amount: float}>
+     */
+    public function billingPayments(): array
+    {
+        $allocations = $this->relationLoaded('invoices')
+            ? $this->invoices->flatMap(fn (Invoice $invoice) => $invoice->allocations)
+            : PaymentAllocation::query()->whereIn('invoice_id', $this->invoices()->select('id'))->with('payment')->get();
+
+        return $allocations
+            ->filter(fn (PaymentAllocation $allocation) => $allocation->payment->status === 'cleared')
+            ->groupBy('payment_id')
+            ->map(fn ($shares) => [
+                'key' => "payment-{$shares->first()->payment_id}",
+                'id' => $shares->first()->payment->id,
+                'number' => $shares->first()->payment->payment_number,
+                'paidOn' => $shares->first()->payment->received_on->toImmutable(),
+                'method' => $shares->first()->payment->method,
+                'amount' => round($shares->sum(fn (PaymentAllocation $share) => (float) $share->amount), 2),
+            ])
+            ->sortBy([['paidOn', 'asc'], ['id', 'asc']])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Issue the invoices of every billing period begun by `$through`, so
+     * the money has an invoice to settle.
+     */
+    protected function prepareCollection(CarbonInterface $through): void
+    {
+        $this->invoiceThrough($through);
+        $this->unsetRelation('invoices');
+    }
+
+    /**
+     * A payment from the client, spread over the contract's open invoices
+     * oldest first.
+     */
+    protected function recordCollection(float $amount, CarbonInterface $through, string $method, ?User $by): Payment
+    {
+        $receivedOn = today();
+        $payment = new Payment(['received_on' => $receivedOn, 'amount' => $amount, 'method' => $method, 'status' => 'cleared', 'reference' => $this->contract_number]);
+        $payment->forceFill([
+            'company_id' => $this->company_id,
+            'client_id' => $this->client_id,
+            'payment_number' => Payment::nextNumber($this->company_id, $receivedOn),
+        ])->save();
+
+        $remaining = $amount;
+        $amounts = [];
+
+        foreach ($this->invoices()->whereIn('status', ['issued', 'partially_paid'])->orderBy('period_start')->orderBy('id')->get() as $invoice) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $share = min($remaining, $invoice->balance());
+            $amounts[$invoice->id] = $share;
+            $remaining = round($remaining - $share, 2);
+        }
+
+        $payment->allocate($amounts);
+
+        return $payment;
     }
 
     /**

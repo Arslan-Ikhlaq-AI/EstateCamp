@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Controllers\PropertyController;
+use App\Http\Requests\Concerns\ValidatesChequeSchedule;
 use App\Models\Apartment;
 use App\Models\HeadLease;
 use App\Models\Landlord;
@@ -19,6 +20,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class PropertyRequest extends FormRequest
 {
+    use ValidatesChequeSchedule;
+
     /**
      * How the required documents are named in error messages.
      *
@@ -52,9 +55,9 @@ class PropertyRequest extends FormRequest
     public const LEASE_TERMS = ['ejari_number', 'annual_rent', 'payments_per_year', 'security_deposit', 'notice_period_days'];
 
     /**
-     * Landlord and lease details only apply to leased properties. A leased
-     * property either picks one of the company's landlords (`existing`) or
-     * brings the details of a new one (`new`).
+     * Landlord, lease and cheque details only apply to leased properties. A
+     * leased property either picks one of the company's landlords
+     * (`existing`) or brings the details of a new one (`new`).
      */
     protected function prepareForValidation(): void
     {
@@ -65,6 +68,7 @@ class PropertyRequest extends FormRequest
                 'new_landlord' => null,
                 'lease_start_date' => null,
                 'lease_end_date' => null,
+                'cheques' => [],
                 ...array_fill_keys(self::LEASE_TERMS, null),
             ]);
         } elseif ($this->input('landlord_mode') === 'new') {
@@ -139,6 +143,7 @@ class PropertyRequest extends FormRequest
             'payments_per_year' => ['nullable', 'required_if:ownership_type,leased', 'integer', Rule::in(HeadLease::PAYMENTS_PER_YEAR)],
             'security_deposit' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
             'notice_period_days' => ['nullable', 'integer', 'between:0,730'],
+            ...$this->chequeRules(),
 
             'notes' => ['nullable', 'string', 'max:5000'],
 
@@ -161,7 +166,9 @@ class PropertyRequest extends FormRequest
 
     /**
      * Rooms, shops and apartments added in batches: `count` alike units
-     * numbered up from `first_number`, which must end in a digit.
+     * numbered up from `first_number`, which must end in a digit. A batch
+     * can be as large as the largest property; the property's own number of
+     * units is checked after.
      *
      * @return array<string, array<mixed>>
      */
@@ -169,7 +176,7 @@ class PropertyRequest extends FormRequest
     {
         $batch = fn (string $kind) => [
             "units.{$kind}" => ['array', 'max:20'],
-            "units.{$kind}.*.count" => ['required', 'integer', 'between:1,100'],
+            "units.{$kind}.*.count" => ['required', 'integer', 'between:1,10000'],
             "units.{$kind}.*.first_number" => ['required', 'string', 'max:25', 'regex:/\d$/'],
             "units.{$kind}.*.floor_number" => ['nullable', 'integer', 'between:-5,200'],
             "units.{$kind}.*.area_sqm" => ['nullable', 'numeric', 'gt:0', 'max:10000'],
@@ -330,6 +337,7 @@ class PropertyRequest extends FormRequest
             'units.*.*.first_number' => 'first number',
             'units.rooms.*.room_type_id' => 'room type',
             'units.rooms.*.capacity' => 'beds per room',
+            ...$this->chequeAttributes(),
         ];
     }
 }

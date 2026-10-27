@@ -1,5 +1,5 @@
-import { ChequePlanCard } from '@/Components/ChequeScheduleFields';
-import { ChoiceField, MoneyField, TextareaField, TextField } from '@/Components/FormFields';
+import ChequeScheduleFields, { ChequeCountPicker, ChequePlanCard, TermPicker } from '@/Components/ChequeScheduleFields';
+import { MoneyField, TextareaField, TextField } from '@/Components/FormFields';
 import { FormActions } from '@/Components/FormShell';
 import PageHeader from '@/Components/PageHeader';
 import DashboardLayout from '@/Layouts/DashboardLayout';
@@ -14,7 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { FieldGroup } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
-import { planLeaseCheques, scheduleRows } from '@/lib/cheques';
+import { chequePayload, emptyChequeEntry, initialChequeEntries, planLeaseCheques, scheduleRows } from '@/lib/cheques';
+import { shrinkImage } from '@/lib/images';
 import { Head, Link, useForm } from '@inertiajs/react';
 import {
     Building2Icon,
@@ -33,6 +34,7 @@ import {
     MapPinIcon,
     PhoneIcon,
     ScrollTextIcon,
+    WalletCardsIcon,
     WrenchIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -91,6 +93,17 @@ const emptyDocument = () => ({
 });
 
 /**
+ * The lease terms in the shape the cheque planner reads.
+ */
+const leaseTerms = (values) => ({
+    start_date: values.lease_start_date,
+    end_date: values.lease_end_date,
+    annual_rent: values.annual_rent,
+    payments_per_year: values.payments_per_year,
+    security_deposit: values.security_deposit,
+});
+
+/**
  * The form's starting values: the property being edited (nulls become
  * empty strings for the inputs), or the defaults for a new one. Each
  * required document type gets a place in the list, empty until uploaded.
@@ -100,6 +113,7 @@ function initialData(property, landlords, requiredTypes) {
         ...PROPERTY_FIELDS,
         cover_image: null,
         documents: [],
+        cheques: {},
         landlord_mode: property?.landlord_id || landlords.length > 0 ? 'existing' : 'new',
         new_landlord: emptyLandlord(),
         units: emptyUnits(),
@@ -128,21 +142,22 @@ function initialData(property, landlords, requiredTypes) {
             file_url: document.file_url,
         })),
     );
+    data.cheques = initialChequeEntries(property.lease?.cheques ?? [], planLeaseCheques(leaseTerms(data)));
 
     return data;
 }
 
 /**
- * The form's steps, in order, with each one's accent. Units are optional;
- * lease details only apply to leased properties.
+ * The form's steps, in order. Units are optional; the lease and its
+ * cheques only apply to leased properties.
  */
 const STEPS = [
-    { key: 'basics', icon: Building2Icon, tone: 'brand' },
-    { key: 'location', icon: MapPinIcon, tone: 'green' },
-    { key: 'ownership', icon: KeyRoundIcon, tone: 'gold' },
-    { key: 'units', icon: LayoutGridIcon, tone: 'navy', optional: true },
-    { key: 'documents', icon: FileTextIcon, tone: 'orange' },
-    { key: 'lease', icon: ScrollTextIcon, tone: 'brand' },
+    { key: 'basics', icon: Building2Icon },
+    { key: 'location', icon: MapPinIcon },
+    { key: 'units', icon: LayoutGridIcon, optional: true },
+    { key: 'ownership', icon: KeyRoundIcon },
+    { key: 'documents', icon: FileTextIcon },
+    { key: 'lease', icon: WalletCardsIcon, leasedOnly: true },
 ];
 
 /**
@@ -157,7 +172,7 @@ const STEP_FIELDS = {
     ownership: ['ownership_type', 'landlord_mode', 'landlord_id', 'new_landlord'],
     units: ['units', 'total_floors', 'total_units'],
     documents: ['documents'],
-    lease: ['lease_start_date', 'lease_end_date', 'ejari_number', 'annual_rent', 'payments_per_year', 'security_deposit', 'notice_period_days'],
+    lease: ['lease_start_date', 'lease_end_date', 'ejari_number', 'annual_rent', 'payments_per_year', 'security_deposit', 'notice_period_days', 'cheques'],
 };
 
 const EXTRA_LOCATION_FIELDS = ['plot_number', 'makani_number', 'po_box', 'map_url', 'latitude', 'longitude'];
@@ -167,12 +182,23 @@ const stepOf = (field) => STEPS.find(({ key }) => STEP_FIELDS[key].some((name) =
 /**
  * Where each step stands: `error` when one of its fields was rejected,
  * `done` when its required fields are filled (or, for an optional step,
- * when something was added), otherwise `todo`.
+ * when something was added), `started` when something was entered but not
+ * all it needs, otherwise `todo`. A field left at its default (such as the
+ * country) does not count as entered.
  */
 function stepStates(data, errors, requiredTypes) {
     const withErrors = new Set(Object.keys(errors).map(stepOf));
     const isLeased = data.ownership_type === 'leased';
     const hasLandlord = data.landlord_mode === 'new' ? Boolean(data.new_landlord.name) : Boolean(data.landlord_id);
+    const isEntered = (fields) => fields.some((field) => ![null, '', PROPERTY_FIELDS[field]].includes(data[field]));
+    const isStarted = {
+        basics: isEntered(['name', 'code', 'property_type_id', 'status']) || Boolean(data.cover_image),
+        location: isEntered(STEP_FIELDS.location),
+        ownership: isEntered(['ownership_type', 'landlord_id']) || Boolean(data.new_landlord.name),
+        units: Object.values(data.units).some((batches) => batches.length > 0),
+        documents: data.documents.some(hasFile) || data.documents.length > requiredTypes.length,
+        lease: isEntered(STEP_FIELDS.lease.filter((field) => field !== 'cheques')),
+    };
     const isDone = {
         basics: Boolean(data.name && data.code && data.property_type_id),
         location: Boolean(data.country_code && (data.area || data.street || data.building_name || data.address)),
@@ -184,7 +210,7 @@ function stepStates(data, errors, requiredTypes) {
         lease: !isLeased || Boolean(data.lease_start_date && data.lease_end_date && data.annual_rent !== '' && data.payments_per_year),
     };
 
-    return Object.fromEntries(STEPS.map(({ key }) => [key, withErrors.has(key) ? 'error' : isDone[key] ? 'done' : 'todo']));
+    return Object.fromEntries(STEPS.map(({ key }) => [key, withErrors.has(key) ? 'error' : isDone[key] ? 'done' : isStarted[key] ? 'started' : 'todo']));
 }
 
 const TYPE_STYLES = {
@@ -230,29 +256,26 @@ export default function Form({
     furnishingStatuses,
     paymentsPerYear,
     currency,
+    banks,
     unitSummary,
 }) {
     const { t, tOr } = useTranslation();
     const isEditing = property !== null;
     const form = useForm(initialData(property, landlords, requiredDocumentTypes));
     const { data, setData, errors, processing } = form;
+    const isLeased = data.ownership_type === 'leased';
+    const steps = STEPS.filter((step) => isLeased || !step.leasedOnly);
     const states = stepStates(data, errors, requiredDocumentTypes);
-    const current = useCurrentStep(STEPS.map((step) => step.key));
+    const current = useCurrentStep(steps.map((step) => step.key));
     const [showMoreLocation, setShowMoreLocation] = useState(() => EXTRA_LOCATION_FIELDS.some((field) => data[field]));
 
     const title = isEditing ? t('propertyForm.editTitle') : t('propertyForm.addTitle');
     const months = leaseMonths(data.lease_start_date, data.lease_end_date);
-    const isLeased = data.ownership_type === 'leased';
-    const chequeRows = scheduleRows(
-        planLeaseCheques({
-            start_date: data.lease_start_date,
-            end_date: data.lease_end_date,
-            annual_rent: data.annual_rent,
-            payments_per_year: data.payments_per_year,
-            security_deposit: data.security_deposit,
-        }),
-        {},
-    );
+    const isKept = Boolean(property?.lease?.hasLockedCheques);
+    const chequeRows = (values) => scheduleRows(planLeaseCheques(leaseTerms(values)), values.cheques, property?.lease?.cheques ?? [], isKept);
+    const rows = chequeRows(data);
+    const patchCheque = (key, patch) =>
+        setData((values) => ({ ...values, cheques: { ...values.cheques, [key]: { ...(values.cheques[key] ?? emptyChequeEntry()), ...patch } } }));
 
     const slots = requiredDocumentTypes.map((type) => {
         const index = data.documents.findIndex((document) => document.document_type === type);
@@ -287,21 +310,29 @@ export default function Form({
         error: errors[field],
     });
 
+    const setDocumentField = (index, field, value) =>
+        setData((values) => ({
+            ...values,
+            documents: values.documents.map((document, position) => (position === index ? { ...document, [field]: value } : document)),
+        }));
+
+    // Photos of documents go up shrunk; PDFs as they are.
     const updateDocument = (index, field, value) =>
-        setData(
-            'documents',
-            data.documents.map((document, position) => (position === index ? { ...document, [field]: value } : document)),
-        );
+        field === 'file' ? shrinkImage(value).then((file) => setDocumentField(index, field, file)) : setDocumentField(index, field, value);
 
     const submit = (event) => {
         event.preventDefault();
 
-        form.transform((values) => (isEditing ? { ...values, _method: 'put' } : values));
+        form.transform((values) => ({
+            ...values,
+            cheques: values.ownership_type === 'leased' ? chequePayload(chequeRows(values)) : [],
+            ...(isEditing ? { _method: 'put' } : {}),
+        }));
         form.post(isEditing ? route('properties.update', property.id) : route('properties.store'), {
             forceFormData: true,
             preserveScroll: true,
             onError: (rejected) => {
-                const first = STEPS.find(({ key }) => Object.keys(rejected).some((field) => stepOf(field) === key));
+                const first = steps.find(({ key }) => Object.keys(rejected).some((field) => stepOf(field) === key));
 
                 document.getElementById(`step-${first?.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             },
@@ -321,9 +352,9 @@ export default function Form({
     );
 
     const section = (key) => ({
-        step: STEPS.find((step) => step.key === key),
-        index: STEPS.findIndex((step) => step.key === key),
-        total: STEPS.length,
+        step: steps.find((step) => step.key === key),
+        index: steps.findIndex((step) => step.key === key),
+        total: steps.length,
         state: states[key],
     });
 
@@ -343,7 +374,7 @@ export default function Form({
                     actionsClassName="max-sm:hidden"
                 />
 
-                <StepBar steps={STEPS} states={states} current={current} />
+                <StepBar steps={steps} states={states} current={current} />
 
                 <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]">
                     <div className="flex min-w-0 flex-col gap-6">
@@ -352,7 +383,7 @@ export default function Form({
                                 <CoverDropzone
                                     previewUrl={coverUrl}
                                     hasNewFile={Boolean(data.cover_image)}
-                                    onChange={(file) => setData('cover_image', file)}
+                                    onChange={(file) => shrinkImage(file).then((smaller) => setData('cover_image', smaller))}
                                     error={errors.cover_image}
                                 />
                                 <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -464,6 +495,28 @@ export default function Form({
                             </FieldGroup>
                         </StepSection>
 
+                        <StepSection {...section('units')}>
+                            <div className="flex flex-col gap-6">
+                                <BuildingSize
+                                    floors={data.total_floors}
+                                    units={data.total_units}
+                                    onChange={setData}
+                                    errors={errors}
+                                    saved={savedUnits}
+                                    adding={addingUnits}
+                                />
+                                <UnitBatches
+                                    units={data.units}
+                                    onChange={(units) => setData('units', units)}
+                                    errors={errors}
+                                    options={{ roomTypes, genderPolicies, shopTypes, furnishingStatuses }}
+                                    currency={currency}
+                                    summary={unitSummary}
+                                    remaining={remainingUnits}
+                                />
+                            </div>
+                        </StepSection>
+
                         <StepSection {...section('ownership')}>
                             <FieldGroup className="grid gap-5 sm:grid-cols-2">
                                 <div className="sm:col-span-2">
@@ -481,28 +534,6 @@ export default function Form({
                                 </div>
                                 {isLeased && <LandlordPicker landlords={landlords} data={data} setData={setData} errors={errors} />}
                             </FieldGroup>
-                        </StepSection>
-
-                        <StepSection {...section('units')}>
-                            <div className="flex flex-col gap-6">
-                                <BuildingSize
-                                    floors={data.total_floors}
-                                    units={data.total_units}
-                                    onChange={setData}
-                                    errors={errors}
-                                    saved={savedUnits}
-                                    adding={addingUnits}
-                                />
-                                <UnitBatches
-                                units={data.units}
-                                onChange={(units) => setData('units', units)}
-                                errors={errors}
-                                options={{ roomTypes, genderPolicies, shopTypes, furnishingStatuses }}
-                                currency={currency}
-                                summary={unitSummary}
-                                remaining={remainingUnits}
-                            />
-                            </div>
                         </StepSection>
 
                         <StepSection {...section('documents')}>
@@ -542,77 +573,90 @@ export default function Form({
                             </div>
                         </StepSection>
 
-                        <StepSection
-                            {...section('lease')}
-                            action={
-                                property?.lease && (
-                                    <Badge variant="info" render={<Link href={route('head-leases.show', property.lease.id)} />}>
-                                        {property.lease.number}
-                                    </Badge>
-                                )
-                            }
-                        >
-                            {isLeased ? (
-                                <FieldGroup className="grid gap-5 sm:grid-cols-2">
-                                    <TextField {...bind('lease_start_date')} type="date" label={t('propertyForm.fields.leaseStart')} required />
-                                    <TextField {...bind('lease_end_date')} type="date" label={t('propertyForm.fields.leaseEnd')} required />
-                                    {months !== null && (
-                                        <p className="-mt-2 text-[0.8125rem] text-muted-foreground sm:col-span-2">{t('propertyForm.leaseLength', { count: months })}</p>
-                                    )}
-                                    <MoneyField
-                                        {...bind('annual_rent')}
-                                        label={t('leasing.headLeases.form.fields.annualRent')}
-                                        currency={currency}
-                                        suffix={t('leasing.common.perYear')}
-                                        placeholder="780000"
-                                    />
-                                    <MoneyField {...bind('security_deposit')} label={t('leasing.common.securityDeposit')} currency={currency} optional />
-                                    <ChoiceField
-                                        id="payments_per_year"
-                                        label={t('leasing.headLeases.form.fields.paymentsPerYear')}
-                                        value={data.payments_per_year}
-                                        onChange={(value) => setData('payments_per_year', Number(value))}
-                                        options={paymentsPerYear.map((count) => ({ value: count, label: t('leasing.headLeases.form.cheques', { count }) }))}
-                                        error={errors.payments_per_year}
-                                        className="sm:col-span-2"
-                                    />
-                                    <TextField
-                                        {...bind('notice_period_days')}
-                                        type="number"
-                                        inputMode="numeric"
-                                        min={0}
-                                        label={t('leasing.headLeases.form.fields.noticeDays')}
-                                        optional
-                                    />
-                                    <TextField {...bind('ejari_number')} label={t('leasing.common.ejariNumber')} optional />
-                                    <Alert className="sm:col-span-2">
+                        {isLeased && (
+                            <StepSection
+                                {...section('lease')}
+                                action={
+                                    property?.lease && (
+                                        <Badge variant="info" render={<Link href={route('head-leases.show', property.lease.id)} />}>
+                                            {property.lease.number}
+                                        </Badge>
+                                    )
+                                }
+                            >
+                                <div className="flex flex-col gap-6">
+                                    <FieldGroup className="grid gap-5 sm:grid-cols-2">
+                                        <TextField {...bind('lease_start_date')} type="date" label={t('propertyForm.fields.leaseStart')} required />
+                                        <TextField {...bind('lease_end_date')} type="date" label={t('propertyForm.fields.leaseEnd')} required />
+                                        <TermPicker startDate={data.lease_start_date} endDate={data.lease_end_date} onChange={(value) => setData('lease_end_date', value)} />
+                                        {months !== null && (
+                                            <p className="-mt-2 text-[0.8125rem] text-muted-foreground sm:col-span-2">{t('propertyForm.leaseLength', { count: months })}</p>
+                                        )}
+                                        <MoneyField
+                                            {...bind('annual_rent')}
+                                            label={t('leasing.headLeases.form.fields.annualRent')}
+                                            currency={currency}
+                                            suffix={t('leasing.common.perYear')}
+                                            placeholder="780000"
+                                        />
+                                        <MoneyField {...bind('security_deposit')} label={t('leasing.common.securityDeposit')} currency={currency} optional />
+                                        <ChequeCountPicker
+                                            id="payments_per_year"
+                                            label={t('leasing.headLeases.form.fields.paymentsPerYear')}
+                                            value={data.payments_per_year}
+                                            onChange={(value) => setData('payments_per_year', value)}
+                                            options={paymentsPerYear}
+                                            annualRent={data.annual_rent}
+                                            currency={currency}
+                                            error={errors.payments_per_year}
+                                            className="sm:col-span-2"
+                                        />
+                                        <TextField
+                                            {...bind('notice_period_days')}
+                                            type="number"
+                                            inputMode="numeric"
+                                            min={0}
+                                            label={t('leasing.headLeases.form.fields.noticeDays')}
+                                            optional
+                                        />
+                                        <TextField {...bind('ejari_number')} label={t('leasing.common.ejariNumber')} optional />
+                                    </FieldGroup>
+
+                                    <section className="flex flex-col gap-4 border-t pt-6">
+                                        <div className="flex flex-col gap-0.5">
+                                            <h3 className="text-sm font-bold">{t('leasing.cheques.schedule.title')}</h3>
+                                            <p className="text-[0.8125rem] text-muted-foreground">{t('leasing.cheques.schedule.formDescription.issued')}</p>
+                                        </div>
+                                        <ChequeScheduleFields
+                                            rows={rows}
+                                            startDate={data.lease_start_date}
+                                            endDate={data.lease_end_date}
+                                            direction="issued"
+                                            enforce={false}
+                                            optional
+                                            isKept={isKept}
+                                            onPatch={patchCheque}
+                                            errors={errors}
+                                            currency={currency}
+                                            banks={banks}
+                                            hint={t('propertyForm.lease.chequesHint')}
+                                        />
+                                    </section>
+
+                                    <Alert>
                                         <ScrollTextIcon />
                                         <AlertDescription>{t(property?.lease ? 'propertyForm.lease.updates' : 'propertyForm.lease.creates')}</AlertDescription>
                                     </Alert>
-                                </FieldGroup>
-                            ) : (
-                                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-8 text-center">
-                                    <span className="flex size-11 items-center justify-center rounded-xl bg-brand-cyan/10 text-brand-ink">
-                                        <KeyRoundIcon className="size-5" />
-                                    </span>
-                                    <div className="flex flex-col gap-1">
-                                        <p className="text-sm font-semibold">{t('propertyForm.lease.owned.title')}</p>
-                                        <p className="max-w-md text-[0.8125rem] text-muted-foreground">{t('propertyForm.lease.owned.description')}</p>
-                                    </div>
-                                    <Button type="button" variant="outline" onClick={() => setData('ownership_type', 'leased')}>
-                                        <HandshakeIcon data-icon="inline-start" />
-                                        {t('propertyForm.lease.owned.action')}
-                                    </Button>
                                 </div>
-                            )}
-                        </StepSection>
+                            </StepSection>
+                        )}
                     </div>
 
                     <aside className="hidden flex-col gap-6 xl:sticky xl:top-40 xl:flex xl:max-h-[calc(100svh-11rem)] xl:overflow-y-auto xl:pb-1 [&>*]:shrink-0">
                         <PropertyPreview data={data} coverUrl={coverUrl} propertyTypes={propertyTypes} landlords={landlords} savedUnits={savedUnits} />
                         {isLeased && (
                             <ChequePlanCard
-                                rows={chequeRows}
+                                rows={rows}
                                 startDate={data.lease_start_date}
                                 endDate={data.lease_end_date}
                                 perYear={Number(data.payments_per_year)}

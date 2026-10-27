@@ -9,6 +9,7 @@ use App\Models\Contract;
 use App\Models\ContractDocument;
 use App\Models\ContractLine;
 use App\Models\Room;
+use App\Models\RoomRental;
 use App\Models\Shop;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Eloquent\Builder;
@@ -210,8 +211,8 @@ class ContractRequest extends CompanyScopedRequest
 
     /**
      * No other live contract may hold the same apartment, shop or whole room
-     * for overlapping days, and bed lines in a room may not add up to more
-     * beds than it has.
+     * for overlapping days, nor a short-term rental the room, and bed lines
+     * in a room may not add up to more beds than it has.
      *
      * @param  array<string, mixed>  $line
      */
@@ -243,6 +244,19 @@ class ContractRequest extends CompanyScopedRequest
 
         if ($taken) {
             $validator->errors()->add("lines.{$index}.{$column}", "Already let under {$taken->contract->contract_number} until {$taken->end_date->format('j M Y')}.");
+
+            return false;
+        }
+
+        $rental = in_array($type, ['bed', 'room'], true) ? RoomRental::query()
+            ->active()
+            ->whereDate('start_date', '<=', $line['end_date'])
+            ->where(fn (Builder $query) => $query->whereNull('end_date')->orWhereDate('end_date', '>=', $line['start_date']))
+            ->whereHas('rooms', fn (Builder $rooms) => $rooms->whereKey($line['room_id']))
+            ->first() : null;
+
+        if ($rental) {
+            $validator->errors()->add("lines.{$index}.{$column}", "Rented short-term under {$rental->rental_number}".($rental->end_date ? " until {$rental->end_date->format('j M Y')}." : '.'));
 
             return false;
         }

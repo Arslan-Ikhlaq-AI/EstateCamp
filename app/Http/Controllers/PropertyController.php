@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\PropertyRequest;
 use App\Models\Apartment;
+use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\ContractLine;
@@ -195,7 +196,12 @@ class PropertyController extends Controller
                 'lease_start_date' => $property->lease_start_date?->toDateString(),
                 'lease_end_date' => $property->lease_end_date?->toDateString(),
                 ...($lease?->only(PropertyRequest::LEASE_TERMS) ?? []),
-                'lease' => $lease ? ['id' => $lease->id, 'number' => $lease->lease_number] : null,
+                'lease' => $lease ? [
+                    'id' => $lease->id,
+                    'number' => $lease->lease_number,
+                    'hasLockedCheques' => $lease->cheques()->whereNotIn('status', Cheque::EDITABLE_STATUSES)->exists(),
+                    'cheques' => $lease->cheques()->whereNull('replaces_id')->with('chequeStatus:id,name,slug,color,stage')->get()->map(fn (Cheque $cheque) => ChequeController::formDetails($cheque)),
+                ] : null,
                 'documents' => $property->documents->map(fn (PropertyDocument $document) => [
                     'id' => $document->id,
                     'document_type' => $document->document_type,
@@ -268,8 +274,11 @@ class PropertyController extends Controller
      */
     private function formOptions(int $companyId): array
     {
+        $company = Company::findOrFail($companyId);
+
         return [
-            'currency' => Company::whereKey($companyId)->value('default_currency'),
+            'currency' => $company->default_currency,
+            'banks' => ChequeController::knownBanks($company),
             'landlords' => Landlord::query()
                 ->where('company_id', $companyId)
                 ->orderBy('name')
@@ -468,7 +477,7 @@ class PropertyController extends Controller
      */
     private function propertyAttributes(PropertyRequest $request, Company $company): array
     {
-        $attributes = Arr::except($request->validated(), ['cover_image', 'documents', 'landlord_mode', 'new_landlord', 'units', ...PropertyRequest::LEASE_TERMS]);
+        $attributes = Arr::except($request->validated(), ['cover_image', 'documents', 'cheques', 'landlord_mode', 'new_landlord', 'units', ...PropertyRequest::LEASE_TERMS]);
 
         if ($request->validated('landlord_mode') === 'new') {
             $attributes['landlord_id'] = $company->landlords()->create($request->validated('new_landlord'))->id;
@@ -483,12 +492,12 @@ class PropertyController extends Controller
 
     /**
      * Create or update the head lease of a leased property from the terms
-     * entered with it.
+     * and cheques entered with it.
      */
     private function syncLease(Property $property, PropertyRequest $request): ?HeadLease
     {
         return $property->ownership_type === 'leased'
-            ? $property->syncHeadLease($request->safe()->only(PropertyRequest::LEASE_TERMS))
+            ? $property->syncHeadLease($request->safe()->only(PropertyRequest::LEASE_TERMS), $request->chequeEntries(), $request->user())
             : null;
     }
 

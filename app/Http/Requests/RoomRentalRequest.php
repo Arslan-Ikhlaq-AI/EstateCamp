@@ -2,19 +2,22 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Bed;
 use App\Models\Client;
-use App\Models\Occupant;
+use App\Models\Company;
+use App\Models\Room;
 use App\Models\RoomRental;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Renting a bed or a whole room to an individual without a contract, or
- * changing a rental's terms. A new rental names the tenant (an individual
- * client already on file, or a new one) and the bed they take; once
- * running, only the rent, deposit, end date and notes change.
+ * Renting whole rooms short-term to a company without a contract, or
+ * changing a rental's terms. A new rental names the company (one already on
+ * file, or a new one by its name and phone with any other details), the
+ * property and its rooms, how many months they stay, and whether the first
+ * month is paid now; once running, only the stay, start date, rent and
+ * deposit change.
  */
 class RoomRentalRequest extends CompanyScopedRequest
 {
@@ -28,45 +31,43 @@ class RoomRentalRequest extends CompanyScopedRequest
     public function rules(): array
     {
         $terms = [
+            'months' => ['required', 'integer', 'min:1', 'max:'.RoomRental::MAX_TERM_MONTHS],
+            'start_date' => ['required', 'date'],
             'monthly_rent' => ['required', 'numeric', 'gt:0', 'max:10000000'],
             'security_deposit' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['nullable', 'date', 'after:start_date'],
-            'notes' => ['nullable', 'string', 'max:5000'],
         ];
 
         if ($this->route('roomRental')) {
             return $terms;
         }
 
-        $isNewTenant = $this->input('client_mode') === 'new';
+        $isNewCompany = $this->input('client_mode') === 'new';
 
         return [
             'client_mode' => ['required', Rule::in(['existing', 'new'])],
-            'client_id' => [Rule::requiredIf(! $isNewTenant), 'nullable', 'integer', $this->existsInCompany('clients')],
-            'new_client.name' => [Rule::requiredIf($isNewTenant), 'nullable', 'string', 'max:255'],
-            'new_client.phone' => [Rule::requiredIf($isNewTenant), 'nullable', 'string', 'max:40'],
+            'client_id' => [Rule::requiredIf(! $isNewCompany), 'nullable', 'integer', $this->existsInCompany('clients')],
+            'new_client.name' => [Rule::requiredIf($isNewCompany), 'nullable', 'string', 'max:255'],
+            'new_client.phone' => [Rule::requiredIf($isNewCompany), 'nullable', 'string', 'max:40'],
+            'new_client.contact_person_name' => ['nullable', 'string', 'max:255'],
             'new_client.email' => ['nullable', 'email', 'max:255'],
-            'new_client.nationality' => ['nullable', 'string', 'max:100'],
-            'new_client.id_type' => [Rule::requiredIf($isNewTenant), 'nullable', Rule::in(Client::ID_TYPES)],
-            'new_client.id_number' => [
-                Rule::requiredIf($isNewTenant), 'nullable', 'string', 'max:50',
-                Rule::unique('clients', 'id_number')
-                    ->where('company_id', $this->companyId())
-                    ->where('id_type', $this->input('new_client.id_type'))
-                    ->whereNull('deleted_at'),
-            ],
-            'gender' => ['required', Rule::in(Occupant::GENDERS)],
-            'unit_type' => ['required', Rule::in(RoomRental::UNIT_TYPES)],
-            'bed_id' => ['required', 'integer'],
+            'new_client.trade_license_number' => ['nullable', 'string', 'max:255'],
+            'new_client.tax_registration_number' => ['nullable', 'digits:15'],
+            'new_client.address' => ['nullable', 'string', 'max:2000'],
+            'property_id' => ['required', 'integer', $this->existsInCompany('properties')],
+            'room_ids' => ['required', 'array', 'min:1', 'max:200'],
+            'room_ids.*' => ['integer', 'distinct'],
             ...$terms,
+            'first_payment' => ['required', Rule::in(['now', 'later'])],
+            'payment_method' => ['required_if:first_payment,now', 'nullable', Rule::in(RoomRental::FIRST_PAYMENT_METHODS)],
+            'payment_reference' => ['nullable', 'string', 'max:100'],
         ];
     }
 
     /**
-     * The tenant must be an individual not staying anywhere else, and the
-     * bed must be free in a room open to individuals (all of it free for a
-     * whole-room rental) that accepts the tenant's gender.
+     * The tenant must be a company, and every room must be in the property,
+     * in service, free of any contract or other rental and empty. A longer
+     * term must not run into a contract or rental that has since taken one
+     * of the rooms.
      *
      * @return array<int, callable>
      */
@@ -74,15 +75,33 @@ class RoomRentalRequest extends CompanyScopedRequest
     {
         return [
             function (Validator $validator) {
-                if ($validator->errors()->isNotEmpty() || $this->route('roomRental')) {
+                if ($validator->errors()->isNotEmpty()) {
                     return;
                 }
 
-                foreach ($this->problems() as $field => $message) {
+                $problems = $this->route('roomRental') ? $this->termProblems($this->route('roomRental')) : $this->problems();
+
+                foreach ($problems as $field => $message) {
                     $validator->errors()->add($field, $message);
                 }
             },
         ];
+    }
+
+    /**
+     * Why a running rental's term cannot grow, by field.
+     *
+     * @return array<string, string>
+     */
+    private function termProblems(RoomRental $rental): array
+    {
+        if ($rental->end_date !== null && $this->terms()['end_date'] <= $rental->end_date->toDateString()) {
+            return [];
+        }
+
+        $taken = $rental->rooms()->whereKey(RoomRental::unavailableRoomIds($rental->company_id, $rental->id))->orderBy('room_number')->pluck('room_number');
+
+        return $taken->isEmpty() ? [] : ['months' => 'Room '.$taken->join(', ', ' and ').' has since been rented to someone else, so the term cannot be made longer.'];
     }
 
     /**
@@ -95,72 +114,42 @@ class RoomRentalRequest extends CompanyScopedRequest
         if ($this->input('client_mode') === 'existing') {
             $client = Client::query()->find($this->integer('client_id'));
 
-            if ($client->client_type !== 'individual') {
-                return ['client_id' => "{$client->name} is a company. Companies rent under a contract."];
-            }
-
-            if (Occupant::query()->where('client_id', $client->id)->whereHas('currentStay')->exists()) {
-                return ['client_id' => "{$client->name} is already staying in one of your beds. Check them out first."];
+            if ($client->client_type !== 'company') {
+                return ['client_id' => "{$client->name} is a person. Short-term rentals are for companies."];
             }
         }
 
-        $bed = Bed::query()->with('room')->find($this->integer('bed_id'));
-        $room = $bed?->room;
+        $rooms = Room::query()->whereKey($this->input('room_ids'))->get(['id', 'property_id', 'room_number']);
+        $free = RoomRental::roomsToRent(Company::findOrFail($this->companyId()))->modelKeys();
 
-        if ($room === null || $room->company_id !== $this->companyId()) {
-            return ['bed_id' => 'Choose a bed in one of your rooms.'];
+        if ($rooms->count() !== count($this->input('room_ids')) || $rooms->contains(fn (Room $room) => $room->property_id !== $this->integer('property_id'))) {
+            return ['room_ids' => 'Choose rooms in this property.'];
         }
 
-        if ($room->status !== 'active' || ! $bed->is_active) {
-            return ['bed_id' => "Room {$room->room_number} is not open for new tenants right now."];
-        }
+        $taken = $rooms->reject(fn (Room $room) => in_array($room->id, $free, true));
 
-        if (in_array($room->id, RoomRental::unavailableRoomIds($this->companyId()), true)) {
-            return ['bed_id' => "Room {$room->room_number} is rented under a contract or by another tenant."];
-        }
-
-        $taken = $room->beds()->whereHas('occupancies', fn ($stays) => $stays->whereNull('check_out_date'));
-
-        if ($this->input('unit_type') === 'room' && $taken->exists()) {
-            return ['bed_id' => "Someone is already staying in room {$room->room_number}, so it cannot be rented whole."];
-        }
-
-        if ((clone $taken)->whereKey($bed->id)->exists()) {
-            return ['bed_id' => "Bed {$bed->label} in room {$room->room_number} is taken."];
-        }
-
-        $policy = $room->gender_policy;
-
-        if (in_array($policy, ['male', 'female'], true) && $policy !== $this->tenantGender()) {
-            return ['bed_id' => "Room {$room->room_number} is for ".($policy === 'male' ? 'men' : 'women').' only.'];
+        if ($taken->isNotEmpty()) {
+            return ['room_ids' => 'Room '.$taken->pluck('room_number')->join(', ', ' and ').' is no longer free. Choose another.'];
         }
 
         return [];
     }
 
     /**
-     * The tenant's gender: as on file for someone who has stayed before,
-     * otherwise as entered.
-     */
-    public function tenantGender(): string
-    {
-        $onFile = $this->input('client_mode') === 'existing'
-            ? Occupant::query()->where('client_id', $this->integer('client_id'))->orderBy('id')->value('gender')
-            : null;
-
-        return $onFile ?? $this->input('gender');
-    }
-
-    /**
-     * The rental's terms as the model fills them.
+     * The rental's terms as the model fills them, with the end date the
+     * term in months gives.
      *
      * @return array<string, mixed>
      */
     public function terms(): array
     {
+        $start = Carbon::parse($this->validated('start_date'));
+
         return [
-            ...$this->safe()->only(['monthly_rent', 'start_date', 'end_date', 'notes']),
+            'monthly_rent' => $this->validated('monthly_rent'),
             'security_deposit' => $this->validated('security_deposit') ?? 0,
+            'start_date' => $start->toDateString(),
+            'end_date' => RoomRental::endDateFor($start, $this->integer('months'))->toDateString(),
         ];
     }
 
@@ -170,26 +159,21 @@ class RoomRentalRequest extends CompanyScopedRequest
     public function attributes(): array
     {
         return [
-            'client_id' => 'tenant',
-            'new_client.name' => 'name',
+            'client_id' => 'company',
+            'new_client.name' => 'company name',
             'new_client.phone' => 'phone',
+            'new_client.contact_person_name' => 'contact person',
             'new_client.email' => 'email',
-            'new_client.id_type' => 'ID type',
-            'new_client.id_number' => 'ID number',
-            'bed_id' => 'bed',
+            'new_client.trade_license_number' => 'trade licence number',
+            'new_client.tax_registration_number' => 'tax registration number',
+            'new_client.address' => 'address',
+            'property_id' => 'property',
+            'room_ids' => 'rooms',
+            'months' => 'months',
             'monthly_rent' => 'monthly rent',
             'security_deposit' => 'security deposit',
-            'end_date' => 'end date',
-        ];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    public function messages(): array
-    {
-        return [
-            'new_client.id_number.unique' => 'Another client already has this ID number. Choose them as an existing tenant instead.',
+            'payment_method' => 'payment method',
+            'payment_reference' => 'reference',
         ];
     }
 }

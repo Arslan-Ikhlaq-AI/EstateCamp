@@ -1,41 +1,78 @@
-import { useRentalPlace } from '@/Components/FinanceBadges';
-import { ChoiceField, FormSection, MoneyField, SelectField, TextareaField, TextField } from '@/Components/FormFields';
+import { METHOD_ICONS, useRentalPlace } from '@/Components/FinanceBadges';
+import { ChoiceField, FormSection, MoneyField, SelectField, TextField } from '@/Components/FormFields';
 import FormShell from '@/Components/FormShell';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FieldGroup } from '@/components/ui/field';
-import { todayIso } from '@/hooks/use-leasing-format';
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { addMonths, todayIso } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
+import { addDays } from '@/lib/cheques';
+import { cn } from '@/lib/utils';
 import { Head, useForm } from '@inertiajs/react';
-import { BedSingleIcon, DoorClosedIcon, InfoIcon, LockIcon, MarsIcon, UserPlusIcon, UsersIcon, VenusIcon } from 'lucide-react';
+import { Building2Icon, CheckIcon, ClockIcon, DoorOpenIcon, InfoIcon, LayersIcon, ListChecksIcon, LockIcon, MinusIcon, PlusIcon, WalletIcon, XIcon } from 'lucide-react';
+import { useState } from 'react';
 
 const amount = (value) => Number.parseFloat(value) || 0;
 
 /**
- * The rent a room suggests: its rate per bed, times its beds for a whole room.
+ * Quick picks offered when a property has more free rooms than this.
  */
-function suggestedRent(room, unitType) {
-    if (!room?.rentPerBed) {
-        return '';
-    }
+const FIRST_ROOMS = [5, 10];
 
-    return unitType === 'room' ? room.rentPerBed * room.capacity : room.rentPerBed;
+/**
+ * Months of the payment schedule listed beside the form; the rest are counted.
+ */
+const SCHEDULE_ROWS = 6;
+
+/**
+ * How many whole months the stay is, or 0 while the field is not a number.
+ */
+const stayMonths = (value) => (Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : 0);
+
+/**
+ * The last day of a stay of `months` months from `start` (both ISO dates),
+ * the way the server works it out.
+ */
+function stayEnd(start, months) {
+    return start && months > 0 ? addDays(addMonths(start, months), -1) : null;
 }
 
 /**
- * What the tenant pays to move in, and how the rent works from then on.
+ * The standard rent of the chosen rooms together, or '' when none has one.
  */
-function MoveInSummary({ data, currency }) {
+function standardRent(rooms) {
+    const rents = rooms.map((room) => room.rent).filter((rent) => rent !== null);
+
+    return rents.length > 0 ? rents.reduce((sum, rent) => sum + rent, 0) : '';
+}
+
+/**
+ * The months of the stay, each with the day its rent falls due.
+ */
+function paymentSchedule(start, months) {
+    return start ? Array.from({ length: months }, (_, index) => addMonths(start, index)) : [];
+}
+
+/**
+ * What the company pays now and month by month, and when the stay ends.
+ */
+function AtAGlance({ data, currency, isEdit }) {
     const { t, formatMoney, formatDate } = useTranslation();
     const rent = amount(data.monthly_rent);
     const deposit = amount(data.security_deposit);
+    const months = stayMonths(data.months);
+    const endsOn = stayEnd(data.start_date, months);
+    const isPaidNow = !isEdit && data.first_payment === 'now';
+    const schedule = paymentSchedule(data.start_date, months);
 
     return (
         <Card>
             <CardHeader>
                 <CardTitle>{t('finance.rentals.form.summary.title')}</CardTitle>
-                <CardDescription>{t('finance.rentals.form.summary.description')}</CardDescription>
+                <CardDescription>{endsOn ? t('finance.rentals.form.summary.endsOn', { date: formatDate(endsOn) }) : t('finance.rentals.form.summary.description')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
                 <dl className="flex flex-col gap-1.5 rounded-xl bg-brand-cyan/[0.06] p-4 text-sm ring-1 ring-brand-cyan/15">
@@ -48,12 +85,44 @@ function MoveInSummary({ data, currency }) {
                         <dd className="tabular-nums">{formatMoney(deposit, currency)}</dd>
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-3 border-t border-brand-cyan/15 pt-2.5">
-                        <dt className="font-medium">{t('finance.rentals.form.summary.toMoveIn')}</dt>
+                        <dt className="font-medium">{isPaidNow ? t('finance.rentals.form.summary.paidNow') : t('finance.rentals.form.summary.toMoveIn')}</dt>
                         <dd className="font-heading text-lg font-bold tabular-nums">{formatMoney(rent + deposit, currency)}</dd>
                     </div>
+                    <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">{t('finance.rentals.form.summary.wholeTerm', { count: months })}</dt>
+                        <dd className="tabular-nums">{formatMoney(rent * months, currency)}</dd>
+                    </div>
                 </dl>
+
+                {schedule.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                        <p className="text-sm font-medium">{t('finance.rentals.form.summary.schedule')}</p>
+                        <ol className="flex flex-col divide-y divide-border rounded-xl text-[0.8125rem] ring-1 ring-foreground/10">
+                            {schedule.slice(0, SCHEDULE_ROWS).map((dueOn, index) => (
+                                <li key={dueOn} className="flex items-center justify-between gap-3 px-3 py-2">
+                                    <span className="flex flex-col leading-tight">
+                                        <span className="font-medium">{t('finance.rentals.form.summary.month', { count: index + 1 })}</span>
+                                        <span className="text-xs text-muted-foreground tabular-nums">{t('finance.rentals.form.summary.dueOn', { date: formatDate(dueOn) })}</span>
+                                    </span>
+                                    <span className="flex flex-col items-end leading-tight">
+                                        <span className="tabular-nums">{formatMoney(rent, currency)}</span>
+                                        {index === 0 && isPaidNow && (
+                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                                                <CheckIcon className="size-3" />
+                                                {t('finance.rentals.form.payment.now')}
+                                            </span>
+                                        )}
+                                    </span>
+                                </li>
+                            ))}
+                            {schedule.length > SCHEDULE_ROWS && (
+                                <li className="px-3 py-2 text-xs text-muted-foreground">{t('finance.rentals.form.summary.more', { count: schedule.length - SCHEDULE_ROWS })}</li>
+                            )}
+                        </ol>
+                    </div>
+                )}
+
                 <ul className="flex flex-col gap-2 text-[0.8125rem] text-pretty text-muted-foreground">
-                    <li>{data.start_date ? t('finance.rentals.form.summary.dueEach', { date: formatDate(data.start_date) }) : t('finance.rentals.form.summary.dueMonthly')}</li>
                     <li>{t('finance.rentals.form.summary.grace')}</li>
                     <li>{t('finance.rentals.form.summary.partial')}</li>
                 </ul>
@@ -63,75 +132,255 @@ function MoveInSummary({ data, currency }) {
 }
 
 /**
- * Rent a bed or a whole room to an individual without a contract, or
- * change a running rental's terms.
+ * How many months the company stays, typed or stepped one at a time, with
+ * the day the stay ends.
  */
-export default function Form({ rental, currency, defaults, tenants, rooms, idTypes }) {
+function MonthsField({ value, onChange, max, startDate, error }) {
+    const { t, formatDate } = useTranslation();
+    const months = stayMonths(value);
+    const endsOn = stayEnd(startDate, months);
+    const step = (by) => onChange(Math.min(max, Math.max(1, (months || 1) + by)));
+
+    return (
+        <Field data-invalid={error ? true : undefined} className="sm:col-span-2">
+            <FieldLabel htmlFor="months">{t('finance.rentals.form.months')}</FieldLabel>
+            <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="icon" aria-label={t('finance.rentals.form.monthsLess')} disabled={months <= 1} onClick={() => step(-1)}>
+                    <MinusIcon />
+                </Button>
+                <Input
+                    id="months"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={max}
+                    step={1}
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    aria-invalid={error ? true : undefined}
+                    className="w-20 text-center text-base font-semibold tabular-nums"
+                />
+                <Button type="button" variant="outline" size="icon" aria-label={t('finance.rentals.form.monthsMore')} disabled={months >= max} onClick={() => step(1)}>
+                    <PlusIcon />
+                </Button>
+                <span className="text-sm text-muted-foreground">{t('finance.rentals.form.monthsUnit', { count: months })}</span>
+            </div>
+            {!error && <FieldDescription>{endsOn ? t('finance.rentals.form.monthsHint', { date: formatDate(endsOn) }) : t('finance.rentals.form.monthsEmpty')}</FieldDescription>}
+            <FieldError>{error}</FieldError>
+        </Field>
+    );
+}
+
+/**
+ * A room to tap in or out of the rental.
+ */
+function RoomChoice({ room, isChosen, onToggle, currency }) {
+    const { t, formatMoney } = useTranslation();
+
+    return (
+        <button
+            type="button"
+            aria-pressed={isChosen}
+            onClick={onToggle}
+            className={cn(
+                'flex items-center gap-3 rounded-xl p-3 text-start ring-1 transition-shadow outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:p-3.5',
+                isChosen ? 'bg-brand-cyan/[0.06] shadow-(--raised-shadow) ring-2 ring-brand-cyan' : 'bg-surface ring-foreground/10 hover:bg-accent',
+            )}
+        >
+            <span
+                className={cn(
+                    'hidden size-9 shrink-0 items-center justify-center rounded-lg sm:flex',
+                    isChosen ? 'bg-brand-cyan text-brand-navy' : 'bg-brand-cyan/10 text-brand-ink',
+                )}
+            >
+                {isChosen ? <CheckIcon className="size-4" /> : <DoorOpenIcon className="size-4" />}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                <span className="flex items-center gap-1 truncate text-sm font-semibold">
+                    {isChosen && <CheckIcon className="size-3.5 shrink-0 text-brand-ink sm:hidden" />}
+                    {t('leasing.lines.roomName', { room: room.number })}
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                    <span className="block sm:inline">{t('finance.rentals.form.rooms.beds', { count: room.capacity })}</span>
+                    <span className="hidden sm:inline"> · </span>
+                    <span className="block sm:inline">{room.rent !== null ? formatMoney(room.rent, currency) : t('finance.rentals.form.rooms.noRate')}</span>
+                </span>
+            </span>
+        </button>
+    );
+}
+
+/**
+ * Buttons that choose many rooms at once: all of them, the first few, or a
+ * whole floor; and one that clears the choice.
+ */
+function QuickPicks({ rooms, roomIds, onRoomsChange }) {
     const { t } = useTranslation();
+    const floors = [...new Set(rooms.map((room) => room.floor).filter((floor) => floor !== null))].sort((a, b) => a - b);
+    const pick = (picked) => onRoomsChange(picked.map((room) => room.id));
+    const isPicked = (picked) => picked.length === roomIds.length && picked.every((room) => roomIds.includes(room.id));
+
+    const options = [
+        { key: 'all', label: t('finance.rentals.form.rooms.quick.all', { count: rooms.length }), rooms, icon: ListChecksIcon },
+        ...FIRST_ROOMS.filter((count) => count < rooms.length).map((count) => ({
+            key: `first-${count}`,
+            label: t('finance.rentals.form.rooms.quick.first', { count }),
+            rooms: rooms.slice(0, count),
+        })),
+        ...(floors.length > 1
+            ? floors.map((floor) => ({
+                  key: `floor-${floor}`,
+                  label: floor === 0 ? t('finance.rentals.form.rooms.quick.ground') : t('finance.rentals.form.rooms.quick.floor', { floor }),
+                  rooms: rooms.filter((room) => room.floor === floor),
+                  icon: LayersIcon,
+              }))
+            : []),
+    ];
+
+    return (
+        <div role="group" aria-label={t('finance.rentals.form.rooms.quick.label')} className="flex flex-wrap items-center gap-2">
+            {options.map((option) => (
+                <Button
+                    key={option.key}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-pressed={isPicked(option.rooms)}
+                    onClick={() => pick(option.rooms)}
+                    className="aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-primary"
+                >
+                    {option.icon && <option.icon data-icon="inline-start" />}
+                    {option.label}
+                </Button>
+            ))}
+            {roomIds.length > 0 && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => onRoomsChange([])}>
+                    <XIcon data-icon="inline-start" />
+                    {t('finance.rentals.form.rooms.quick.clear')}
+                </Button>
+            )}
+        </div>
+    );
+}
+
+/**
+ * The property's free rooms to tap, with a tab for each property and quick
+ * picks for choosing many at once.
+ */
+function RoomPicker({ properties, propertyId, roomIds, onPropertyChange, onRoomsChange, error, currency }) {
+    const { t } = useTranslation();
+    const property = properties.find((item) => item.id === propertyId) ?? null;
+    const toggle = (roomId) => onRoomsChange(roomIds.includes(roomId) ? roomIds.filter((id) => id !== roomId) : [...roomIds, roomId]);
+
+    return (
+        <Field data-invalid={error ? true : undefined}>
+            <FieldLabel id="property_id-label">{t('finance.rentals.form.rooms.property')}</FieldLabel>
+            <div role="tablist" aria-labelledby="property_id-label" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+                {properties.map((item) => {
+                    const isCurrent = item.id === propertyId;
+
+                    return (
+                        <button
+                            key={item.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={isCurrent}
+                            onClick={() => onPropertyChange(item.id)}
+                            className={cn(
+                                'flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-start ring-1 transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                                isCurrent ? 'bg-primary text-primary-foreground ring-primary' : 'bg-surface ring-foreground/10 hover:bg-accent',
+                            )}
+                        >
+                            <Building2Icon className={cn('size-4 shrink-0', isCurrent ? 'text-brand-cyan' : 'text-muted-foreground')} />
+                            <span className="flex flex-col leading-tight">
+                                <span dir="auto" className="text-[0.8125rem] font-semibold whitespace-nowrap">
+                                    {item.name}
+                                </span>
+                                <span className={cn('text-[0.6875rem] whitespace-nowrap', isCurrent ? 'text-white/70' : 'text-muted-foreground')}>
+                                    {t('finance.rentals.form.rooms.free', { count: item.rooms.length })}
+                                </span>
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            {property && (
+                <>
+                    <QuickPicks rooms={property.rooms} roomIds={roomIds} onRoomsChange={onRoomsChange} />
+                    <div className="grid grid-cols-2 gap-2 sm:gap-2.5 xl:grid-cols-3">
+                        {property.rooms.map((room) => (
+                            <RoomChoice key={room.id} room={room} isChosen={roomIds.includes(room.id)} onToggle={() => toggle(room.id)} currency={currency} />
+                        ))}
+                    </div>
+                </>
+            )}
+
+            {roomIds.length > 0 && !error && <p className="text-sm font-medium text-brand-ink">{t('finance.rentals.form.rooms.chosen', { count: roomIds.length })}</p>}
+            <FieldError>{error}</FieldError>
+        </Field>
+    );
+}
+
+/**
+ * Rent whole rooms to a company for a stay of some months without a
+ * contract, paid month by month with the first month paid now unless left
+ * for later; or change a running rental's stay, start, rent and deposit.
+ */
+export default function Form({ rental, currency, defaults, companies, properties, maxMonths, paymentMethods }) {
+    const { t, formatMoney } = useTranslation();
     const place = useRentalPlace();
     const isEdit = rental !== null;
-    const initialRoom = rooms.find((room) => room.id === defaults?.room_id) ?? null;
-    const initialTenant = tenants.find((tenant) => tenant.id === defaults?.client_id) ?? null;
+    const initialCompany = companies.find((company) => company.id === defaults?.client_id) ?? null;
+    const [rentTyped, setRentTyped] = useState(isEdit);
 
     const form = useForm(
         isEdit
-            ? { ...rental.form, end_date: rental.form.end_date ?? '', notes: rental.form.notes ?? '', security_deposit: rental.form.security_deposit || '' }
+            ? { ...rental.form, security_deposit: rental.form.security_deposit || '' }
             : {
-                  client_mode: tenants.length > 0 ? 'existing' : 'new',
-                  client_id: initialTenant?.id ?? null,
-                  new_client: { name: '', phone: '', email: '', nationality: '', id_type: idTypes[0], id_number: '' },
-                  gender: initialTenant?.gender ?? (initialRoom?.genderPolicy === 'female' ? 'female' : 'male'),
-                  room_id: initialRoom?.id ?? null,
-                  unit_type: 'bed',
-                  bed_id: initialRoom?.beds[0]?.id ?? null,
-                  monthly_rent: suggestedRent(initialRoom, 'bed'),
-                  security_deposit: '',
+                  client_mode: companies.length > 0 ? 'existing' : 'new',
+                  client_id: initialCompany?.id ?? null,
+                  new_client: { name: '', phone: '', contact_person_name: '', email: '', trade_license_number: '', tax_registration_number: '', address: '' },
+                  property_id: defaults?.property_id ?? properties[0]?.id ?? null,
+                  room_ids: defaults?.room_ids ?? [],
+                  months: 1,
                   start_date: todayIso(),
-                  end_date: '',
-                  notes: '',
+                  monthly_rent: standardRent(properties.flatMap((property) => property.rooms).filter((room) => defaults?.room_ids?.includes(room.id))),
+                  security_deposit: '',
+                  first_payment: 'now',
+                  payment_method: paymentMethods[0] ?? null,
+                  payment_reference: '',
               },
     );
     const { data, setData, errors, processing } = form;
     const title = isEdit ? t('finance.rentals.form.editTitle', { number: rental.number }) : t('finance.rentals.form.title');
-    const room = rooms.find((candidate) => candidate.id === data.room_id) ?? null;
-    const tenant = tenants.find((candidate) => candidate.id === data.client_id) ?? null;
-    const genderLocked = !isEdit && data.client_mode === 'existing' && Boolean(tenant?.gender);
+    const rooms = properties.find((property) => property.id === data.property_id)?.rooms ?? [];
+    const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
     const bindNew = (field) => ({
         id: `new_client_${field}`,
         value: data.new_client[field],
         onChange: (value) => setData('new_client', { ...data.new_client, [field]: value }),
         error: errors[`new_client.${field}`],
     });
-    const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
+    const roomsError = errors.room_ids ?? Object.entries(errors).find(([key]) => key.startsWith('room_ids.'))?.[1];
+    const chosenRent = standardRent(rooms.filter((room) => data.room_ids.includes(room.id)));
+    const paidNow = amount(data.monthly_rent) + amount(data.security_deposit);
 
-    const chooseRoom = (roomId) => {
-        const next = rooms.find((candidate) => candidate.id === roomId);
-        const unitType = data.unit_type === 'room' && next?.canRentWhole ? 'room' : 'bed';
-
+    const chooseRooms = (roomIds) =>
         setData((current) => ({
             ...current,
-            room_id: roomId,
-            unit_type: unitType,
-            bed_id: next?.beds[0]?.id ?? null,
-            monthly_rent: suggestedRent(next, unitType) || current.monthly_rent,
-            gender: genderLocked ? current.gender : next?.genderPolicy === 'female' ? 'female' : next?.genderPolicy === 'male' ? 'male' : current.gender,
+            room_ids: roomIds,
+            monthly_rent: rentTyped ? current.monthly_rent : standardRent(rooms.filter((room) => roomIds.includes(room.id))),
         }));
-    };
 
-    const chooseUnit = (unitType) => setData((current) => ({ ...current, unit_type: unitType, monthly_rent: suggestedRent(room, unitType) || current.monthly_rent }));
+    const chooseProperty = (propertyId) => setData((current) => ({ ...current, property_id: propertyId, room_ids: [], monthly_rent: rentTyped ? current.monthly_rent : '' }));
 
-    const chooseTenant = (clientId) => {
-        const next = tenants.find((candidate) => candidate.id === clientId);
-
-        setData((current) => ({ ...current, client_id: clientId, gender: next?.gender ?? current.gender }));
+    const typeRent = (value) => {
+        setRentTyped(true);
+        setData('monthly_rent', value);
     };
 
     const submit = () => (isEdit ? form.put(route('rentals.update', rental.id)) : form.post(route('rentals.store')));
-
-    const roomItems = rooms.map((candidate) => ({
-        value: candidate.id,
-        label: `${candidate.property.name} · ${t('finance.rentals.form.roomOption', { room: candidate.number, count: candidate.beds.length })}`,
-    }));
 
     return (
         <DashboardLayout>
@@ -140,123 +389,80 @@ export default function Form({ rental, currency, defaults, tenants, rooms, idTyp
             <FormShell
                 breadcrumbs={[{ label: t('nav.tenants') }, { label: t('finance.rentals.title'), href: route('rentals.index') }, { label: title }]}
                 title={title}
-                description={isEdit ? `${rental.tenant?.name ?? ''} · ${place(rental)} · ${rental.property?.name ?? ''}` : t('finance.rentals.form.description')}
+                description={isEdit ? [rental.tenant?.name, place(rental), rental.property?.name].filter(Boolean).join(' · ') : t('finance.rentals.form.description')}
                 cancelHref={isEdit ? route('rentals.show', rental.id) : route('rentals.index')}
                 submitLabel={isEdit ? t('finance.rentals.form.saveChanges') : t('finance.rentals.form.save')}
                 processing={processing}
                 onSubmit={submit}
-                aside={<MoveInSummary data={data} currency={currency} />}
+                aside={<AtAGlance data={data} currency={currency} isEdit={isEdit} />}
             >
                 {!isEdit && (
-                    <FormSection title={t('finance.rentals.form.tenant.title')} description={t('finance.rentals.form.tenant.description')}>
+                    <FormSection title={t('finance.rentals.form.company.title')} description={t('finance.rentals.form.company.description')}>
                         <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                            <ChoiceField
-                                id="client_mode"
-                                label={t('finance.rentals.form.tenant.who')}
-                                value={data.client_mode}
-                                onChange={(mode) => setData('client_mode', mode)}
-                                options={[
-                                    { value: 'existing', label: t('finance.rentals.form.tenant.existing'), icon: UsersIcon },
-                                    { value: 'new', label: t('finance.rentals.form.tenant.new'), icon: UserPlusIcon },
-                                ]}
-                                error={errors.client_mode}
-                                className="sm:col-span-2"
-                            />
+                            {companies.length > 0 && (
+                                <ChoiceField
+                                    id="client_mode"
+                                    label={t('finance.rentals.form.company.choose')}
+                                    value={data.client_mode}
+                                    onChange={(mode) => setData('client_mode', mode)}
+                                    options={[
+                                        { value: 'existing', label: t('finance.rentals.form.company.existing'), icon: Building2Icon },
+                                        { value: 'new', label: t('finance.rentals.form.company.new'), icon: PlusIcon },
+                                    ]}
+                                    error={errors.client_mode}
+                                    className="sm:col-span-2"
+                                />
+                            )}
                             {data.client_mode === 'existing' ? (
                                 <SelectField
                                     id="client_id"
-                                    label={t('finance.rentals.form.tenant.choose')}
-                                    placeholder={tenants.length > 0 ? t('finance.rentals.form.tenant.choosePlaceholder') : t('finance.rentals.form.tenant.none')}
+                                    label={t('finance.rentals.form.company.choose')}
+                                    placeholder={t('finance.rentals.form.company.choosePlaceholder')}
                                     value={data.client_id}
-                                    onChange={chooseTenant}
-                                    items={tenants.map((candidate) => ({ value: candidate.id, label: [candidate.name, candidate.phone].filter(Boolean).join(' · ') }))}
-                                    description={t('finance.rentals.form.tenant.chooseHint')}
+                                    onChange={(clientId) => setData('client_id', clientId)}
+                                    items={companies.map((company) => ({ value: company.id, label: [company.name, company.phone].filter(Boolean).join(' · ') }))}
                                     error={errors.client_id}
-                                    disabled={tenants.length === 0}
                                     className="sm:col-span-2"
                                 />
                             ) : (
                                 <>
-                                    <TextField {...bindNew('name')} label={t('finance.rentals.form.name')} dir="auto" className="sm:col-span-2" />
+                                    <TextField {...bindNew('name')} label={t('finance.rentals.form.company.name')} dir="auto" />
                                     <TextField {...bindNew('phone')} label={t('finance.rentals.form.phone')} type="tel" inputMode="tel" />
+                                    <TextField {...bindNew('contact_person_name')} label={t('finance.rentals.form.contact')} dir="auto" optional />
                                     <TextField {...bindNew('email')} label={t('finance.rentals.form.email')} type="email" optional />
-                                    <SelectField
-                                        {...bindNew('id_type')}
-                                        label={t('finance.rentals.form.idType')}
-                                        items={idTypes.map((type) => ({ value: type, label: t(`leasing.idTypes.${type}`) }))}
+                                    <TextField {...bindNew('trade_license_number')} label={t('finance.rentals.form.company.license')} inputClassName="font-mono" optional />
+                                    <TextField
+                                        {...bindNew('tax_registration_number')}
+                                        label={t('finance.rentals.form.company.trn')}
+                                        inputMode="numeric"
+                                        inputClassName="font-mono"
+                                        description={t('finance.rentals.form.company.trnHint')}
+                                        optional
                                     />
-                                    <TextField {...bindNew('id_number')} label={t('finance.rentals.form.idNumber')} inputClassName="font-mono" />
-                                    <TextField {...bindNew('nationality')} label={t('finance.rentals.form.nationality')} optional />
+                                    <TextField {...bindNew('address')} label={t('finance.rentals.form.company.address')} dir="auto" optional className="sm:col-span-2" />
                                 </>
                             )}
-                            <ChoiceField
-                                id="gender"
-                                label={t('finance.rentals.form.gender')}
-                                value={data.gender}
-                                onChange={(gender) => !genderLocked && setData('gender', gender)}
-                                options={[
-                                    { value: 'male', label: t('finance.rentals.form.genders.male'), icon: genderLocked && data.gender === 'male' ? LockIcon : MarsIcon },
-                                    { value: 'female', label: t('finance.rentals.form.genders.female'), icon: genderLocked && data.gender === 'female' ? LockIcon : VenusIcon },
-                                ]}
-                                description={genderLocked ? t('finance.rentals.form.genderOnFile') : t('finance.rentals.form.genderHint')}
-                                error={errors.gender}
-                                className={data.client_mode === 'new' ? undefined : 'sm:col-span-2'}
-                            />
                         </FieldGroup>
                     </FormSection>
                 )}
 
                 {!isEdit && (
-                    <FormSection title={t('finance.rentals.form.room.title')} description={t('finance.rentals.form.room.description')}>
-                        {rooms.length === 0 ? (
+                    <FormSection title={t('finance.rentals.form.rooms.title')} description={t('finance.rentals.form.rooms.description')}>
+                        {properties.length === 0 ? (
                             <Alert>
                                 <InfoIcon />
-                                <AlertDescription>{t('finance.rentals.form.room.none')}</AlertDescription>
+                                <AlertDescription>{t('finance.rentals.form.rooms.none')}</AlertDescription>
                             </Alert>
                         ) : (
-                            <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                                <SelectField
-                                    id="room_id"
-                                    label={t('finance.rentals.form.room.room')}
-                                    placeholder={t('finance.rentals.form.room.choose')}
-                                    value={data.room_id}
-                                    onChange={chooseRoom}
-                                    items={roomItems}
-                                    error={errors.room_id}
-                                    className="sm:col-span-2"
-                                    description={
-                                        room?.genderPolicy && room.genderPolicy !== 'mixed'
-                                            ? t(`finance.rentals.form.room.policy.${room.genderPolicy}`)
-                                            : room
-                                              ? t('finance.rentals.form.room.policy.mixed')
-                                              : undefined
-                                    }
-                                />
-                                {room && (
-                                    <>
-                                        <ChoiceField
-                                            id="unit_type"
-                                            label={t('finance.rentals.form.room.what')}
-                                            value={data.unit_type}
-                                            onChange={(unitType) => (unitType === 'bed' || room.canRentWhole) && chooseUnit(unitType)}
-                                            options={[
-                                                { value: 'bed', label: t('finance.rentals.units.bed'), icon: BedSingleIcon },
-                                                ...(room.canRentWhole ? [{ value: 'room', label: t('finance.rentals.units.room'), icon: DoorClosedIcon }] : []),
-                                            ]}
-                                            description={room.canRentWhole ? t('finance.rentals.form.room.wholeHint') : t('finance.rentals.form.room.wholeUnavailable')}
-                                            error={errors.unit_type}
-                                        />
-                                        <SelectField
-                                            id="bed_id"
-                                            label={data.unit_type === 'room' ? t('finance.rentals.form.room.sleepsIn') : t('finance.rentals.form.room.bed')}
-                                            value={data.bed_id}
-                                            onChange={(bedId) => setData('bed_id', bedId)}
-                                            items={room.beds.map((bed) => ({ value: bed.id, label: t('finance.rentals.form.room.bedOption', { bed: bed.label }) }))}
-                                            error={errors.bed_id}
-                                        />
-                                    </>
-                                )}
-                            </FieldGroup>
+                            <RoomPicker
+                                properties={properties}
+                                propertyId={data.property_id}
+                                roomIds={data.room_ids}
+                                onPropertyChange={chooseProperty}
+                                onRoomsChange={chooseRooms}
+                                error={errors.property_id ?? roomsError}
+                                currency={currency}
+                            />
                         )}
                     </FormSection>
                 )}
@@ -269,19 +475,68 @@ export default function Form({ rental, currency, defaults, tenants, rooms, idTyp
                         </Alert>
                     )}
                     <FieldGroup className="grid gap-4 sm:grid-cols-2">
+                        <TextField {...bind('start_date')} type="date" label={t('finance.rentals.form.startDate')} disabled={isEdit && !rental.canChangeRent} />
+                        <MonthsField value={data.months} onChange={(months) => setData('months', months)} max={maxMonths} startDate={data.start_date} error={errors.months} />
                         <MoneyField
                             {...bind('monthly_rent')}
+                            onChange={typeRent}
                             label={t('finance.rentals.form.monthlyRent')}
                             currency={currency}
                             suffix={t('finance.rentals.form.perMonth')}
-                            description={room?.rentPerBed ? t('finance.rentals.form.rentHint', { amount: room.rentPerBed }) : undefined}
+                            description={chosenRent !== '' ? t('finance.rentals.form.rentHint', { amount: formatMoney(chosenRent, currency) }) : undefined}
                         />
                         <MoneyField {...bind('security_deposit')} label={t('finance.rentals.form.deposit')} currency={currency} optional placeholder="0" />
-                        <TextField {...bind('start_date')} type="date" label={t('finance.rentals.form.startDate')} disabled={isEdit && !rental.canChangeRent} />
-                        <TextField {...bind('end_date')} type="date" label={t('finance.rentals.form.endDate')} min={data.start_date} optional description={t('finance.rentals.form.endDateHint')} />
-                        <TextareaField {...bind('notes')} label={t('leasing.common.notes')} optional className="sm:col-span-2" />
                     </FieldGroup>
                 </FormSection>
+
+                {!isEdit && (
+                    <FormSection title={t('finance.rentals.form.payment.title')} description={t('finance.rentals.form.payment.description')}>
+                        <FieldGroup className="grid gap-4 sm:grid-cols-2">
+                            <ChoiceField
+                                id="first_payment"
+                                label={t('finance.rentals.form.payment.when')}
+                                value={data.first_payment}
+                                onChange={(when) => setData('first_payment', when)}
+                                options={[
+                                    { value: 'now', label: t('finance.rentals.form.payment.now'), icon: WalletIcon },
+                                    { value: 'later', label: t('finance.rentals.form.payment.later'), icon: ClockIcon },
+                                ]}
+                                description={
+                                    data.first_payment === 'now'
+                                        ? amount(data.security_deposit) > 0
+                                            ? t('finance.rentals.form.payment.withDeposit', { amount: formatMoney(paidNow, currency) })
+                                            : t('finance.rentals.form.payment.rentOnly', { amount: formatMoney(paidNow, currency) })
+                                        : t('finance.rentals.form.payment.laterHint')
+                                }
+                                error={errors.first_payment}
+                                className="sm:col-span-2"
+                            />
+                            {data.first_payment === 'now' && (
+                                <>
+                                    <ChoiceField
+                                        id="payment_method"
+                                        label={t('finance.rentals.payment.method')}
+                                        value={data.payment_method}
+                                        onChange={(method) => setData('payment_method', method)}
+                                        options={paymentMethods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`), icon: METHOD_ICONS[method] }))}
+                                        description={t('finance.rentals.form.payment.chequeHint')}
+                                        error={errors.payment_method}
+                                        className="sm:col-span-2"
+                                    />
+                                    {data.payment_method !== 'cash' && (
+                                        <TextField
+                                            {...bind('payment_reference')}
+                                            label={t('finance.rentals.payment.reference')}
+                                            placeholder={t('finance.rentals.payment.referencePlaceholder')}
+                                            optional
+                                            className="sm:col-span-2"
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </FieldGroup>
+                    </FormSection>
+                )}
             </FormShell>
         </DashboardLayout>
     );

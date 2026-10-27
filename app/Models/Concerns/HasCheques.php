@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\DB;
  * (when there is one) and one rent cheque per payment period over the term.
  *
  * The using model has `company_id`, `start_date`, `end_date` and
- * `security_deposit`, and says which way its cheques go, how many months
- * each rent cheque covers and what each one is for.
+ * `security_deposit`, and says which way its cheques go, which periods the
+ * rent cheques cover and what each one is for.
  */
 trait HasCheques
 {
@@ -24,22 +24,20 @@ trait HasCheques
     abstract public function chequeDirection(): string;
 
     /**
-     * How many months one rent cheque covers.
-     */
-    abstract public function monthsPerCheque(): int;
-
-    /**
      * The amount of the rent cheque covering `$from` to `$to`.
      */
     abstract public function plannedChequeAmount(CarbonImmutable $from, CarbonImmutable $to): float;
 
     /**
-     * Whether rent periods follow one another (true) or start a fixed number
-     * of months from the start date (false).
+     * The periods the rent cheques cover, in order. By default one every
+     * monthsPerCheque() months (which the using model then defines), each
+     * starting the day after the last ends.
+     *
+     * @return list<array{0: CarbonImmutable, 1: CarbonImmutable}>
      */
-    protected function chainsChequePeriods(): bool
+    protected function chequePeriods(): array
     {
-        return true;
+        return Cheque::periods($this->start_date, $this->end_date, $this->monthsPerCheque());
     }
 
     /**
@@ -82,7 +80,7 @@ trait HasCheques
             ];
         }
 
-        foreach (Cheque::periods($this->start_date, $this->end_date, $this->monthsPerCheque(), $this->chainsChequePeriods()) as $index => [$from, $to]) {
+        foreach ($this->chequePeriods() as $index => [$from, $to]) {
             $amount = $this->plannedChequeAmount($from, $to);
 
             if ($amount <= 0) {

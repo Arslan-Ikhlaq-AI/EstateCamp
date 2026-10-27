@@ -23,7 +23,7 @@ import {
 /**
  * Each kind of money movement in the payments overview: its icon, its
  * colour (fixed per kind, so a filter never repaints the others) and the
- * page that lists it. Individual rentals share a colour in and out.
+ * page that lists it. Short-term rentals share a colour in and out.
  */
 export const CASH_CATEGORIES = {
     client_payment: { icon: FileSignatureIcon, color: 'var(--cash-clients)', routeName: 'payments.index' },
@@ -78,8 +78,15 @@ export function RentStandingBadge({ standing }) {
     );
 }
 
-export function RentalStatusBadge({ status }) {
+/**
+ * Active or ended; an active rental whose term has run out says so.
+ */
+export function RentalStatusBadge({ status, termOver = false }) {
     const { t } = useTranslation();
+
+    if (status === 'active' && termOver) {
+        return <ToneBadge tone="warning">{t('finance.rentals.termOver')}</ToneBadge>;
+    }
 
     return <ToneBadge tone={status === 'active' ? 'success' : 'muted'}>{t(`finance.rentals.status.${status}`)}</ToneBadge>;
 }
@@ -105,13 +112,16 @@ export function BillStatusBadge({ isPaid }) {
 }
 
 /**
- * "Room 101 · bed 2" for a bed, "Whole room 101" for a whole room.
+ * "Room 101", or "Rooms 101, 102" for a rental holding several.
  */
 export function useRentalPlace() {
     const { t } = useTranslation();
 
-    return (rental) =>
-        rental.unitType === 'room' ? t('finance.rentals.place.room', { room: rental.room?.number ?? '—' }) : t('finance.rentals.place.bed', { room: rental.room?.number ?? '—', bed: rental.bed ?? '—' });
+    return (rental) => {
+        const rooms = rental.rooms ?? [];
+
+        return rooms.length > 0 ? t('finance.rentals.place', { count: rooms.length, rooms: rooms.map((room) => room.number).join(', ') }) : '—';
+    };
 }
 
 /**

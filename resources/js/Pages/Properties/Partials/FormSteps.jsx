@@ -7,20 +7,21 @@ import { CheckIcon, CircleAlertIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 /**
- * Each step's accent: the icon tile, the gradient badge, and the wash
- * behind its section header.
+ * The accents of choice cards and document slots: a soft icon tile, and
+ * the gradient badge once chosen or uploaded.
  */
 export const TONES = {
-    brand: { tile: 'bg-brand-cyan/12 text-brand-ink', badge: 'from-brand-cyan to-brand-navy text-white', wash: 'from-brand-cyan/[0.08]' },
-    green: { tile: 'bg-success/12 text-success', badge: 'from-success/70 to-success text-white', wash: 'from-success/[0.07]' },
-    gold: { tile: 'bg-gold/20 text-gold-ink', badge: 'from-brand-sun to-gold text-brand-navy', wash: 'from-gold/[0.12]' },
-    navy: { tile: 'bg-primary/10 text-primary dark:bg-primary/15', badge: 'from-chart-1 to-brand-navy text-white dark:to-[#0b4f8a]', wash: 'from-primary/[0.06] dark:from-primary/25' },
-    orange: { tile: 'bg-warning/12 text-warning', badge: 'from-warning/70 to-warning text-white', wash: 'from-warning/[0.07]' },
+    brand: { tile: 'bg-brand-cyan/12 text-brand-ink', badge: 'from-brand-cyan to-brand-navy text-white' },
+    green: { tile: 'bg-success/12 text-success', badge: 'from-success/70 to-success text-white' },
+    gold: { tile: 'bg-gold/20 text-gold-ink', badge: 'from-brand-sun to-gold text-brand-navy' },
+    navy: { tile: 'bg-primary/10 text-primary dark:bg-primary/15', badge: 'from-chart-1 to-brand-navy text-white dark:to-[#0b4f8a]' },
+    orange: { tile: 'bg-warning/12 text-warning', badge: 'from-warning/70 to-warning text-white' },
 };
 
 /**
- * A step's marker on the navy bar: its number, a tick once done, a warning
- * when it has errors, and a glow while it is in view.
+ * A step's marker: its number (filled while the step is in view, gold once
+ * something is entered), a tick on brand colour once done, or a warning
+ * when it has errors.
  */
 function StepDot({ index, state, isCurrent }) {
     const { formatNumber } = useTranslation();
@@ -28,16 +29,17 @@ function StepDot({ index, state, isCurrent }) {
     return (
         <span
             className={cn(
-                'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums transition-all duration-300',
-                state === 'error' && 'bg-destructive text-white',
-                state === 'done' && 'bg-linear-to-br from-brand-cyan to-chart-1 text-white shadow-[0_0_0_3px_rgb(28_181_224/0.25)]',
-                state === 'todo' && (isCurrent ? 'bg-white text-primary shadow-[0_0_0_4px_rgb(28_181_224/0.35)]' : 'bg-white/10 text-white/75 inset-ring inset-ring-white/20'),
+                'flex size-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-semibold tabular-nums transition-colors',
+                state === 'error' && 'bg-destructive/10 text-destructive',
+                state === 'done' && cn('bg-linear-to-br shadow-sm', TONES.brand.badge),
+                state === 'started' && cn('ring-1 ring-gold/60 ring-inset', TONES.gold.tile),
+                state === 'todo' && (isCurrent ? 'bg-primary text-primary-foreground' : 'text-muted-foreground ring-1 ring-border ring-inset'),
             )}
         >
             {state === 'error' ? (
-                <CircleAlertIcon className="size-4" />
+                <CircleAlertIcon className="size-3.5" />
             ) : state === 'done' ? (
-                <CheckIcon className="size-4" strokeWidth={3} />
+                <CheckIcon className="size-3.5" strokeWidth={3} />
             ) : (
                 formatNumber(index + 1)
             )}
@@ -70,25 +72,25 @@ function StateChip({ state, isOptional }) {
 }
 
 /**
- * One step of the form as a card: numbered badge, accent icon, title and
- * description, where it stands, and an optional action (such as "Add").
+ * One step of the form as a card: its icon, title and description, which
+ * step it is, where it stands, and an optional action (such as "Add").
  */
 export function StepSection({ step, index, total, state, action, children }) {
     const { t, formatNumber } = useTranslation();
-    const tone = TONES[step.tone];
 
     return (
         <Card id={`step-${step.key}`} className="scroll-mt-24 gap-0 overflow-hidden py-0 lg:scroll-mt-40">
-            <div className={cn('relative flex flex-wrap items-center gap-4 border-b bg-linear-to-r to-transparent px-5 py-4 rtl:bg-linear-to-l lg:px-6', tone.wash)}>
-                <span aria-hidden="true" className={cn('absolute inset-y-0 start-0 w-1 bg-linear-to-b', tone.badge)} />
-                <span className={cn('flex size-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br shadow-md shadow-black/10', tone.badge)}>
+            <div className="flex flex-wrap items-center gap-3.5 border-b px-5 py-4 lg:px-6">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-cyan/10 text-brand-ink">
                     <step.icon className="size-5" />
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="text-[0.6875rem] font-semibold tracking-wider text-muted-foreground uppercase">
-                        {t('propertyForm.steps.stepOf', { number: formatNumber(index + 1), total: formatNumber(total) })}
-                    </span>
-                    <h2 className="font-heading text-base font-bold tracking-tight">{t(`propertyForm.steps.${step.key}.title`)}</h2>
+                    <h2 className="font-heading text-base font-bold tracking-tight">
+                        {t(`propertyForm.steps.${step.key}.title`)}
+                        <span className="ms-2 text-xs font-medium text-muted-foreground tabular-nums">
+                            {t('propertyForm.steps.stepOf', { number: formatNumber(index + 1), total: formatNumber(total) })}
+                        </span>
+                    </h2>
                     <p className="text-[0.8125rem] text-muted-foreground">{t(`propertyForm.steps.${step.key}.description`)}</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -139,25 +141,24 @@ const jumpTo = (key) => (event) => {
 };
 
 /**
- * The steps as a navy bar across the top of the form: each step with where
- * it stands, the one in view lit, joined by lines that fill as steps are
- * done, with the share of required steps complete along the bottom edge.
- * Each step jumps to its section.
+ * The steps as a plain bar across the top of the form: each step's number
+ * and title, the one in view on a soft pill, steps with something entered
+ * on a gold dot, done steps ticked in brand colour and joined by a cyan
+ * line, with how many required steps are done at the end. Each step jumps
+ * to its section.
  */
 export function StepBar({ steps, states, current }) {
-    const { t, formatNumber } = useTranslation();
+    const { t } = useTranslation();
     const required = steps.filter((step) => !step.optional);
     const done = required.filter((step) => states[step.key] === 'done').length;
-    const percent = required.length > 0 ? Math.round((done / required.length) * 100) : 100;
     const isReady = done === required.length;
 
     return (
         <nav
             aria-label={t('propertyForm.steps.title')}
-            className="relative z-[5] overflow-hidden rounded-2xl bg-primary bg-(image:--sidebar-image) text-white shadow-(--overlay-shadow) ring-1 ring-white/10 lg:sticky lg:top-[4.75rem]"
+            className="relative z-[5] rounded-xl bg-surface shadow-(--card-shadow) ring-1 ring-foreground/[0.07] lg:sticky lg:top-[4.75rem]"
         >
-            <span aria-hidden="true" className="pointer-events-none absolute -end-10 -top-24 size-56 rounded-full bg-gold/15 blur-3xl" />
-            <div className="relative flex items-center gap-3 px-2 py-2.5 lg:px-3">
+            <div className="flex items-center gap-3 p-1.5">
                 <ol className="flex min-w-0 flex-1 items-center overflow-x-auto [scrollbar-width:none]">
                     {steps.map((step, index) => {
                         const state = states[step.key];
@@ -170,61 +171,30 @@ export function StepBar({ steps, states, current }) {
                                     onClick={jumpTo(step.key)}
                                     aria-current={isCurrent ? 'step' : undefined}
                                     className={cn(
-                                        'flex shrink-0 items-center gap-2.5 rounded-xl px-2.5 py-1.5 outline-none transition-colors hover:bg-white/[0.08] focus-visible:ring-2 focus-visible:ring-brand-cyan',
-                                        isCurrent && 'bg-white/[0.12] inset-ring inset-ring-white/15',
+                                        'flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-1.5 text-[0.8125rem] whitespace-nowrap outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50',
+                                        isCurrent ? 'bg-muted font-semibold text-foreground' : 'font-medium text-muted-foreground',
+                                        state === 'started' && 'text-foreground',
+                                        state === 'done' && 'text-brand-ink',
+                                        state === 'error' && 'text-destructive',
                                     )}
                                 >
                                     <StepDot index={index} state={state} isCurrent={isCurrent} />
-                                    <span className="flex flex-col leading-tight">
-                                        <span className={cn('text-[0.8125rem] whitespace-nowrap', isCurrent ? 'font-bold text-white' : 'font-medium text-white/85')}>
-                                            {t(`propertyForm.steps.${step.key}.title`)}
-                                        </span>
-                                        <span
-                                            className={cn(
-                                                'text-[0.6875rem] whitespace-nowrap',
-                                                state === 'error' ? 'text-red-300' : state === 'done' ? 'text-brand-cyan' : 'text-white/55',
-                                            )}
-                                        >
-                                            {state === 'error'
-                                                ? t('propertyForm.steps.fix')
-                                                : state === 'done'
-                                                  ? t('propertyForm.steps.done')
-                                                  : t(step.optional ? 'propertyForm.steps.optional' : 'propertyForm.steps.required')}
-                                        </span>
-                                    </span>
+                                    {t(`propertyForm.steps.${step.key}.title`)}
                                 </a>
                                 {index < steps.length - 1 && (
                                     <span
                                         aria-hidden="true"
-                                        className={cn(
-                                            'mx-1.5 h-0.5 min-w-4 flex-1 rounded-full transition-colors',
-                                            state === 'done' ? 'bg-linear-to-r from-brand-cyan to-gold rtl:bg-linear-to-l' : 'bg-white/15',
-                                        )}
+                                        className={cn('mx-1 h-0.5 min-w-3 flex-1 rounded-full transition-colors', state === 'done' ? 'bg-brand-cyan' : 'bg-border')}
                                     />
                                 )}
                             </li>
                         );
                     })}
                 </ol>
-                <span
-                    className={cn(
-                        'hidden shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold 2xl:flex',
-                        isReady ? 'bg-gold text-brand-navy' : 'bg-white/10 text-white inset-ring inset-ring-white/15',
-                    )}
-                >
-                    {isReady ? <CheckIcon className="size-3.5" strokeWidth={3} /> : <span className="tabular-nums">{formatNumber(percent)}%</span>}
+                <span className="hidden shrink-0 items-center gap-1.5 pe-2.5 text-xs font-medium text-muted-foreground 2xl:flex">
+                    {isReady && <CheckIcon className="size-3.5 text-success" strokeWidth={3} />}
                     {isReady ? t('propertyForm.steps.ready') : t('propertyForm.steps.progress', { done, total: required.length })}
                 </span>
-            </div>
-            <div
-                role="progressbar"
-                aria-label={t('propertyForm.steps.progress', { done, total: required.length })}
-                aria-valuenow={percent}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                className="h-1 bg-white/10"
-            >
-                <div className="h-full bg-linear-to-r from-brand-cyan via-chart-5 to-gold transition-[width] duration-500 rtl:bg-linear-to-l" style={{ width: `${percent}%` }} />
             </div>
         </nav>
     );

@@ -42,9 +42,9 @@ class HeadLease extends Model
     public const STATUSES = ['draft', 'active', 'expired', 'terminated'];
 
     /**
-     * How many cheques a year the rent can be split into; each divides twelve months evenly.
+     * How many cheques a year the rent can be split into.
      */
-    public const PAYMENTS_PER_YEAR = [1, 2, 3, 4, 6, 12];
+    public const PAYMENTS_PER_YEAR = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
     /**
      * Get the attributes that should be cast.
@@ -71,11 +71,6 @@ class HeadLease extends Model
         return 'issued';
     }
 
-    public function monthsPerCheque(): int
-    {
-        return intdiv(12, $this->payments_per_year);
-    }
-
     /**
      * Each rent cheque is an equal share of the annual rent.
      */
@@ -85,11 +80,33 @@ class HeadLease extends Model
     }
 
     /**
-     * Instalments fall a fixed number of months from the start date.
+     * Each lease year holds `payments_per_year` instalments, falling whole
+     * months from the start date: evenly when the count divides twelve
+     * (every three months for four a year), otherwise as evenly as whole
+     * months allow (five a year fall 0, 2, 4, 7 and 9 months in).
+     *
+     * @return list<array{0: CarbonImmutable, 1: CarbonImmutable}>
      */
-    protected function chainsChequePeriods(): bool
+    protected function chequePeriods(): array
     {
-        return false;
+        $start = $this->start_date->toImmutable()->startOfDay();
+        $end = $this->end_date->toImmutable()->startOfDay();
+        $perYear = $this->payments_per_year;
+        $monthsIn = fn (int $index) => 12 * intdiv($index, $perYear) + intdiv(12 * ($index % $perYear), $perYear);
+        $periods = [];
+
+        for ($index = 0; $index < 600; $index++) {
+            $from = $start->addMonthsNoOverflow($monthsIn($index));
+
+            if ($from->gt($end)) {
+                break;
+            }
+
+            $to = $start->addMonthsNoOverflow($monthsIn($index + 1))->subDay();
+            $periods[] = [$from, $to->gt($end) ? $end : $to];
+        }
+
+        return $periods;
     }
 
     /**
