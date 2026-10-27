@@ -46,6 +46,7 @@ use App\Http\Controllers\StaffPortalController;
 use App\Http\Controllers\StaffReportController;
 use App\Http\Controllers\StaffRoleController;
 use App\Http\Controllers\SummaryReportController;
+use App\Http\Controllers\TenantContractController;
 use App\Models\Company;
 use App\Models\MaintenanceContract;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
@@ -106,6 +107,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('can:use-app')->group(function () {
         Route::resource('properties', PropertyController::class)->except(['destroy'])->whereNumber('property');
         Route::get('properties/{property}/allocation', [RoomAllocationController::class, 'show'])->whereNumber('property')->name('properties.allocation');
+        Route::get('properties/{property}/tenant-contracts', [TenantContractController::class, 'show'])->whereNumber('property')->name('properties.tenant-contracts');
         Route::resource('rooms', RoomController::class)->except(['show', 'destroy']);
         Route::resource('apartments', ApartmentController::class)->except(['destroy']);
         Route::resource('shops', ShopController::class)->except(['destroy']);

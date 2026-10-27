@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, ExternalLinkIcon, FilePlusIcon, LayoutGridIcon, LayoutPanelLeftIcon, PencilIcon, UsersIcon, WrenchIcon } from 'lucide-react';
+import { BanknoteIcon, BedDoubleIcon, ExternalLinkIcon, FilePlusIcon, FileSignatureIcon, LayoutGridIcon, LayoutPanelLeftIcon, PencilIcon, UsersIcon, WrenchIcon } from 'lucide-react';
 import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 import ClientShares from './Partials/ClientShares';
 import LandlordCard from './Partials/LandlordCard';
@@ -47,6 +47,10 @@ export default function Show({ property, landlord, leases, contracts, clients, d
                         <Button variant="outline" nativeButton={false} render={<Link href={route('properties.allocation', property.id)} />}>
                             <LayoutPanelLeftIcon data-icon="inline-start" />
                             {t('properties.actions.allocation')}
+                        </Button>
+                        <Button variant="outline" nativeButton={false} render={<Link href={route('properties.tenant-contracts', property.id)} />}>
+                            <FileSignatureIcon data-icon="inline-start" />
+                            {t('properties.actions.tenantContracts')}
                         </Button>
                         <Button variant="outline" nativeButton={false} render={<Link href={route('maintenance.create', { property: property.id })} />}>
                             <WrenchIcon data-icon="inline-start" />

@@ -12,7 +12,7 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, LayoutPanelLeftIcon, MapPinIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, FileSignatureIcon, LayoutPanelLeftIcon, MapPinIcon } from 'lucide-react';
 import {
     ComplianceBadge,
     LeaseNote,
@@ -247,6 +247,17 @@ export default function PropertiesTable({ properties, currency, query, onSort, h
                                 >
                                     <LayoutPanelLeftIcon data-icon="inline-start" className="text-brand-ink" />
                                     {t('properties.actions.allocation')}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    nativeButton={false}
+                                    render={<Link href={route('properties.tenant-contracts', property.id)} />}
+                                    aria-label={`${t('properties.actions.tenantContracts')}: ${property.name}`}
+                                    className="whitespace-nowrap"
+                                >
+                                    <FileSignatureIcon data-icon="inline-start" className="text-brand-ink" />
+                                    {t('properties.actions.tenantContracts')}
                                 </Button>
                                 <PropertyActions property={property} />
                             </div>

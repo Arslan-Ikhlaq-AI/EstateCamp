@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, LayoutPanelLeftIcon, MapPinIcon } from 'lucide-react';
+import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, FileSignatureIcon, LayoutPanelLeftIcon, MapPinIcon } from 'lucide-react';
 import { ComplianceBadge, LeaseNote, OwnershipBadge, StatusBadge } from './PropertyBadges';
 import PropertyActions from './PropertyActions';
 import UnitOccupancyCounts from './UnitOccupancy';
@@ -92,16 +92,28 @@ function PropertyGridCard({ property, currency }) {
 
                 <UnitOccupancyCounts units={property.unitOccupancy} />
 
-                <Button
-                    variant="outline"
-                    nativeButton={false}
-                    render={<Link href={route('properties.allocation', property.id)} />}
-                    aria-label={`${t('properties.actions.allocation')}: ${property.name}`}
-                    className="relative z-10 w-full"
-                >
-                    <LayoutPanelLeftIcon data-icon="inline-start" className="text-brand-ink" />
-                    {t('properties.actions.allocation')}
-                </Button>
+                <div className="relative z-10 flex flex-wrap gap-2">
+                    <Button
+                        variant="outline"
+                        nativeButton={false}
+                        render={<Link href={route('properties.allocation', property.id)} />}
+                        aria-label={`${t('properties.actions.allocation')}: ${property.name}`}
+                        className="min-w-fit flex-1"
+                    >
+                        <LayoutPanelLeftIcon data-icon="inline-start" className="text-brand-ink" />
+                        {t('properties.actions.allocation')}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        nativeButton={false}
+                        render={<Link href={route('properties.tenant-contracts', property.id)} />}
+                        aria-label={`${t('properties.actions.tenantContracts')}: ${property.name}`}
+                        className="min-w-fit flex-1"
+                    >
+                        <FileSignatureIcon data-icon="inline-start" className="text-brand-ink" />
+                        {t('properties.actions.tenantContracts')}
+                    </Button>
+                </div>
 
                 <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t pt-3">
                     <div className="flex flex-wrap items-center gap-2">

@@ -15,6 +15,7 @@ import {
     CheckIcon,
     CopyIcon,
     DoorOpenIcon,
+    FileSignatureIcon,
     FileTextIcon,
     LayoutPanelLeftIcon,
     MapPinnedIcon,
@@ -75,6 +76,10 @@ export default function PropertyActions({ property, onImage = false }) {
                     <DropdownMenuItem render={<Link href={route('properties.allocation', property.id)} />}>
                         <LayoutPanelLeftIcon />
                         {t('properties.actions.allocation')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem render={<Link href={route('properties.tenant-contracts', property.id)} />}>
+                        <FileSignatureIcon />
+                        {t('properties.actions.tenantContracts')}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                         render={<Link href={route('rooms.index', { properties: [property.code] })} />}
