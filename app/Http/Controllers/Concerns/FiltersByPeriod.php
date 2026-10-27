@@ -63,6 +63,8 @@ trait FiltersByPeriod
             'this_week' => ['preset', $today->startOfWeek(), $today->endOfWeek()],
             'this_month' => ['preset', $today->startOfMonth(), $today->endOfMonth()],
             'last_month' => ['preset', $today->subMonthNoOverflow()->startOfMonth(), $today->subMonthNoOverflow()->endOfMonth()],
+            'next_month' => ['preset', $today->addMonthNoOverflow()->startOfMonth(), $today->addMonthNoOverflow()->endOfMonth()],
+            'next_quarter' => ['preset', $today->startOfQuarter()->addMonthsNoOverflow(3), $today->startOfQuarter()->addMonthsNoOverflow(3)->endOfQuarter()],
             'this_quarter' => ['preset', $today->startOfQuarter(), $today->endOfQuarter()],
             'last_quarter' => ['preset', $today->startOfQuarter()->subMonthsNoOverflow(3), $today->startOfQuarter()->subDay()],
             'this_year' => ['preset', $today->startOfYear(), $today->endOfYear()],

@@ -148,8 +148,10 @@ function RangeDialog({ period, onApply, open, onOpenChange }) {
  * while one month is shown, arrows to step to the month before or after.
  * `period` is the server's resolved period; `onChange` gets the new value
  * as the URL carries it, '' for the page's default (`period.default`).
+ * `presets` replaces the named periods offered, and `allowsAll` false
+ * leaves out all time.
  */
-export default function PeriodFilter({ period, onChange, className }) {
+export default function PeriodFilter({ period, onChange, presets = PERIOD_PRESETS, allowsAll = true, className }) {
     const { t } = useTranslation();
     const { name, range } = usePeriodLabel();
     const [dialog, setDialog] = useState(null);
@@ -185,8 +187,8 @@ export default function PeriodFilter({ period, onChange, className }) {
                     <DropdownMenuGroup>
                         <DropdownMenuLabel>{t('finance.period.label')}</DropdownMenuLabel>
                         <DropdownMenuRadioGroup value={current} onValueChange={choose}>
-                            <DropdownMenuRadioItem value="all">{t('finance.period.all')}</DropdownMenuRadioItem>
-                            {PERIOD_PRESETS.map((preset) => (
+                            {allowsAll && <DropdownMenuRadioItem value="all">{t('finance.period.all')}</DropdownMenuRadioItem>}
+                            {presets.map((preset) => (
                                 <DropdownMenuRadioItem key={preset} value={preset}>
                                     {t(`finance.period.${preset}`)}
                                 </DropdownMenuRadioItem>

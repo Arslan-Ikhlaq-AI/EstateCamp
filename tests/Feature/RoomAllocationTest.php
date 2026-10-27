@@ -48,7 +48,7 @@ test('shows who holds each room and shop, with the rent of contracts and individ
     ($this->line)(($this->contract)('Al Hajar Contracting'), ['unit_type' => 'room', 'room_id' => $contractRoom->id, 'monthly_rate' => 3000]);
     RoomRental::factory()->wholeRoom()->create(['room_id' => $rentedRoom->id, 'monthly_rent' => 2400]);
     // A terminated contract no longer holds its room.
-    ($this->line)(($this->contract)('Titan Construction', attributes: ['status' => 'terminated']), ['unit_type' => 'room', 'room_id' => $emptyRoom->id, 'monthly_rate' => 2800]);
+    ($this->line)(($this->contract)('Titan Construction', attributes: ['status' => 'terminated', 'terminated_on' => '2026-06-10']), ['unit_type' => 'room', 'room_id' => $emptyRoom->id, 'monthly_rate' => 2800]);
 
     $shop = Shop::factory()->create(['property_id' => $this->property->id, 'shop_number' => 'S-1', 'status' => 'occupied']);
     Shop::factory()->create(['property_id' => $this->property->id, 'shop_number' => 'S-2', 'monthly_rent' => 3500]);
@@ -72,7 +72,7 @@ test('shows who holds each room and shop, with the rent of contracts and individ
             ->where('rooms.2.number', 'R-3')
             ->where('rooms.2.allocation', 'empty')
             ->where('rooms.2.holdings', [])
-            ->where('rooms.2.listRent', 2000)
+            ->where('rooms.2.standardRent', 2000)
             ->where('rooms.3.number', 'R-10')
             ->where('rooms.3.allocation', 'empty')
             ->where('rooms.3.inService', false)
@@ -86,14 +86,105 @@ test('shows who holds each room and shop, with the rent of contracts and individ
                 'individual' => 1,
                 'empty' => 2,
                 'available' => 1,
+                'freeing' => 0,
                 'clients' => ['contract' => 1, 'individual' => 1],
+                'standardRent' => ['let' => 4000, 'available' => 2000],
                 'rent' => ['contract' => 3000, 'individual' => 2400, 'overall' => 5400],
-                'availableListRent' => 2000,
+                'difference' => 1400,
+                'expected' => 5400,
             ])
             ->where('summaries.shops.available', 1)
             ->where('summaries.shops.rent', ['contract' => 0, 'individual' => 4000, 'overall' => 4000])
-            ->where('summaries.shops.availableListRent', 3500)
+            ->where('summaries.shops.standardRent.available', 3500)
             ->where('summaries.apartments.total', 0)
+        );
+});
+
+test('a unit whose contract ends this month is available in the next', function () {
+    $room = ($this->room)('101');
+    ($this->line)(($this->contract)('Titan Construction'), ['unit_type' => 'room', 'room_id' => $room->id, 'monthly_rate' => 3100, 'end_date' => '2026-10-25']);
+
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', $this->property))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('period.from', '2026-10-01')
+            ->where('period.to', '2026-10-31')
+            ->where('includesToday', true)
+            ->where('rooms.0.allocation', 'contract')
+            ->where('rooms.0.freeFrom', '2026-10-26')
+            ->where('summaries.rooms.freeing', 1)
+            ->where('summaries.rooms.available', 0)
+            // October's rent for the 25 of its 31 days the contract runs.
+            ->where('summaries.rooms.expected', 2500)
+        );
+
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', [$this->property, 'period' => '2026-11']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('period.kind', 'month')
+            ->where('includesToday', false)
+            ->where('rooms.0.allocation', 'empty')
+            ->where('summaries.rooms.available', 1)
+            ->where('summaries.rooms.rent.overall', 0)
+        );
+
+    // Any range of days: 20 to 25 October are 6 of October's 31 days.
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', [$this->property, 'period' => '2026-10-20..2026-11-10']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('period.kind', 'range')
+            ->where('rooms.0.allocation', 'contract')
+            ->where('summaries.rooms.expected', 600)
+        );
+
+    // All time and unreadable values fall back to this month.
+    foreach (['all', 'next-ish'] as $value) {
+        $this->actingAs($this->user)
+            ->get(route('properties.allocation', [$this->property, 'period' => $value]))
+            ->assertInertia(fn (Assert $page) => $page->where('period.from', '2026-10-01')->where('period.to', '2026-10-31'));
+    }
+});
+
+test('a past period shows who held each unit then', function () {
+    $leasedRoom = ($this->room)('101');
+    $rentedRoom = ($this->room)('102');
+    ($this->line)(($this->contract)('Titan Construction', attributes: ['status' => 'terminated', 'terminated_on' => '2026-06-10']), ['unit_type' => 'room', 'room_id' => $leasedRoom->id, 'monthly_rate' => 3000]);
+    RoomRental::factory()->wholeRoom()->create(['room_id' => $rentedRoom->id, 'status' => 'ended', 'moved_out_on' => '2026-05-01']);
+    // The next tenant moves in as the first moves out.
+    RoomRental::factory()->wholeRoom()->create(['room_id' => $rentedRoom->id, 'start_date' => '2026-05-01', 'monthly_rent' => 1800]);
+
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', [$this->property, 'period' => '2026-04']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rooms.0.allocation', 'contract')
+            ->where('rooms.1.allocation', 'individual')
+            ->where('rooms.1.holdings.0.endsOn', '2026-04-30')
+            ->where('rooms.1.freeFrom', null)
+        );
+
+    // Over April to June the room's rent is the new tenant's, not both added up,
+    // while the rent due counts each tenant for their own months.
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', [$this->property, 'period' => '2026-04-01..2026-06-30']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rooms.0.allocation', 'contract')
+            ->where('rooms.0.freeFrom', '2026-06-10')
+            ->where('rooms.1.allocation', 'individual')
+            ->where('rooms.1.holdings.0.monthly', 1800)
+            ->where('rooms.1.holdings.0.isLatest', true)
+            ->where('rooms.1.holdings.1.isLatest', false)
+            ->where('rooms.1.monthly', 1800)
+            ->where('summaries.rooms.rent.individual', 1800)
+            ->where('summaries.rooms.clients.individual', 2)
+            // Room 101: April, May and 9 of June's 30 days at 3,000; room 102: April at 2,400, then May and June at 1,800.
+            ->where('summaries.rooms.expected', 6900 + 6000)
+        );
+
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', $this->property))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rooms.0.allocation', 'empty')
+            ->where('rooms.1.allocation', 'individual')
         );
 });
 
