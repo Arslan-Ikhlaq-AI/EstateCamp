@@ -253,7 +253,6 @@ function ContractPanel({ contract, currency, isOpen, onOpenChange, chequeStatuse
                                 { label: t('leasing.contracts.form.fields.billingCycle'), value: t(`leasing.billingCycles.${contract.billingCycle}`) },
                                 { label: t('leasing.contracts.form.fields.paymentTerms'), value: t('leasing.common.days', { count: contract.paymentTermsDays }) },
                                 { label: t('leasing.common.securityDeposit'), value: contract.securityDeposit === null ? null : money(contract.securityDeposit) },
-                                { label: t('leasing.contracts.show.gas'), value: t(`leasing.contracts.form.gasOptions.${contract.gasIncluded ? 'included' : 'billed'}`) },
                                 { label: t('leasing.common.ejariNumber'), value: contract.ejariNumber },
                                 { label: t('leasing.contracts.form.fields.signedOn'), value: contract.signedOn && formatDate(contract.signedOn) },
                                 { label: t('propertyTenantContracts.contract.invoiced'), value: money(contract.invoiced) },

@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class InvoiceItem extends Model
 {
-    public const ITEM_TYPES = ['rent', 'deposit', 'gas', 'other'];
+    public const ITEM_TYPES = ['rent', 'deposit', 'other'];
 
     /**
      * Get the attributes that should be cast.

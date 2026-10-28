@@ -302,14 +302,6 @@ class Company extends Model
     }
 
     /**
-     * @return HasMany<GasBill, $this>
-     */
-    public function gasBills(): HasMany
-    {
-        return $this->hasMany(GasBill::class);
-    }
-
-    /**
      * @return HasMany<Payment, $this>
      */
     public function payments(): HasMany

@@ -1,6 +1,6 @@
 import { ChoiceField, FormSection, MoneyField, SelectField, TextareaField, TextField } from '@/Components/FormFields';
 import FormShell from '@/Components/FormShell';
-import { InvoiceKindBadge, InvoiceStatusBadge } from '@/Components/LeasingBadges';
+import { InvoiceStatusBadge } from '@/Components/LeasingBadges';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -194,7 +194,6 @@ export default function Form({ currency, clients, clientId, invoiceId, openInvoi
                                                     <Link href={route('invoices.show', invoice.id)} className="underline-offset-4 hover:text-brand-ink hover:underline">
                                                         {invoice.number}
                                                     </Link>
-                                                    <InvoiceKindBadge kind={invoice.kind} />
                                                     <InvoiceStatusBadge status={invoice.status} isOverdue={invoice.isOverdue} />
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">

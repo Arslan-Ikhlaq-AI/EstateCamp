@@ -44,16 +44,13 @@ function chequeContractInput(Client $client, Apartment $apartment, array $overri
         'billing_cycle' => 'quarterly',
         'payment_terms_days' => 7,
         'security_deposit' => 10000,
+        'monthly_rent' => 5200,
         ...$overrides,
     ];
 
     return [
         ...$input,
-        'lines' => [[
-            'unit_type' => 'apartment', 'property_id' => $apartment->property_id, 'apartment_id' => $apartment->id, 'quantity' => 1,
-            'monthly_rate' => 5200, 'billing_basis' => 'contracted', 'vat_rate' => 0,
-            'start_date' => $input['start_date'], 'end_date' => $input['end_date'],
-        ]],
+        'lines' => [['unit_type' => 'apartment', 'property_id' => $apartment->property_id, 'apartment_id' => $apartment->id]],
     ];
 }
 
@@ -87,14 +84,13 @@ function storedContract(): Contract
 }
 
 /**
- * The stored contract, with this year's cheques collected and activated.
+ * The stored contract, active once saved, with this year's cheques collected.
  */
 function activeChequeContract(User $user, Client $client, Apartment $apartment): Contract
 {
     test()->actingAs($user)->post(route('contracts.store'), chequeContractInput($client, $apartment))->assertSessionHasNoErrors();
     $contract = storedContract();
     collectChequesDueThisYear($contract);
-    $contract->activate();
 
     return $contract->refresh();
 }
@@ -124,7 +120,7 @@ test('builds a three-year contract\'s cheques from its billing cycle, four a yea
     Storage::disk('local')->assertExists($deposit->front_image_path);
 });
 
-test('saves a draft contract before its cheques are handed over', function () {
+test('saves a contract before its cheques are handed over', function () {
     $this->actingAs($this->superAdmin)
         ->post(route('contracts.store'), chequeContractInput($this->alNoor, $this->apartment))
         ->assertSessionHasNoErrors();
@@ -133,7 +129,7 @@ test('saves a draft contract before its cheques are handed over', function () {
         ->and(storedContract()->cheques()->distinct()->pluck('status')->all())->toBe(['pending']);
 });
 
-test('needs this year\'s cheques with a front photo once the contract is running', function () {
+test('saves a running contract with this year\'s cheques still to collect', function () {
     $contract = activeChequeContract($this->superAdmin, $this->alNoor, $this->apartment);
 
     $this->actingAs($this->superAdmin)
@@ -145,8 +141,7 @@ test('needs this year\'s cheques with a front photo once the contract is running
                 ['key' => 'rent:5', 'cheque_number' => '', 'bank_name' => ''],
             ],
         ])
-        ->assertSessionHasErrors(['cheques.0.front_image', 'cheques.1.cheque_number', 'cheques.1.bank_name'])
-        ->assertSessionDoesntHaveErrors(['cheques.2.cheque_number']);
+        ->assertSessionHasNoErrors();
 });
 
 test('a cleared cheque becomes a payment that settles its period, invoicing the period first', function () {
@@ -214,8 +209,9 @@ test('a bounced cheque comes off its invoice, and its replacement takes its plac
         ->and($cheque->refresh()->canBeReplaced())->toBeFalse();
 });
 
-test('refuses moves a cheque cannot take yet', function (string $target, string $status, string $error) {
+test('refuses moves a cheque cannot take yet', function (string $target, string $status, string $error, string $contractStatus = 'active') {
     $this->actingAs($this->superAdmin)->post(route('contracts.store'), chequeContractInput($this->alNoor, $this->apartment));
+    storedContract()->forceFill(['status' => $contractStatus])->save();
     $cheque = storedContract()->cheques()->where('purpose', 'rent')->where('sequence', 1)->sole();
     $cheque->forceFill(['status' => $status, 'cheque_number' => '123456', 'bank_name' => 'Mashreq'])->save();
 
@@ -229,7 +225,7 @@ test('refuses moves a cheque cannot take yet', function (string $target, string 
     'approving a cheque still to collect' => ['approved', 'pending', 'cheque_status_id'],
     'approving a cheque never submitted' => ['approved', 'received', 'cheque_status_id'],
     'moving a client cheque to a landlord status' => ['issued', 'received', 'cheque_status_id'],
-    'submitting for a draft contract' => ['submitted', 'received', 'action'],
+    'submitting for a draft contract' => ['submitted', 'received', 'action', 'draft'],
 ]);
 
 test('keeps the cheque schedule once a cheque has cleared, even when the terms change', function () {

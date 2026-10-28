@@ -1,5 +1,5 @@
 import DataTable, { TotalsRow } from '@/Components/DataTable';
-import { InvoiceKindBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
+import { PartyTypeBadge } from '@/Components/LeasingBadges';
 import { RentalStatusBadge } from '@/Components/FinanceBadges';
 import ReportLayout, { Amount, Figures, ReportEmpty, ReportSection, ShareBar, useAmountFormat } from '@/Components/ReportLayout';
 import StatCard from '@/Components/StatCard';
@@ -89,12 +89,9 @@ export default function Receivables({ company, prepared, asOf, buckets, totals, 
             header: t('reports.receivables.invoices.columns.invoice'),
             cell: (row) => (
                 <div className="flex flex-col">
-                    <span className="flex flex-wrap items-center gap-2">
-                        <Link href={route('invoices.show', row.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
-                            {row.number}
-                        </Link>
-                        <InvoiceKindBadge kind={row.kind} />
-                    </span>
+                    <Link href={route('invoices.show', row.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
+                        {row.number}
+                    </Link>
                     <span dir="auto" className="max-w-56 truncate text-xs text-muted-foreground">
                         {row.client}
                     </span>

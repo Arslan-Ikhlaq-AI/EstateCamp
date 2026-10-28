@@ -3,7 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
-import { CalendarRangeIcon, DoorOpenIcon, FileTextIcon, HouseIcon, LandmarkIcon, LayersIcon, MapPinIcon, StoreIcon } from 'lucide-react';
+import { CalendarRangeIcon, ConciergeBellIcon, DoorOpenIcon, FileTextIcon, HouseIcon, LandmarkIcon, LayersIcon, MapPinIcon, StoreIcon } from 'lucide-react';
+import { FACILITIES } from './BuildingFacilities';
 import { hasFile } from './RequiredDocuments';
 import { unitNumbers } from './UnitBatches';
 
@@ -21,7 +22,8 @@ function Row({ icon: Icon, children }) {
 /**
  * The property as it will appear, updating as the form is filled in: its
  * photo, type, name, code and place, its status, the units about to be
- * added, its floors and units, the landlord and lease, and its documents.
+ * added, its floors and units, its facilities, the landlord and lease, and
+ * its documents.
  */
 export default function PropertyPreview({ data, coverUrl, propertyTypes, landlords, savedUnits = 0 }) {
     const { t, tOr, formatNumber, formatDate } = useTranslation();
@@ -43,6 +45,9 @@ export default function PropertyPreview({ data, coverUrl, propertyTypes, landlor
         Number(data.total_units) > 0 &&
             t('propertyForm.size.planned', { used: formatNumber(savedUnits + units.reduce((sum, unit) => sum + unit.count, 0)), total: formatNumber(Number(data.total_units)) }),
     ].filter(Boolean);
+    const facilities = FACILITIES.filter((facility) => Number(data[facility.key]) > 0).map((facility) =>
+        t(`propertyForm.facilities.counts.${facility.key}`, { count: Number(data[facility.key]) }),
+    );
 
     return (
         <Card className="gap-4 overflow-hidden pt-0">
@@ -95,6 +100,7 @@ export default function PropertyPreview({ data, coverUrl, propertyTypes, landlor
                         </Row>
                     )}
                     {size.length > 0 && <Row icon={LayersIcon}>{size.join(' · ')}</Row>}
+                    {facilities.length > 0 && <Row icon={ConciergeBellIcon}>{facilities.join(' · ')}</Row>}
                     {documentCount > 0 && <Row icon={FileTextIcon}>{t('propertyForm.preview.documents', { count: documentCount })}</Row>}
                 </ul>
 

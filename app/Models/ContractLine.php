@@ -14,10 +14,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 /**
- * One thing a contract rents at its own monthly rate:
- * - bed: `quantity` beds in the property, or in one room of it;
+ * One thing a contract rents, at its share of the contract's monthly rent:
  * - room: a whole room, charged per room;
- * - apartment or shop: that unit.
+ * - apartment or shop: that unit;
+ * - bed: `quantity` beds in the property, or in one room of it, on older
+ *   contracts only. New contracts rent whole rooms.
  */
 #[Fillable([
     'property_id',
@@ -47,6 +48,11 @@ class ContractLine extends Model
     public const BILLING_BASES = ['contracted', 'actual'];
 
     /**
+     * VAT on a shop's rent: shops are let commercially, homes are exempt.
+     */
+    public const SHOP_VAT_RATE = 5;
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -68,6 +74,51 @@ class ContractLine extends Model
     public function covers(CarbonInterface $day): bool
     {
         return $day->betweenIncluded($this->start_date, $this->end_date);
+    }
+
+    /**
+     * The unit's list price for a month: a whole room at its bed rate for
+     * every bed, beds at that rate each, an apartment or shop at its rent.
+     * Null when the unit has none.
+     */
+    public function standardRent(): ?float
+    {
+        $rent = match ($this->unit_type) {
+            'room' => $this->room?->rent_per_bed === null ? null : (float) $this->room->rent_per_bed * $this->room->capacity,
+            'bed' => $this->room?->rent_per_bed === null ? null : (float) $this->room->rent_per_bed * $this->quantity,
+            'apartment' => $this->apartment?->monthly_rent,
+            'shop' => $this->shop?->monthly_rent,
+            default => null,
+        };
+
+        return $rent === null ? null : (float) $rent;
+    }
+
+    /**
+     * Share a contract's monthly rent between its lines: in proportion to
+     * their units' list prices when every unit has one, otherwise equally.
+     * Shares are rounded to the fils and the last line takes what rounding
+     * leaves, so they add up to the rent. A bed line's rate is its share
+     * per bed.
+     *
+     * @param  list<ContractLine>  $lines
+     */
+    public static function shareRent(array $lines, float $monthlyRent): void
+    {
+        $weights = array_map(fn (ContractLine $line) => $line->standardRent(), $lines);
+
+        if (in_array(null, $weights, true) || min($weights ?: [0]) <= 0) {
+            $weights = array_fill(0, count($lines), 1.0);
+        }
+
+        $total = array_sum($weights);
+        $left = $monthlyRent;
+
+        foreach ($lines as $index => $line) {
+            $share = $index === count($lines) - 1 ? round($left, 2) : round($monthlyRent * $weights[$index] / $total, 2);
+            $left -= $share;
+            $line->monthly_rate = round($share / max(1, $line->quantity), 2);
+        }
     }
 
     /**

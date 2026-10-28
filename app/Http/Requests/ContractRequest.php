@@ -13,15 +13,17 @@ use App\Models\RoomRental;
 use App\Models\Shop;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * A contract with its lines and its cheque schedule. Besides the field
- * rules, after() checks that every unit is in the line's property and is not
- * already let to another live contract for the same days, and that this
- * year's cheques are in hand.
+ * A contract with the units it rents, one monthly rent for all of them
+ * and its cheque schedule. Besides the field rules, after() checks that
+ * every unit is in the line's property and is not already let to another
+ * live contract for the same days. Only lines already on the contract may
+ * rent beds; new ones rent whole rooms, apartments or shops. Cheques are
+ * optional: they are collected on the contract page as the client hands
+ * them over.
  */
 class ContractRequest extends CompanyScopedRequest
 {
@@ -46,23 +48,18 @@ class ContractRequest extends CompanyScopedRequest
             'billing_cycle' => ['required', Rule::in(array_keys(Contract::BILLING_CYCLES))],
             'payment_terms_days' => ['required', 'integer', 'between:0,120'],
             'security_deposit' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
-            'gas_included' => ['sometimes', 'boolean'],
+            'monthly_rent' => ['required', 'numeric', 'min:0', 'max:100000000'],
             'signed_on' => ['nullable', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:5000'],
-            'lines' => ['required', 'array', 'min:1', 'max:50'],
+            'lines' => ['required', 'array', 'min:1', 'max:500'],
             'lines.*.id' => ['nullable', 'integer'],
             'lines.*.unit_type' => ['required', Rule::in(ContractLine::UNIT_TYPES)],
             'lines.*.property_id' => ['required', 'integer', $this->existsInCompany('properties')],
             'lines.*.room_id' => ['nullable', 'required_if:lines.*.unit_type,room', 'integer'],
             'lines.*.apartment_id' => ['nullable', 'required_if:lines.*.unit_type,apartment', 'integer'],
             'lines.*.shop_id' => ['nullable', 'required_if:lines.*.unit_type,shop', 'integer'],
-            'lines.*.quantity' => ['required', 'integer', 'between:1,500'],
-            'lines.*.monthly_rate' => ['required', 'numeric', 'min:0', 'max:10000000'],
-            'lines.*.billing_basis' => ['required', Rule::in(ContractLine::BILLING_BASES)],
-            'lines.*.vat_rate' => ['required', 'numeric', 'between:0,100'],
             'lines.*.start_date' => ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:end_date'],
             'lines.*.end_date' => ['required', 'date', 'after_or_equal:lines.*.start_date', 'before_or_equal:end_date'],
-            'lines.*.description' => ['nullable', 'string', 'max:255'],
             'documents' => ['array', 'max:20'],
             'documents.*.id' => ['nullable', 'integer'],
             'documents.*.document_type' => ['required', Rule::in(ContractDocument::TYPES)],
@@ -108,9 +105,9 @@ class ContractRequest extends CompanyScopedRequest
 
     /**
      * The contract either picks one of the company's clients (`existing`, the
-     * default) or brings the details of a new one (`new`). Only bed lines
-     * rent several units or bill on actual use, and each line keeps only the
-     * unit column its type uses.
+     * default) or brings the details of a new one (`new`). Each line keeps
+     * only the unit column its type uses, and runs for the contract's term
+     * unless it brings dates of its own.
      */
     protected function prepareForValidation(): void
     {
@@ -136,11 +133,8 @@ class ContractRequest extends CompanyScopedRequest
             }
 
             $type = $line['unit_type'] ?? null;
-
-            if ($type !== 'bed') {
-                $line['quantity'] = 1;
-                $line['billing_basis'] = 'contracted';
-            }
+            $line['start_date'] = ($line['start_date'] ?? null) ?: $this->input('start_date');
+            $line['end_date'] = ($line['end_date'] ?? null) ?: $this->input('end_date');
 
             foreach (['room' => 'room_id', 'apartment' => 'apartment_id', 'shop' => 'shop_id'] as $unitType => $column) {
                 if ($type !== $unitType && ! ($type === 'bed' && $column === 'room_id')) {
@@ -166,30 +160,18 @@ class ContractRequest extends CompanyScopedRequest
                 }
 
                 foreach ($this->input('lines') as $index => $line) {
+                    if ($line['unit_type'] === 'bed' && empty($line['id'])) {
+                        $validator->errors()->add("lines.{$index}.unit_type", 'Rent whole rooms: choose the rooms the client takes.');
+
+                        continue;
+                    }
+
                     if ($this->checkUnitIsInProperty($validator, $index, $line)) {
                         $this->checkUnitIsFree($validator, $index, $line);
                     }
                 }
-
-                // A draft is saved before the cheques are handed over; a running contract needs this year's.
-                if ($validator->errors()->isEmpty() && $this->route('contract')?->status === 'active') {
-                    $this->checkChequesDueNow($validator, $this->plannedContract(), $this->route('contract'));
-                }
             },
         ];
-    }
-
-    /**
-     * The contract as this form would leave it, unsaved, to plan its cheques.
-     */
-    private function plannedContract(): Contract
-    {
-        $contract = new Contract($this->only(['start_date', 'end_date', 'billing_cycle', 'security_deposit']));
-        $contract->setRelation('lines', collect($this->input('lines'))->map(
-            fn (array $line) => new ContractLine(Arr::only($line, ['quantity', 'monthly_rate', 'vat_rate', 'start_date', 'end_date'])),
-        ));
-
-        return $contract;
     }
 
     /**
@@ -265,9 +247,9 @@ class ContractRequest extends CompanyScopedRequest
             $room = Room::find($line['room_id']);
             $booked = (int) $others()->where('unit_type', 'bed')->where('room_id', $room->id)->sum('quantity');
 
-            if ($booked + (int) $line['quantity'] > $room->capacity) {
+            if ($booked + (int) ContractLine::query()->whereKey($line['id'])->value('quantity') > $room->capacity) {
                 $free = max(0, $room->capacity - $booked);
-                $validator->errors()->add("lines.{$index}.quantity", "Room {$room->room_number} has {$room->capacity} beds and {$booked} are already let; at most {$free} are free.");
+                $validator->errors()->add("lines.{$index}.room_id", "Room {$room->room_number} has {$room->capacity} beds and {$booked} are already let; at most {$free} are free.");
 
                 return false;
             }
@@ -327,14 +309,12 @@ class ContractRequest extends CompanyScopedRequest
             'documents.*.expires_on' => 'expiry date',
             'billing_cycle' => 'billing cycle',
             'payment_terms_days' => 'payment terms',
-            'gas_included' => 'gas',
             'lines.*.unit_type' => 'unit type',
             'lines.*.property_id' => 'property',
             'lines.*.room_id' => 'room',
             'lines.*.apartment_id' => 'apartment',
             'lines.*.shop_id' => 'shop',
-            'lines.*.monthly_rate' => 'monthly rate',
-            'lines.*.vat_rate' => 'VAT rate',
+            'monthly_rent' => 'monthly rent',
             'lines.*.start_date' => 'line start date',
             'lines.*.end_date' => 'line end date',
             ...$this->chequeAttributes(),
@@ -348,7 +328,7 @@ class ContractRequest extends CompanyScopedRequest
     {
         return [
             'documents.*.file.required_without' => 'Upload the file.',
-            'lines.required' => 'Add at least one line saying what the client rents.',
+            'lines.required' => 'Choose at least one room, apartment or shop the client rents.',
             'lines.*.start_date.after_or_equal' => 'A line cannot start before the contract.',
             'lines.*.end_date.before_or_equal' => 'A line cannot run past the end of the contract.',
         ];

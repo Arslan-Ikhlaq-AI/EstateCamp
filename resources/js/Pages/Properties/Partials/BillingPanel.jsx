@@ -88,29 +88,34 @@ function figureTone(name, value) {
 
 /**
  * The five figures of a bill side by side, ruled apart; on a phone, two
- * to a line.
+ * to a line. A balance paid beyond the bill reads as credit.
  */
 function BillFigures({ figures, currency, isLarge = false }) {
     const { t, formatCurrency } = useTranslation();
 
     return (
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-5 sm:gap-x-0 sm:divide-x sm:divide-foreground/[0.08]">
-            {FIGURES.map((name) => (
-                <div key={name} className="flex min-w-0 flex-col gap-0.5 sm:px-4 sm:first:ps-0 sm:last:pe-0">
-                    <dt className="truncate text-xs text-muted-foreground">{t(`propertyAllocation.billing.figures.${name}`)}</dt>
-                    <dd
-                        title={formatCurrency(figures[name], currency)}
-                        className={cn(
-                            'truncate font-heading tabular-nums',
-                            isLarge ? 'text-lg' : 'text-[0.9375rem]',
-                            name === 'total' || name === 'balance' ? 'font-bold' : 'font-semibold',
-                            figureTone(name, figures[name]),
-                        )}
-                    >
-                        {formatCurrency(figures[name], currency)}
-                    </dd>
-                </div>
-            ))}
+            {FIGURES.map((name) => {
+                const isCredit = name === 'balance' && figures[name] < 0;
+                const value = formatCurrency(isCredit ? -figures[name] : figures[name], currency);
+
+                return (
+                    <div key={name} className="flex min-w-0 flex-col gap-0.5 sm:px-4 sm:first:ps-0 sm:last:pe-0">
+                        <dt className="truncate text-xs text-muted-foreground">{t(`propertyAllocation.billing.figures.${isCredit ? 'credit' : name}`)}</dt>
+                        <dd
+                            title={value}
+                            className={cn(
+                                'truncate font-heading tabular-nums',
+                                isLarge ? 'text-lg' : 'text-[0.9375rem]',
+                                name === 'total' || name === 'balance' ? 'font-bold' : 'font-semibold',
+                                figureTone(name, figures[name]),
+                            )}
+                        >
+                            {value}
+                        </dd>
+                    </div>
+                );
+            })}
         </dl>
     );
 }
@@ -129,15 +134,54 @@ function useUnitsSummary() {
 }
 
 /**
+ * The line under the payment box: an error, or what the amount typed will
+ * do (pay ahead, or more than the agreement can take), or where the bill
+ * stands when it is paid up.
+ */
+function CollectHint({ error, toPay, carriedForward, amount, limit, currency }) {
+    const { t, formatCurrency } = useTranslation();
+    const money = (value) => formatCurrency(value, currency);
+
+    if (error) {
+        return <p className="text-xs text-destructive md:text-end">{error}</p>;
+    }
+
+    if (amount > 0 && limit !== null && amount > limit + 0.005) {
+        return <p className="text-xs text-destructive md:text-end">{t('propertyAllocation.billing.collect.overLimit', { amount: money(limit) })}</p>;
+    }
+
+    if (amount > toPay + 0.005) {
+        return (
+            <p className="text-xs font-medium text-brand-ink md:text-end">{t('propertyAllocation.billing.collect.credit', { amount: money(cents(amount - toPay)) })}</p>
+        );
+    }
+
+    if (toPay <= 0) {
+        return (
+            <p className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                <CircleCheckIcon aria-hidden="true" className="size-3.5" />
+                {carriedForward < 0 ? t('propertyAllocation.billing.collect.inCredit', { amount: money(-carriedForward) }) : t('propertyAllocation.billing.collect.paidUp')}
+            </p>
+        );
+    }
+
+    return null;
+}
+
+/**
  * The amount received, how it was paid and a tick to record it. Cheques
- * are left to the cheque register, where they wait to clear. Once nothing
- * is left to pay, the bill says so instead.
+ * are left to the cheque register, where they wait to clear. More than is
+ * due is paid ahead and comes off the next bill, up to the end of the
+ * agreement; once nothing more can be taken, the bill says so instead.
  */
 function CollectForm({ account, currency, propertyId, through, methods }) {
     const { t, formatCurrency } = useTranslation();
     const [isRecorded, setIsRecorded] = useState(false);
     const form = useForm({ amount: '', method: methods[0] });
     const { toPay, carriedForward } = account.statement;
+    const limit = account.collectionLimit;
+    const amount = Number(form.data.amount) || 0;
+    const isOverLimit = limit !== null && amount > limit + 0.005;
     const methodItems = methods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`), icon: METHOD_ICONS[method] }));
     const error = Object.values(form.errors)[0];
 
@@ -175,7 +219,7 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
         return <p className="max-w-60 text-xs text-pretty text-muted-foreground md:text-end">{t('propertyAllocation.billing.collect.notBilled')}</p>;
     }
 
-    if (toPay <= 0) {
+    if (limit !== null && limit <= 0) {
         return (
             <div className="flex flex-col items-start gap-1.5 md:items-end">
                 <ToneBadge tone="success" icon={CircleCheckIcon}>
@@ -199,7 +243,6 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
                         type="number"
                         inputMode="decimal"
                         min="0.01"
-                        max={toPay}
                         step="0.01"
                         value={form.data.amount}
                         onChange={(event) => form.setData('amount', event.target.value)}
@@ -208,14 +251,16 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
                         aria-invalid={Boolean(error)}
                         className="tabular-nums"
                     />
-                    <InputGroupAddon align="inline-end">
-                        <Tooltip>
-                            <TooltipTrigger render={<InputGroupButton onClick={() => form.setData('amount', String(toPay))} />}>
-                                {t('propertyAllocation.billing.collect.full')}
-                            </TooltipTrigger>
-                            <TooltipContent>{t('propertyAllocation.billing.collect.fill', { amount: formatCurrency(toPay, currency) })}</TooltipContent>
-                        </Tooltip>
-                    </InputGroupAddon>
+                    {toPay > 0 && (
+                        <InputGroupAddon align="inline-end">
+                            <Tooltip>
+                                <TooltipTrigger render={<InputGroupButton onClick={() => form.setData('amount', String(toPay))} />}>
+                                    {t('propertyAllocation.billing.collect.full')}
+                                </TooltipTrigger>
+                                <TooltipContent>{t('propertyAllocation.billing.collect.fill', { amount: formatCurrency(toPay, currency) })}</TooltipContent>
+                            </Tooltip>
+                        </InputGroupAddon>
+                    )}
                 </InputGroup>
                 <Select items={methodItems} value={form.data.method} onValueChange={(value) => form.setData('method', value)}>
                     <SelectTrigger aria-label={t('propertyAllocation.billing.collect.method')} className="w-30 shrink-0 md:w-36">
@@ -240,7 +285,7 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
                                 variant="brand"
                                 size="icon"
                                 className="shrink-0"
-                                disabled={form.processing || form.data.amount === ''}
+                                disabled={form.processing || amount <= 0 || isOverLimit}
                                 aria-label={t('propertyAllocation.billing.collect.record')}
                             />
                         }
@@ -250,7 +295,7 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
                     <TooltipContent>{t('propertyAllocation.billing.collect.record')}</TooltipContent>
                 </Tooltip>
             </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            <CollectHint error={error} toPay={toPay} carriedForward={carriedForward} amount={amount} limit={limit} currency={currency} />
             {recorded}
         </form>
     );

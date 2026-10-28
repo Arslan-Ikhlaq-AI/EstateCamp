@@ -11,8 +11,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { ArrowDownLeftIcon, ArrowUpRightIcon, ReceiptTextIcon, ScaleIcon } from 'lucide-react';
 
-const IN = ['client_payment', 'gas_payment', 'rental_payment'];
-const OUT = ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund'];
+const IN = ['client_payment', 'rental_payment'];
+const OUT = ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund', 'other_payment'];
 const METHODS = ['cash', 'bank_transfer', 'cheque', 'card'];
 
 const sum = (totals, categories) => categories.reduce((total, category) => total + (totals?.[category]?.amount ?? 0), 0);
@@ -293,7 +293,6 @@ export default function Income({ company, prepared, period, previousPeriod, canS
                             { label: t('reports.income.invoicing.subtotal'), value: money(invoiced.subtotal) },
                             { label: t('reports.income.invoicing.vat'), value: money(invoiced.vat) },
                             { label: t('reports.income.invoicing.total'), value: money(invoiced.total) },
-                            { label: t('reports.income.invoicing.gas'), value: money(invoiced.gas.total), detail: t('reports.income.invoicing.gasDetail', { count: invoiced.gas.count }) },
                         ]}
                     />
                 </ReportSection>

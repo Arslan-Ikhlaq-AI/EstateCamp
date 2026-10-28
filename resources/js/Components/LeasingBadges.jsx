@@ -7,7 +7,6 @@ import {
     CircleCheckIcon,
     CircleSlashIcon,
     ClockIcon,
-    CylinderIcon,
     HandCoinsIcon,
     LandmarkIcon,
     SendIcon,
@@ -91,23 +90,6 @@ export function InvoiceStatusBadge({ status, isOverdue = false }) {
     }
 
     return <ToneBadge tone={INVOICE_TONES[status]}>{t(`leasing.status.invoice.${status}`)}</ToneBadge>;
-}
-
-/**
- * Marks a gas bill's invoice among the rent invoices, which need no mark.
- */
-export function InvoiceKindBadge({ kind }) {
-    const { t } = useTranslation();
-
-    if (kind !== 'gas') {
-        return null;
-    }
-
-    return (
-        <ToneBadge tone="info" icon={CylinderIcon}>
-            {t('leasing.invoices.kinds.gas')}
-        </ToneBadge>
-    );
 }
 
 export function PaymentStatusBadge({ status }) {

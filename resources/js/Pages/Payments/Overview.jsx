@@ -29,7 +29,6 @@ import {
     ArrowUpRightIcon,
     BanknoteIcon,
     ChevronDownIcon,
-    CylinderIcon,
     FileSignatureIcon,
     FileStackIcon,
     HandCoinsIcon,
@@ -45,8 +44,8 @@ import {
 import { useMemo } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
-const IN = ['client_payment', 'gas_payment', 'rental_payment'];
-const OUT = ['landlord_rent', 'salary', 'maintenance', 'maintenance_contract', 'deposit_refund'];
+const IN = ['client_payment', 'rental_payment'];
+const OUT = ['landlord_rent', 'salary', 'maintenance', 'maintenance_contract', 'deposit_refund', 'other_payment'];
 
 const sum = (totals, categories) => categories.reduce((total, category) => total + (totals?.[category]?.amount ?? 0), 0);
 const count = (totals, categories) => categories.reduce((total, category) => total + (totals?.[category]?.count ?? 0), 0);
@@ -364,7 +363,6 @@ function RecordMenu() {
     const canOpen = useCanOpen();
     const items = [
         { label: t('finance.overview.record.clientPayment'), href: route('payments.create'), icon: FileSignatureIcon },
-        { label: t('finance.overview.record.gasBill'), href: route('gas-bills.create'), icon: CylinderIcon },
         { label: t('finance.overview.record.rentPayment'), href: route('rentals.index', { status: ['active'] }), icon: KeyRoundIcon },
         { label: t('finance.overview.record.newRental'), href: route('rentals.create'), icon: PlusIcon },
         { label: t('finance.overview.record.maintenanceBill'), href: route('maintenance-bills.index', { status: ['unpaid'] }), icon: WrenchIcon },

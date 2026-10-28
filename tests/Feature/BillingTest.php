@@ -9,7 +9,6 @@ use App\Models\User;
 use Database\Seeders\ClientSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\PropertySeeder;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -85,17 +84,14 @@ describe('invoices', function () {
             'end_date' => '2027-10-31',
             'billing_cycle' => 'monthly',
             'payment_terms_days' => 7,
+            'monthly_rent' => 3000,
             'lines' => [[
-                'unit_type' => 'apartment', 'property_id' => $alQuoz->id, 'apartment_id' => $apartment->id, 'quantity' => 1,
-                'monthly_rate' => 3000, 'billing_basis' => 'contracted', 'vat_rate' => 0,
+                'unit_type' => 'apartment', 'property_id' => $alQuoz->id, 'apartment_id' => $apartment->id,
                 'start_date' => '2026-11-16', 'end_date' => '2027-10-31',
             ]],
         ])->assertSessionHasNoErrors();
 
         $contract = Contract::where('contract_number', 'CTR-2026-0012')->sole();
-        Storage::fake('local');
-        collectChequesDueThisYear($contract);
-        $this->actingAs($this->superAdmin)->post(route('contracts.activate', $contract))->assertSessionHasNoErrors();
         $this->actingAs($this->superAdmin)->post(route('contracts.invoices.store', $contract));
 
         expect((float) $contract->invoices()->sole()->total)->toBe(1500.0);

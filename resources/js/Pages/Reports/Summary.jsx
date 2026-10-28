@@ -7,8 +7,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import { Link } from '@inertiajs/react';
 import { ArrowDownLeftIcon, ArrowUpRightIcon, BedDoubleIcon, PresentationIcon, ScaleIcon } from 'lucide-react';
 
-const IN = ['client_payment', 'gas_payment', 'rental_payment'];
-const OUT = ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund'];
+const IN = ['client_payment', 'rental_payment'];
+const OUT = ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund', 'other_payment'];
 
 const sum = (totals, categories) => categories.reduce((total, category) => total + (totals?.[category]?.amount ?? 0), 0);
 
@@ -51,7 +51,6 @@ export default function Summary({ company, prepared, period, previousPeriod, can
             key: 'billing',
             items: [
                 { label: t('reports.summary.figures.invoiced'), value: money(billing.invoiced.amount), detail: t('reports.common.invoices', { count: billing.invoiced.count }) },
-                { label: t('reports.summary.figures.gasBilled'), value: money(billing.gas.amount), detail: t('reports.income.invoicing.gasDetail', { count: billing.gas.count }) },
                 { label: t('reports.summary.figures.owedToday'), value: money(receivables.total), detail: t('reports.summary.figures.owedTodayDetail') },
                 {
                     label: t('reports.summary.figures.overdueInvoices'),

@@ -189,6 +189,29 @@ describe('for the seeded demo company', function () {
             ->and($property->rooms()->orderByDesc('room_number')->value('room_number'))->toBe('250');
     });
 
+    test('keeps the facility counts without creating rooms for them', function () {
+        $this->actingAs($this->superAdmin)
+            ->post(route('properties.store'), validPropertyInput([
+                'medical_rooms' => 1,
+                'kitchens' => 2,
+                'washrooms' => 12,
+                'supervisor_rooms' => 0,
+            ]))
+            ->assertRedirect(route('properties.index'));
+
+        $property = Property::where('code', 'HFM-SNP-01')->sole();
+
+        expect($property->only(['medical_rooms', 'kitchens', 'washrooms', 'supervisor_rooms']))
+            ->toBe(['medical_rooms' => 1, 'kitchens' => 2, 'washrooms' => 12, 'supervisor_rooms' => 0])
+            ->and($property->unitCount())->toBe(0);
+
+        $this->get(route('properties.show', $property))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('property.facilities.washrooms', 12)
+                ->where('property.facilities.supervisor_rooms', 0)
+            );
+    });
+
     test('counts the property\'s saved units against its number of units', function () {
         $property = Property::where('code', 'HFM-JBA-01')->sole();
         $originalTotal = $property->total_units;
@@ -341,6 +364,7 @@ describe('for the seeded demo company', function () {
         'missing the required documents' => [['documents' => []], 'documents'],
         'more units than the property holds' => [['total_units' => 2, 'units' => ['shops' => [['count' => 3, 'first_number' => 'S-01']]]], 'total_units'],
         'batch larger than any property' => [['units' => ['shops' => [['count' => 10001, 'first_number' => 'S-01']]]], 'units.shops.0.count'],
+        'negative facility count' => [['kitchens' => -1], 'kitchens'],
     ]);
 
     test('shows the edit form filled with the property and its documents', function () {

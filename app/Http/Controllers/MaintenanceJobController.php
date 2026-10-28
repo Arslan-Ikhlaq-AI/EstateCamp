@@ -83,7 +83,9 @@ class MaintenanceJobController extends Controller
     }
 
     /**
-     * Show the form for reporting a problem, opened from a property or room when given.
+     * Show the form for reporting a problem, opened from a property or room
+     * when given. Opened from a property's payments page (`from=payments`),
+     * the job is paid as it is added and saving goes back to that page.
      */
     public function create(Request $request): Response
     {
@@ -97,13 +99,16 @@ class MaintenanceJobController extends Controller
                 'property_id' => $property?->id,
                 'unit_type' => $room ? 'room' : 'property',
                 'room_id' => $room?->id,
+                'from_payments' => $property !== null && $request->query('from') === 'payments',
             ],
             ...$this->formOptions($company),
         ]);
     }
 
     /**
-     * Save a newly reported problem and start its history.
+     * Save a newly reported problem and start its history. One added from a
+     * property's payments page is paid as it is added, issuing its voucher,
+     * and the property's payments open on what was paid out.
      */
     public function store(MaintenanceJobRequest $request): RedirectResponse
     {
@@ -114,12 +119,21 @@ class MaintenanceJobController extends Controller
         $job = DB::transaction(function () use ($request, $company, $property, $status) {
             $job = new MaintenanceJob($request->details());
             $job->placeAt($property, $request->validated('unit_type'), $request->unitId());
-            $job->forceFill(['job_number' => MaintenanceJob::nextNumber($company->id), 'created_by' => $request->user()->id]);
+            $job->forceFill([
+                'job_number' => MaintenanceJob::nextNumber($company->id),
+                'created_by' => $request->user()->id,
+                'paid_by' => $request->recordsPayment() ? $request->user()->id : null,
+            ]);
             $job->moveTo($status, $status->isCompleted() ? ($request->date('completed_on') ?? today()) : $request->date('reported_on'), by: $request->user());
             $job->recordCost($request->cost());
 
             return $job;
         });
+
+        if ($request->recordsPayment()) {
+            return to_route('properties.payments', ['property' => $property, 'tab' => 'out'])
+                ->with('success', "{$job->job_number} was added and paid; voucher {$job->voucher_number} was issued.");
+        }
 
         return to_route('maintenance.show', $job)->with('success', "{$job->job_number} was reported.");
     }

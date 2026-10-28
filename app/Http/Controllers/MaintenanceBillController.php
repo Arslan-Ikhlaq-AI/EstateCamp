@@ -80,10 +80,15 @@ class MaintenanceBillController extends Controller
     }
 
     /**
-     * Pay a bill and issue its voucher.
+     * Pay a bill and issue its voucher, recording what the work cost when
+     * the amount comes with the payment.
      */
     public function pay(MaintenanceBillPaymentRequest $request, MaintenanceJob $maintenanceJob): RedirectResponse
     {
+        if ($request->filled('amount')) {
+            $maintenanceJob->amount = $request->validated('amount');
+        }
+
         $maintenanceJob->markPaid($request->date('paid_on'), $request->validated('payment_method'), $request->validated('reference'), $request->user());
 
         return back()->with('success', "{$maintenanceJob->job_number} was paid; voucher {$maintenanceJob->voucher_number} was issued.");

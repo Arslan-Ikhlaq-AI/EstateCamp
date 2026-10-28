@@ -1,126 +1,201 @@
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
-import { BedDoubleIcon, Building2Icon, CheckIcon, DoorOpenIcon, HouseIcon, PlusIcon, StoreIcon } from 'lucide-react';
+import { ArrowDownToLineIcon, ArrowUpToLineIcon, Building2Icon, CheckIcon, DoorOpenIcon, HouseIcon, ListChecksIcon, LockIcon, StoreIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 
 const KINDS = {
-    rooms: DoorOpenIcon,
-    apartments: HouseIcon,
-    shops: StoreIcon,
+    rooms: { icon: DoorOpenIcon, column: 'room_id', type: 'room' },
+    apartments: { icon: HouseIcon, column: 'apartment_id', type: 'apartment' },
+    shops: { icon: StoreIcon, column: 'shop_id', type: 'shop' },
 };
 
 /**
- * Beds of a room already on this form's lines: a whole room takes them all.
+ * Apartments and shops in these states cannot be let.
  */
-export function bedsOnForm(room, lines) {
-    return lines
-        .filter((line) => line.room_id === room.id)
-        .reduce((sum, line) => sum + (line.unit_type === 'room' ? room.capacity : Number(line.quantity) || 0), 0);
+const OUT_OF_SERVICE = ['under_maintenance', 'inactive'];
+
+const byNumber = (a, b) => String(a.number).localeCompare(String(b.number), undefined, { numeric: true });
+
+/**
+ * The line on the form that rents this unit, if any.
+ */
+function lineFor(lines, kind, unit) {
+    return lines.find((line) => line[KINDS[kind].column] === unit.id);
 }
 
 /**
- * Beds of a room still free: not held by another live contract, nor
- * already on this form.
+ * The property's units of one kind this contract can take, in number
+ * order: those nobody else holds and that are in service, and those
+ * already on the contract. Rooms are let whole, so a room another
+ * contract or a short-term rental holds any of is left out.
  */
-export function freeBeds(room, lines) {
-    return Math.max(room.capacity - room.contracted - bedsOnForm(room, lines), 0);
+function choosable(property, kind, lines) {
+    const isFree = (unit) => (kind === 'rooms' ? unit.status === 'active' && unit.contracted === 0 : !unit.held && !OUT_OF_SERVICE.includes(unit.status));
+
+    return property[kind].filter((unit) => lineFor(lines, kind, unit) || isFree(unit)).sort(byNumber);
 }
 
-function RoomTile({ room, lines, onAddBed, onAddRoom }) {
-    const { t, tOr, formatNumber } = useTranslation();
-    const free = freeBeds(room, lines);
-    const onForm = bedsOnForm(room, lines);
-    const isInService = room.status === 'active';
-    const canTakeWhole = isInService && room.contracted === 0 && onForm === 0;
-    const takenPercent = room.capacity > 0 ? ((room.capacity - free - onForm) / room.capacity) * 100 : 0;
-    const onFormPercent = room.capacity > 0 ? (onForm / room.capacity) * 100 : 0;
-
-    return (
-        <div
-            className={cn(
-                'flex flex-col gap-3 rounded-xl bg-surface p-3.5 ring-1 transition-shadow',
-                onForm > 0 ? 'shadow-(--raised-shadow) ring-2 ring-brand-cyan' : 'ring-foreground/10',
-                !isInService && 'opacity-70',
-            )}
-        >
-            <div className="flex items-start justify-between gap-2">
-                <div className="flex min-w-0 flex-col leading-tight">
-                    <span className="text-sm font-semibold">{t('leasing.lines.roomName', { room: room.number })}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                        {[room.type && tOr(`roomTypes.${room.type.slug}`, room.type.name), room.genderPolicy && t(`gender.${room.genderPolicy}`)]
-                            .filter(Boolean)
-                            .join(' · ')}
-                    </span>
-                </div>
-                {onForm > 0 ? (
-                    <Badge variant="info">
-                        <CheckIcon data-icon="inline-start" />
-                        {t('common.beds', { count: onForm })}
-                    </Badge>
-                ) : !isInService ? (
-                    <Badge variant="secondary">{t(`status.${room.status}`)}</Badge>
-                ) : null}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-                <div className="flex h-1.5 gap-px overflow-hidden rounded-full bg-success/20">
-                    <span className="h-full bg-chart-3" style={{ width: `${takenPercent}%` }} />
-                    <span className="h-full bg-brand-cyan" style={{ width: `${onFormPercent}%` }} />
-                </div>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                    {t('leasing.contracts.form.picker.bedsFree', { free: formatNumber(free), total: formatNumber(room.capacity) })}
-                </span>
-            </div>
-
-            <div className="flex gap-2">
-                <Button type="button" variant="outline" size="sm" className="flex-1" disabled={!isInService || free === 0} onClick={() => onAddBed(room)}>
-                    <BedDoubleIcon data-icon="inline-start" />
-                    {t('leasing.contracts.form.picker.addBed')}
-                </Button>
-                <Button type="button" variant="outline" size="sm" className="flex-1" disabled={!canTakeWhole} onClick={() => onAddRoom(room)}>
-                    <DoorOpenIcon data-icon="inline-start" />
-                    {t('leasing.contracts.form.picker.wholeRoom')}
-                </Button>
-            </div>
-        </div>
-    );
+/**
+ * A new line renting one whole unit, for the contract's term.
+ */
+function newLine(property, kind, unit) {
+    return {
+        id: null,
+        unit_type: KINDS[kind].type,
+        property_id: property.id,
+        room_id: null,
+        apartment_id: null,
+        shop_id: null,
+        [KINDS[kind].column]: unit.id,
+        start_date: '',
+        end_date: '',
+        hasStays: false,
+    };
 }
 
-function UnitTile({ kind, unit, isOnForm, onAdd, currency }) {
+/**
+ * A unit to tap on or off the contract. One people have stayed in under
+ * the contract stays on it.
+ */
+function UnitChoice({ kind, unit, line, onToggle, currency }) {
     const { t, formatMoney } = useTranslation();
-    const label = kind === 'apartments' ? t('leasing.lines.apartment', { number: unit.number }) : t('leasing.lines.shop', { number: unit.number });
-    const isTaken = unit.held;
-    const Icon = KINDS[kind];
+    const isChosen = Boolean(line);
+    const isLocked = Boolean(line?.hasStays);
+    const Icon = KINDS[kind].icon;
+    const label = {
+        rooms: t('leasing.lines.roomName', { room: unit.number }),
+        apartments: t('leasing.lines.apartment', { number: unit.number }),
+        shops: t('leasing.lines.shop', { number: unit.number }),
+    }[kind];
+    const rent = unit.rate === null ? null : kind === 'rooms' ? unit.rate * unit.capacity : unit.rate;
 
     return (
-        <div
+        <button
+            type="button"
+            aria-pressed={isChosen}
+            disabled={isLocked}
+            onClick={onToggle}
             className={cn(
-                'flex items-center gap-3 rounded-xl bg-surface p-3.5 ring-1 transition-shadow',
-                isOnForm ? 'shadow-(--raised-shadow) ring-2 ring-brand-cyan' : 'ring-foreground/10',
-                isTaken && 'opacity-70',
+                'flex items-center gap-3 rounded-xl p-3 text-start ring-1 transition-shadow outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed sm:p-3.5',
+                isChosen ? 'bg-brand-cyan/[0.06] shadow-(--raised-shadow) ring-2 ring-brand-cyan' : 'bg-surface ring-foreground/10 hover:bg-accent',
             )}
         >
-            <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', isTaken ? 'bg-muted text-muted-foreground' : 'bg-brand-cyan/10 text-brand-ink')}>
-                <Icon className="size-4" />
+            <span
+                className={cn(
+                    'hidden size-9 shrink-0 items-center justify-center rounded-lg sm:flex',
+                    isChosen ? 'bg-brand-cyan text-brand-navy' : 'bg-brand-cyan/10 text-brand-ink',
+                )}
+            >
+                {isLocked ? <LockIcon className="size-4" /> : isChosen ? <CheckIcon className="size-4" /> : <Icon className="size-4" />}
             </span>
-            <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className="truncate text-sm font-semibold">{label}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                    {isTaken ? t('leasing.contracts.form.picker.taken') : unit.rate ? formatMoney(unit.rate, currency) : t(`leasing.unitStatus.${unit.status}`)}
+            <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                <span className="flex items-center gap-1 truncate text-sm font-semibold">
+                    {isChosen && <CheckIcon className="size-3.5 shrink-0 text-brand-ink sm:hidden" />}
+                    {label}
                 </span>
-            </div>
-            {isOnForm ? (
-                <Badge variant="info">
-                    <CheckIcon data-icon="inline-start" />
-                    {t('leasing.contracts.form.picker.added')}
-                </Badge>
-            ) : (
-                <Button type="button" variant="outline" size="sm" disabled={isTaken} onClick={() => onAdd(unit)}>
-                    <PlusIcon data-icon="inline-start" />
-                    {t('leasing.contracts.form.picker.add')}
+                <span className="text-xs text-muted-foreground tabular-nums">
+                    {kind === 'rooms' && (
+                        <>
+                            <span className="block sm:inline">{t('common.beds', { count: unit.capacity })}</span>
+                            <span className="hidden sm:inline"> · </span>
+                        </>
+                    )}
+                    <span className="block sm:inline">
+                        {isLocked ? t('leasing.contracts.form.picker.staying') : rent !== null ? formatMoney(rent, currency) : t('leasing.contracts.form.picker.noRate')}
+                    </span>
+                </span>
+            </span>
+        </button>
+    );
+}
+
+/**
+ * Choosing many units at once: all of them, or a typed count taken from
+ * the start (as soon as it is typed) or from the end; and clearing them.
+ */
+function QuickPicks({ units, chosen, onChoose }) {
+    const { t } = useTranslation();
+    const [count, setCount] = useState('');
+    const [from, setFrom] = useState('first');
+    const howMany = (value) => Math.min(Math.max(Number.parseInt(value, 10) || 0, 0), units.length);
+    const pick = (direction, size) => onChoose(direction === 'first' ? units.slice(0, size) : units.slice(units.length - size));
+    const size = howMany(count);
+
+    const changeCount = (value) => {
+        setCount(value);
+
+        if (howMany(value) > 0) {
+            pick(from, howMany(value));
+        }
+    };
+
+    const chooseFrom = (direction) => {
+        setFrom(direction);
+        pick(direction, size);
+    };
+
+    const directions = [
+        { key: 'first', icon: ArrowUpToLineIcon, label: t('leasing.contracts.form.picker.quick.first', { count: size || '…' }) },
+        { key: 'last', icon: ArrowDownToLineIcon, label: t('leasing.contracts.form.picker.quick.last', { count: size || '…' }) },
+    ];
+
+    return (
+        <div role="group" aria-label={t('leasing.contracts.form.picker.quick.label')} className="flex flex-wrap items-center gap-2">
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-pressed={chosen === units.length}
+                onClick={() => {
+                    setCount(String(units.length));
+                    onChoose(units);
+                }}
+                className="aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-primary"
+            >
+                <ListChecksIcon data-icon="inline-start" />
+                {t('leasing.contracts.form.picker.quick.all', { count: units.length })}
+            </Button>
+            <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={units.length}
+                value={count}
+                onChange={(event) => changeCount(event.target.value)}
+                placeholder={t('leasing.contracts.form.picker.quick.count')}
+                aria-label={t('leasing.contracts.form.picker.quick.count')}
+                className="h-8 w-28 tabular-nums"
+            />
+            {directions.map((direction) => (
+                <Button
+                    key={direction.key}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={size === 0}
+                    aria-pressed={size > 0 && from === direction.key}
+                    onClick={() => chooseFrom(direction.key)}
+                    className="aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-primary"
+                >
+                    <direction.icon data-icon="inline-start" />
+                    {direction.label}
+                </Button>
+            ))}
+            {chosen > 0 && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                        setCount('');
+                        onChoose([]);
+                    }}
+                >
+                    <XIcon data-icon="inline-start" />
+                    {t('leasing.contracts.form.picker.quick.clear')}
                 </Button>
             )}
         </div>
@@ -128,12 +203,11 @@ function UnitTile({ kind, unit, isOnForm, onAdd, currency }) {
 }
 
 /**
- * Every property with its rooms, apartments and shops, showing what is free.
- * A room can be taken whole or a bed at a time (each click adds a bed); an
- * apartment or shop is added once. `onAdd` receives the line to add, with
- * its property, unit and list price.
+ * Every property with the rooms, apartments and shops this contract can
+ * take, to tap on or off; units already let elsewhere are not shown. Rooms
+ * are let whole. `onChange` receives the contract's new list of lines.
  */
-export default function UnitPicker({ properties, lines, onAdd, currency }) {
+export default function UnitPicker({ properties, lines, onChange, currency }) {
     const { t, formatNumber } = useTranslation();
     const [propertyId, setPropertyId] = useState(() => lines.find((line) => line.property_id)?.property_id ?? properties[0]?.id);
     const [kind, setKind] = useState('rooms');
@@ -143,9 +217,25 @@ export default function UnitPicker({ properties, lines, onAdd, currency }) {
         return <p className="text-sm text-muted-foreground">{t('leasing.contracts.form.picker.noProperties')}</p>;
     }
 
-    const propertyFreeBeds = (item) => item.rooms.filter((room) => room.status === 'active').reduce((sum, room) => sum + freeBeds(room, lines), 0);
+    const units = choosable(property, kind, lines);
+    const column = KINDS[kind].column;
+    const chosen = units.filter((unit) => lineFor(lines, kind, unit)).length;
+    const freeIn = (item) => Object.keys(KINDS).reduce((sum, key) => sum + choosable(item, key, lines).filter((unit) => !lineFor(lines, key, unit)).length, 0);
 
-    const line = (patch) => ({ property_id: property.id, room_id: null, apartment_id: null, shop_id: null, quantity: 1, ...patch });
+    const toggle = (unit) => {
+        const line = lineFor(lines, kind, unit);
+        onChange(line ? lines.filter((entry) => entry !== line) : [...lines, newLine(property, kind, unit)]);
+    };
+
+    // Picking many replaces what is chosen among these units; ones people have stayed in stay on.
+    const choose = (picked) => {
+        const pickedIds = new Set(picked.map((unit) => unit.id));
+        const shownIds = new Set(units.map((unit) => unit.id));
+        const kept = lines.filter((line) => line.property_id !== property.id || !shownIds.has(line[column]) || pickedIds.has(line[column]) || line.hasStays);
+        const added = picked.filter((unit) => !lineFor(lines, kind, unit)).map((unit) => newLine(property, kind, unit));
+
+        onChange([...kept, ...added]);
+    };
 
     return (
         <div className="flex flex-col gap-4">
@@ -168,9 +258,11 @@ export default function UnitPicker({ properties, lines, onAdd, currency }) {
                         >
                             <Building2Icon className={cn('size-4 shrink-0', isCurrent ? 'text-brand-cyan' : 'text-muted-foreground')} />
                             <span className="flex flex-col leading-tight">
-                                <span dir="auto" className="text-[0.8125rem] font-semibold whitespace-nowrap">{item.name}</span>
+                                <span dir="auto" className="text-[0.8125rem] font-semibold whitespace-nowrap">
+                                    {item.name}
+                                </span>
                                 <span className={cn('text-[0.6875rem] whitespace-nowrap', isCurrent ? 'text-white/70' : 'text-muted-foreground')}>
-                                    {t('leasing.contracts.form.picker.freeBeds', { count: propertyFreeBeds(item) })}
+                                    {t('leasing.contracts.form.picker.free', { count: freeIn(item) })}
                                 </span>
                             </span>
                             {onForm > 0 && (
@@ -181,65 +273,28 @@ export default function UnitPicker({ properties, lines, onAdd, currency }) {
                 })}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <ToggleGroup variant="outline" spacing={0} value={[kind]} onValueChange={([value]) => value && setKind(value)} aria-label={t('leasing.contracts.form.picker.title')}>
-                    {Object.entries(KINDS).map(([key, Icon]) => (
-                        <ToggleGroupItem key={key} value={key} className="gap-2 px-3.5 aria-pressed:bg-primary aria-pressed:text-primary-foreground">
-                            <Icon data-icon="inline-start" />
-                            {t(`leasing.contracts.form.picker.${key}`)}
-                            <span className="text-xs opacity-70 tabular-nums">{formatNumber(property[key].length)}</span>
-                        </ToggleGroupItem>
-                    ))}
-                </ToggleGroup>
-                {kind === 'rooms' && property.rooms.length > 0 && (
-                    <Button type="button" variant="ghost" size="sm" className="text-brand-ink" onClick={() => onAdd(line({ unit_type: 'bed', monthly_rate: '' }))}>
-                        <PlusIcon data-icon="inline-start" />
-                        {t('leasing.contracts.form.picker.anywhere')}
-                    </Button>
-                )}
-            </div>
+            <ToggleGroup variant="outline" spacing={0} value={[kind]} onValueChange={([value]) => value && setKind(value)} aria-label={t('leasing.contracts.form.picker.title')}>
+                {Object.entries(KINDS).map(([key, { icon: Icon }]) => (
+                    <ToggleGroupItem key={key} value={key} className="gap-2 px-3.5 aria-pressed:bg-primary aria-pressed:text-primary-foreground">
+                        <Icon data-icon="inline-start" />
+                        {t(`leasing.contracts.form.picker.${key}`)}
+                        <span className="text-xs opacity-70 tabular-nums">{formatNumber(choosable(property, key, lines).length)}</span>
+                    </ToggleGroupItem>
+                ))}
+            </ToggleGroup>
 
-            {property[kind].length === 0 ? (
-                <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                    {t(`leasing.contracts.form.picker.none.${kind}`)}
-                </p>
-            ) : kind === 'rooms' ? (
-                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                    {property.rooms.map((room) => (
-                        <RoomTile
-                            key={room.id}
-                            room={room}
-                            lines={lines}
-                            onAddBed={() => onAdd(line({ unit_type: 'bed', room_id: room.id, monthly_rate: room.rate ?? '' }))}
-                            onAddRoom={() => onAdd(line({ unit_type: 'room', room_id: room.id, monthly_rate: room.rate ? room.rate * room.capacity : '' }))}
-                        />
-                    ))}
-                </div>
+            {units.length === 0 ? (
+                <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">{t(`leasing.contracts.form.picker.none.${kind}`)}</p>
             ) : (
-                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                    {property[kind].map((unit) => {
-                        const column = kind === 'apartments' ? 'apartment_id' : 'shop_id';
-
-                        return (
-                            <UnitTile
-                                key={unit.id}
-                                kind={kind}
-                                unit={unit}
-                                currency={currency}
-                                isOnForm={lines.some((entry) => entry[column] === unit.id)}
-                                onAdd={() =>
-                                    onAdd(
-                                        line({
-                                            unit_type: kind === 'apartments' ? 'apartment' : 'shop',
-                                            [column]: unit.id,
-                                            monthly_rate: unit.rate ?? '',
-                                        }),
-                                    )
-                                }
-                            />
-                        );
-                    })}
-                </div>
+                <>
+                    <QuickPicks key={`${property.id}-${kind}`} units={units} chosen={chosen} onChoose={choose} />
+                    <div className="grid grid-cols-2 gap-2 sm:gap-2.5 xl:grid-cols-3">
+                        {units.map((unit) => (
+                            <UnitChoice key={unit.id} kind={kind} unit={unit} line={lineFor(lines, kind, unit)} onToggle={() => toggle(unit)} currency={currency} />
+                        ))}
+                    </div>
+                    {chosen > 0 && <p className="text-sm font-medium text-brand-ink">{t('leasing.contracts.form.picker.chosen', { count: chosen })}</p>}
+                </>
             )}
         </div>
     );

@@ -8,8 +8,21 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, ExternalLinkIcon, FilePlusIcon, FileSignatureIcon, LayoutGridIcon, LayoutPanelLeftIcon, PencilIcon, UsersIcon, WrenchIcon } from 'lucide-react';
+import {
+    BanknoteIcon,
+    BedDoubleIcon,
+    ExternalLinkIcon,
+    FilePlusIcon,
+    FileSignatureIcon,
+    LayoutGridIcon,
+    LayoutPanelLeftIcon,
+    PencilIcon,
+    UsersIcon,
+    WalletIcon,
+    WrenchIcon,
+} from 'lucide-react';
 import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
+import { FacilityCounts } from './Partials/BuildingFacilities';
 import ClientShares from './Partials/ClientShares';
 import LandlordCard from './Partials/LandlordCard';
 import OccupancyBreakdown from './Partials/OccupancyBreakdown';
@@ -19,7 +32,8 @@ import { LeaseNote, OwnershipBadge, StatusBadge } from './Partials/PropertyBadge
 /**
  * One property: its photo and details, every room, bed, shop and apartment
  * by how full it is, which clients rent which units under which contracts,
- * the landlord and head leases it is rented under, and its documents.
+ * its facilities, the landlord and head leases it is rented under, and its
+ * documents.
  */
 export default function Show({ property, landlord, leases, contracts, clients, documents, currency }) {
     const { t, tOr, formatNumber, formatPercent, formatCurrency, formatDate } = useTranslation();
@@ -28,6 +42,7 @@ export default function Show({ property, landlord, leases, contracts, clients, d
     const place = [property.area, property.city].filter(Boolean).join(', ');
     const activeContracts = contracts.filter((contract) => contract.status === 'active').length;
     const unitCounts = { rooms: property.rooms, shops: property.shops, apartments: property.apartments };
+    const hasFacilities = Object.values(property.facilities).some((count) => count !== null);
 
     return (
         <DashboardLayout>
@@ -51,6 +66,10 @@ export default function Show({ property, landlord, leases, contracts, clients, d
                         <Button variant="outline" nativeButton={false} render={<Link href={route('properties.tenant-contracts', property.id)} />}>
                             <FileSignatureIcon data-icon="inline-start" />
                             {t('properties.actions.tenantContracts')}
+                        </Button>
+                        <Button variant="outline" nativeButton={false} render={<Link href={route('properties.payments', property.id)} />}>
+                            <WalletIcon data-icon="inline-start" />
+                            {t('properties.actions.payments')}
                         </Button>
                         <Button variant="outline" nativeButton={false} render={<Link href={route('maintenance.create', { property: property.id })} />}>
                             <WrenchIcon data-icon="inline-start" />
@@ -179,6 +198,12 @@ export default function Show({ property, landlord, leases, contracts, clients, d
                             />
                         </div>
                     </Card>
+
+                    {hasFacilities && (
+                        <SectionCard title={t('propertyForm.facilities.title')} description={t('propertyShow.facilitiesDescription')}>
+                            <FacilityCounts facilities={property.facilities} />
+                        </SectionCard>
+                    )}
 
                     {property.notes && (
                         <SectionCard title={t('propertyForm.fields.notes')}>

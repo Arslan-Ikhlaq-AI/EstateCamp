@@ -40,13 +40,13 @@ it('seeds landlords, clients, contracts, stays, invoices and payments for the de
         ->and(Payment::count())->toBe(47);
 });
 
-it('derives every room\'s occupied count from the people staying in it', function () {
+it('derives every room\'s occupied count from the beds let in it or the people staying, whichever is more', function () {
     $this->seed(DatabaseSeeder::class);
 
     Room::with('beds')->get()->each(function (Room $room) {
         $staying = Occupancy::whereNull('check_out_date')->whereIn('bed_id', $room->beds->pluck('id'))->count();
 
-        expect($room->occupied_count)->toBe($staying)
+        expect($room->occupied_count)->toBe(min($room->capacity, max($room->bedsHeld(), $staying)))
             ->and($room->beds->where('is_active', true)->count())->toBe($room->capacity);
     });
 });

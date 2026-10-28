@@ -84,7 +84,6 @@ export const reports = {
             },
             figures: {
                 invoiced: 'Invoiced',
-                gasBilled: 'Gas billed',
                 owedToday: 'Owed today',
                 owedTodayDetail: 'Open invoices and rent owed',
                 overdueInvoices: 'Overdue invoices',
@@ -169,8 +168,6 @@ export const reports = {
                 subtotal: 'Before VAT',
                 vat: 'VAT',
                 total: 'Total invoiced',
-                gas: 'Of which gas bills',
-                gasDetail: { one: '{count} gas bill', other: '{count} gas bills' },
             },
             months: {
                 title: 'Cash flow by month',
@@ -490,7 +487,6 @@ export const reports = {
             },
             figures: {
                 invoiced: 'المفوتر',
-                gasBilled: 'الغاز المفوتر',
                 owedToday: 'المستحق اليوم',
                 owedTodayDetail: 'الفواتير المفتوحة والإيجار المستحق',
                 overdueInvoices: 'الفواتير المتأخرة',
@@ -575,8 +571,6 @@ export const reports = {
                 subtotal: 'قبل الضريبة',
                 vat: 'ضريبة القيمة المضافة',
                 total: 'إجمالي المفوتر',
-                gas: 'منها فواتير الغاز',
-                gasDetail: { one: 'فاتورة غاز واحدة', other: '{count} فواتير غاز' },
             },
             months: {
                 title: 'التدفق النقدي حسب الشهر',

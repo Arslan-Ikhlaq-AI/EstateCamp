@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Cheque;
 use App\Models\Client;
 use App\Models\Contract;
 use App\Models\ContractLine;
@@ -63,6 +64,7 @@ test('bills each company as a whole for the month, carrying last month’s unpai
             ->where('accounts.0.statement.charged', 4000)
             ->where('accounts.0.statement.carriedForward', 4000)
             ->where('accounts.0.statement.toPay', 4000)
+            ->where('accounts.0.collectionLimit', 48000)
             ->where('accounts.1.key', "rental:{$rental->id}")
             ->has('accounts.1.units', 2)
             ->where('accounts.1.units.0.monthly', 1200)
@@ -123,13 +125,86 @@ test('collecting from a short-term rental pays its rent as a whole, oldest month
         );
 });
 
-test('refuses to collect more than is still to pay, leaving nothing behind', function () {
+test('paying a contract more than its bill carries the extra into the next bill as credit', function () {
     $contract = ($this->contract)('Al Hajar Contracting', [($this->room)('R-1')], ['start_date' => '2026-10-01', 'end_date' => '2027-09-30']);
-    $rental = ($this->rental)([($this->room)('R-3')], ['start_date' => '2026-10-01', 'end_date' => '2026-12-31']);
+
+    ($this->collect)('contract', $contract->id, 2500)->assertSessionHasNoErrors();
+
+    $advance = Payment::query()->sole();
+    expect($advance->contract_id)->toBe($contract->id)
+        ->and($advance->unallocatedAmount())->toBe(500.0)
+        // Only October is invoiced; November is not billed ahead of time.
+        ->and(Invoice::query()->sole()->status)->toBe('paid');
+
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', $this->property))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accounts.0.statement.received', 2500)
+            ->where('accounts.0.statement.carriedForward', -500)
+            ->where('accounts.0.statement.toPay', 0)
+        );
+
+    // November's bill opens with the 500 credit, so 1,500 is left to pay.
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', [$this->property, 'period' => '2026-11']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accounts.0.statement.broughtForward', -500)
+            ->where('accounts.0.statement.charged', 2000)
+            ->where('accounts.0.statement.toPay', 1500)
+        );
+
+    ($this->collect)('contract', $contract->id, 1500, '2026-11-30')->assertSessionHasNoErrors();
+
+    $november = Invoice::query()->whereDate('period_start', '2026-11-01')->sole();
+    expect($november->status)->toBe('paid')
+        ->and((float) $november->allocations()->where('payment_id', $advance->id)->value('amount'))->toBe(500.0)
+        ->and($advance->unallocatedAmount())->toBe(0.0);
+});
+
+test('a cheque that clears after credit was paid keeps its leftover as credit too', function () {
+    $contract = ($this->contract)('Al Hajar Contracting', [($this->room)('R-1')], ['start_date' => '2026-10-01', 'end_date' => '2027-09-30']);
+    ($this->collect)('contract', $contract->id, 3000)->assertSessionHasNoErrors();
+    $cheque = Cheque::factory()->forAgreement($contract)->held()->create(['cheque_date' => '2026-11-01', 'period_start' => '2026-11-01', 'period_end' => '2026-11-30', 'amount' => 2000]);
+
+    $this->travelTo(now()->setDate(2026, 11, 2));
+    $cheque->deposit(today());
+    $cheque->clear(today());
+
+    // November took the 1,000 credit first, so half the cheque is left for December.
+    expect(Payment::query()->where('cheque_id', $cheque->id)->sole()->unallocatedAmount())->toBe(1000.0);
+
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', [$this->property, 'period' => '2026-12']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accounts.0.statement.broughtForward', -1000)
+            ->where('accounts.0.statement.toPay', 1000)
+        );
+});
+
+test('paying a short-term rental more than its bill takes it off the next month', function () {
+    $rental = ($this->rental)([($this->room)('R-3'), ($this->room)('R-4')], ['start_date' => '2026-10-01', 'end_date' => '2026-12-31']);
+
+    ($this->collect)('rental', $rental->id, 3000)->assertSessionHasNoErrors();
+
+    expect(RentalPayment::query()->sole()->period_end->toDateString())->toBe('2026-11-30');
+
+    $this->actingAs($this->user)
+        ->get(route('properties.allocation', [$this->property, 'period' => '2026-11']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('accounts.0.statement.broughtForward', -600)
+            ->where('accounts.0.statement.charged', 2400)
+            ->where('accounts.0.statement.toPay', 1800)
+            ->where('accounts.0.collectionLimit', 4200)
+        );
+});
+
+test('takes no more than pays the agreement to its end, leaving nothing behind', function () {
+    $contract = ($this->contract)('Al Hajar Contracting', [($this->room)('R-1')], ['start_date' => '2026-10-01', 'end_date' => '2026-11-30']);
+    $rental = ($this->rental)([($this->room)('R-3')], ['start_date' => '2026-10-01', 'end_date' => '2026-10-31']);
     $rental->recordPayment(['paid_on' => '2026-10-01', 'amount' => 2400, 'purpose' => 'rent', 'method' => 'cash']);
 
-    ($this->collect)('contract', $contract->id, 2000.01)->assertSessionHasErrors('amount');
-    ($this->collect)('rental', $rental->id, 10)->assertSessionHasErrors(['amount' => 'Nothing is left to pay on this bill.']);
+    ($this->collect)('contract', $contract->id, 4000.01)->assertSessionHasErrors('amount');
+    ($this->collect)('rental', $rental->id, 10)->assertSessionHasErrors(['amount' => 'Nothing is left to pay up to the end of the agreement.']);
 
     expect(Invoice::query()->count())->toBe(0)
         ->and(Payment::query()->count())->toBe(0)

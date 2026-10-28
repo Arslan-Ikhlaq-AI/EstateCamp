@@ -138,6 +138,7 @@ class RoomController extends Controller
             $room->forceFill(['property_id' => $property->id])->save();
 
             $room->syncBeds();
+            $room->recalculateOccupancy();
             $this->syncPhotos($room, $request);
             $property->recalculateTotals();
 

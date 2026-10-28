@@ -38,6 +38,7 @@ import {
     WrenchIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import BuildingFacilities, { FACILITIES } from './Partials/BuildingFacilities';
 import BuildingSize from './Partials/BuildingSize';
 import CoverDropzone from './Partials/CoverDropzone';
 import DocumentFields from './Partials/DocumentFields';
@@ -73,6 +74,10 @@ const PROPERTY_FIELDS = {
     notes: '',
     total_floors: '',
     total_units: '',
+    medical_rooms: '',
+    kitchens: '',
+    washrooms: '',
+    supervisor_rooms: '',
     ejari_number: '',
     annual_rent: '',
     payments_per_year: 4,
@@ -170,7 +175,7 @@ const STEP_FIELDS = {
         'contact_person_name', 'contact_person_phone', 'notes',
     ],
     ownership: ['ownership_type', 'landlord_mode', 'landlord_id', 'new_landlord'],
-    units: ['units', 'total_floors', 'total_units'],
+    units: ['units', 'total_floors', 'total_units', ...FACILITIES.map((facility) => facility.key)],
     documents: ['documents'],
     lease: ['lease_start_date', 'lease_end_date', 'ejari_number', 'annual_rent', 'payments_per_year', 'security_deposit', 'notice_period_days', 'cheques'],
 };
@@ -204,7 +209,7 @@ function stepStates(data, errors, requiredTypes) {
         location: Boolean(data.country_code && (data.area || data.street || data.building_name || data.address)),
         ownership: !isLeased || hasLandlord,
         units:
-            Boolean(data.total_floors || data.total_units) ||
+            isEntered(STEP_FIELDS.units.filter((field) => field !== 'units')) ||
             Object.values(data.units).some((batches) => batches.some((batch) => unitNumbers(batch.first_number, batch.count).length > 0)),
         documents: requiredTypes.every((type) => data.documents.some((document) => document.document_type === type && hasFile(document))),
         lease: !isLeased || Boolean(data.lease_start_date && data.lease_end_date && data.annual_rent !== '' && data.payments_per_year),
@@ -505,6 +510,7 @@ export default function Form({
                                     saved={savedUnits}
                                     adding={addingUnits}
                                 />
+                                <BuildingFacilities data={data} onChange={setData} errors={errors} />
                                 <UnitBatches
                                     units={data.units}
                                     onChange={(units) => setData('units', units)}

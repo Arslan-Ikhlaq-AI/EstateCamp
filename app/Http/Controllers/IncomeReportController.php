@@ -15,7 +15,7 @@ use Inertia\Response;
  * The income and expenditure report, on a cash basis: what came in and
  * went out over a period by kind, against the period before it, a year of
  * it month by month, how it moved, who paid the most and who was paid the
- * most, beside what was invoiced in the period (rent and gas bills).
+ * most, beside what was invoiced in the period.
  */
 class IncomeReportController extends Controller
 {
@@ -63,7 +63,6 @@ class IncomeReportController extends Controller
                 'subtotal' => round((float) $invoices()->sum('subtotal'), 2),
                 'vat' => round((float) $invoices()->sum('vat_amount'), 2),
                 'total' => round((float) $invoices()->sum('total'), 2),
-                'gas' => ['count' => $invoices()->where('kind', 'gas')->count(), 'total' => round((float) $invoices()->where('kind', 'gas')->sum('total'), 2)],
             ],
         ]);
     }

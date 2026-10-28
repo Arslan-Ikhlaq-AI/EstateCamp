@@ -4,7 +4,7 @@ import DataTable from '@/Components/DataTable';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
 import { TextareaField, TextField } from '@/Components/FormFields';
-import { ContractStatusBadge, InvoiceKindBadge, InvoiceStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
+import { ContractStatusBadge, InvoiceStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import PostButton from '@/Components/PostButton';
 import PropertyHoldings from '@/Components/PropertyHoldings';
@@ -22,7 +22,6 @@ import {
     BedDoubleIcon,
     CalendarClockIcon,
     CircleCheckIcon,
-    CylinderIcon,
     FilePlusIcon,
     LogInIcon,
     LogOutIcon,
@@ -33,7 +32,6 @@ import {
     XCircleIcon,
 } from 'lucide-react';
 import { useState } from 'react';
-import GasBillTable from '../GasBills/Partials/GasBillTable';
 import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 import CheckOutDialog from '../Occupants/Partials/CheckOutDialog';
 
@@ -101,7 +99,7 @@ function ChequeFigure({ label, value, tone = 'muted' }) {
     );
 }
 
-export default function Show({ contract, lines, stays, invoices, gasBills, documents, totals, nextPeriod, cheques, chequeStats, banks, chequeStatuses, can, currency }) {
+export default function Show({ contract, lines, stays, invoices, documents, totals, nextPeriod, cheques, chequeStats, banks, chequeStatuses, can, currency }) {
     const { t, formatCurrency, formatMoney, formatDate, formatNumber } = useTranslation();
     const { period, lineLabel } = useLeasingFormat();
     const [isTerminating, setIsTerminating] = useState(false);
@@ -387,12 +385,9 @@ export default function Show({ contract, lines, stays, invoices, gasBills, docum
                                         id: 'number',
                                         header: t('leasing.invoices.columns.invoice'),
                                         cell: (invoice) => (
-                                            <span className="flex flex-wrap items-center gap-2">
-                                                <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
-                                                    {invoice.number}
-                                                </Link>
-                                                <InvoiceKindBadge kind={invoice.kind} />
-                                            </span>
+                                            <Link href={route('invoices.show', invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
+                                                {invoice.number}
+                                            </Link>
                                         ),
                                     },
                                     { id: 'period', header: t('leasing.invoices.columns.period'), cell: (invoice) => <span className="text-sm">{period(invoice.periodStart, invoice.periodEnd)}</span> },
@@ -403,28 +398,6 @@ export default function Show({ contract, lines, stays, invoices, gasBills, docum
                             />
                         )}
                     </SectionCard>
-
-                    {(!contract.gasIncluded || gasBills.length > 0) && (
-                        <SectionCard
-                            title={t('leasing.contracts.show.gasBills.title')}
-                            description={t('leasing.contracts.show.gasBills.description')}
-                            flush={gasBills.length > 0}
-                            action={
-                                can.billGas ? (
-                                    <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('gas-bills.create', { contract: contract.id })} />}>
-                                        <CylinderIcon data-icon="inline-start" />
-                                        {t('leasing.contracts.show.gasBills.add')}
-                                    </Button>
-                                ) : null
-                            }
-                        >
-                            {gasBills.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">{t('leasing.contracts.show.gasBills.empty')}</p>
-                            ) : (
-                                <GasBillTable bills={gasBills} currency={currency} showClient={false} />
-                            )}
-                        </SectionCard>
-                    )}
 
                     <SectionCard title={t('leasing.contracts.form.documents.title')} description={t('leasing.contracts.show.documentsDescription')}>
                         {documents.length > 0 ? (
@@ -443,7 +416,6 @@ export default function Show({ contract, lines, stays, invoices, gasBills, docum
                                 { label: t('leasing.contracts.form.fields.billingCycle'), value: t(`leasing.billingCycles.${contract.billingCycle}`) },
                                 { label: t('leasing.contracts.form.fields.paymentTerms'), value: t('leasing.common.days', { count: contract.paymentTermsDays }) },
                                 { label: t('leasing.common.securityDeposit'), value: contract.securityDeposit === null ? null : formatMoney(contract.securityDeposit, currency) },
-                                { label: t('leasing.contracts.show.gas'), value: t(`leasing.contracts.form.gasOptions.${contract.gasIncluded ? 'included' : 'billed'}`) },
                                 { label: t('leasing.common.ejariNumber'), value: contract.ejariNumber },
                                 { label: t('leasing.contracts.form.fields.signedOn'), value: contract.signedOn && formatDate(contract.signedOn) },
                                 ...(contract.terminatedOn

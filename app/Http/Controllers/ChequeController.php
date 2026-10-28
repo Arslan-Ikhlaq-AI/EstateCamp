@@ -7,6 +7,7 @@ use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\ChequeBulkStatusRequest;
 use App\Http\Requests\ChequeDetailsRequest;
 use App\Http\Requests\ChequeReplaceRequest;
+use App\Http\Requests\ChequeSettleRequest;
 use App\Http\Requests\ChequeStatusChangeRequest;
 use App\Models\Cheque;
 use App\Models\ChequeStatus;
@@ -132,6 +133,25 @@ class ChequeController extends Controller
             $status->stage === 'cleared' && $cheque->rentalPayment !== null => "Cheque {$this->label($cheque)} is now {$status->name} and was recorded as receipt {$cheque->rentalPayment->receipt_number}.",
             $status->stage === 'bounced' => "Cheque {$this->label($cheque)} is now {$status->name}. Record the replacement cheque when it arrives.",
             default => "Cheque {$this->label($cheque)} is now {$status->name}.",
+        };
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Mark a cheque's money as moved in one step: a client's cheque cashed
+     * (deposited first when it is still in hand), or one the company handed
+     * over paid.
+     */
+    public function settle(ChequeSettleRequest $request, Cheque $cheque): RedirectResponse
+    {
+        $cheque->settle($request->date('date'), $request->validated('note'), $request->user());
+
+        $message = match (true) {
+            $cheque->payment !== null => "Cheque {$this->label($cheque)} was cashed and recorded as payment {$cheque->payment->payment_number}.",
+            $cheque->rentalPayment !== null => "Cheque {$this->label($cheque)} was cashed and recorded as receipt {$cheque->rentalPayment->receipt_number}.",
+            $cheque->direction === 'received' => "Cheque {$this->label($cheque)} was cashed.",
+            default => "Cheque {$this->label($cheque)} was paid.",
         };
 
         return back()->with('success', $message);
@@ -331,6 +351,7 @@ class ChequeController extends Controller
             'actions' => $cheque->allowedActions(),
             'canEdit' => $cheque->isEditable(),
             'canReplace' => $cheque->status === 'bounced' && $cheque->replacement === null,
+            'canSettle' => $cheque->canBeSettled(),
             'replacesId' => $cheque->replaces_id,
             'replacementId' => $cheque->replacement?->id,
             'payment' => $receipt,

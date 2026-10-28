@@ -380,7 +380,17 @@ class RoomRental extends Model
     }
 
     /**
-     * A rent receipt dated today.
+     * Bills run to the last night the company is charged for; an
+     * open-ended rental has no last day.
+     */
+    protected function lastBillingDay(): ?CarbonInterface
+    {
+        return $this->lastDay();
+    }
+
+    /**
+     * A rent receipt dated today. Paying more than is due pays the coming
+     * months ahead.
      */
     protected function recordCollection(float $amount, CarbonInterface $through, string $method, ?User $by): RentalPayment
     {
@@ -508,7 +518,17 @@ class RoomRental extends Model
                 'deposit_refund_method' => $refund > 0 ? $refundMethod : null,
                 'notes' => filled($note) ? trim(implode("\n", array_filter([$this->notes, trim($note)]))) : $this->notes,
             ])->save();
+            $this->recountRooms();
         });
+    }
+
+    /**
+     * Recount the beds taken in the rental's rooms: it holds them whole
+     * from its start date while it runs, whether or not anyone checks in.
+     */
+    public function recountRooms(): void
+    {
+        $this->rooms()->get()->each->recalculateOccupancy();
     }
 
     /**

@@ -25,6 +25,7 @@ import {
     ArrowRightIcon,
     ArrowRightLeftIcon,
     ArrowUpRightIcon,
+    CircleCheckIcon,
     ExternalLinkIcon,
     HistoryIcon,
     ImageIcon,
@@ -129,7 +130,7 @@ function StatusDate({ cheque }) {
     return text ? <span className="max-w-36 text-xs text-pretty text-muted-foreground">{text}</span> : null;
 }
 
-function ChequeActions({ cheque, statuses, onOpen }) {
+function ChequeActions({ cheque, statuses, quickSettle, onOpen }) {
     const { t } = useTranslation();
     const label = useChequeLabel()(cheque);
     const statusName = useChequeStatusName();
@@ -153,6 +154,12 @@ function ChequeActions({ cheque, statuses, onOpen }) {
             <DropdownMenuContent align="end" className="w-60">
                 <DropdownMenuGroup>
                     <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
+                    {quickSettle && cheque.canSettle && (
+                        <DropdownMenuItem onClick={() => onOpen('settle')}>
+                            <CircleCheckIcon />
+                            {t(`leasing.cheques.settle.${cheque.direction === 'received' ? 'cashed' : 'paid'}.action`)}
+                        </DropdownMenuItem>
+                    )}
                     {cheque.canEdit && (
                         <DropdownMenuItem onClick={() => onOpen('details')}>
                             <PencilIcon />
@@ -424,6 +431,53 @@ function ChequeStatusDialog({ cheque, statuses, statusId, currency, open, onOpen
 }
 
 /**
+ * Mark a cheque's money as moved in one step, on a given day: a client's
+ * cheque cashed (deposited and cleared together when it is still in hand),
+ * or one the company handed over paid.
+ */
+function ChequeSettleDialog({ cheque, currency, open, onOpenChange }) {
+    const { t, formatMoney } = useTranslation();
+    const label = useChequeLabel()(cheque);
+    const form = useForm({ date: todayIso(), note: '' });
+    const { data, setData, errors, processing } = form;
+    const way = cheque.direction === 'received' ? 'cashed' : 'paid';
+
+    return (
+        <ActionDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title={t(`leasing.cheques.settle.${way}.title`, { label })}
+            description={`${formatMoney(cheque.amount, currency)} · ${t(`leasing.cheques.settle.${way}.description`)}`}
+            submitLabel={t(`leasing.cheques.settle.${way}.submit`)}
+            processing={processing}
+            onSubmit={() => form.post(route('cheques.settle', cheque.id), { preserveScroll: true, onSuccess: () => onOpenChange(false) })}
+        >
+            <FieldGroup className="grid gap-4">
+                {(errors.cheque || errors.action) && <p className="text-[0.8125rem] text-destructive">{errors.cheque ?? errors.action}</p>}
+                <TextField
+                    id="cheque-settle-date"
+                    type="date"
+                    label={t(`leasing.cheques.settle.${way}.date`)}
+                    value={data.date}
+                    onChange={(value) => setData('date', value)}
+                    error={errors.date}
+                    max={todayIso()}
+                />
+                <TextareaField
+                    id="cheque-settle-note"
+                    label={t('leasing.cheques.dialogs.note')}
+                    value={data.note}
+                    onChange={(value) => setData('note', value)}
+                    error={errors.note}
+                    optional
+                    rows={2}
+                />
+            </FieldGroup>
+        </ActionDialog>
+    );
+}
+
+/**
  * Move the cheques chosen in the list to one status on the same day. Only
  * statuses at least one of them can move to are offered; the rest of the
  * chosen cheques are left as they are.
@@ -635,9 +689,10 @@ function ChequePhotoDialog({ cheque, open, onOpenChange }) {
  * another of the company's `statuses` (clicking its status does too), see
  * its history or replace it. `showParty` adds who it is from or to and
  * under which agreement; `selectable` adds checkboxes for updating the
- * status of several cheques at once.
+ * status of several cheques at once; `quickSettle` adds a button to mark a
+ * client's cheque cashed, or one handed over paid, in one step.
  */
-export default function ChequeSchedule({ cheques, currency, statuses = [], showParty = false, selectable = false, banks = [] }) {
+export default function ChequeSchedule({ cheques, currency, statuses = [], showParty = false, selectable = false, banks = [], quickSettle = false }) {
     const { t, formatDate, formatMoney } = useTranslation();
     const label = useChequeLabel();
     const [dialog, setDialog] = useState(null);
@@ -754,6 +809,12 @@ export default function ChequeSchedule({ cheques, currency, statuses = [], showP
                         <ChequeStatusBadge status={cheque.status} direction={cheque.direction} isOverdue={cheque.isOverdue} chequeStatus={cheque.chequeStatus} />
                     )}
                     <StatusDate cheque={cheque} />
+                    {quickSettle && cheque.canSettle && (
+                        <Button type="button" variant="outline" size="xs" onClick={() => setDialog({ type: 'settle', cheque })} className="text-success">
+                            <CircleCheckIcon data-icon="inline-start" />
+                            {t(`leasing.cheques.settle.${cheque.direction === 'received' ? 'cashed' : 'paid'}.button`)}
+                        </Button>
+                    )}
                     {cheque.payment && (
                         <Link href={cheque.payment.url} className="text-xs font-medium text-brand-ink underline-offset-4 hover:underline">
                             {cheque.payment.payment_number}
@@ -790,7 +851,9 @@ export default function ChequeSchedule({ cheques, currency, statuses = [], showP
                         ? { selected, onChange: setSelected, label: (cheque) => t('leasing.cheques.bulk.select', { label: label(cheque) }), allLabel: t('leasing.cheques.bulk.selectAll') }
                         : undefined
                 }
-                actions={(cheque) => <ChequeActions cheque={cheque} statuses={statuses} onOpen={(type, statusId) => setDialog({ type, cheque, statusId })} />}
+                actions={(cheque) => (
+                    <ChequeActions cheque={cheque} statuses={statuses} quickSettle={quickSettle} onOpen={(type, statusId) => setDialog({ type, cheque, statusId })} />
+                )}
             />
 
             {dialog?.type === 'details' && <ChequeDetailsDialog key={dialog.cheque.id} cheque={dialog.cheque} banks={banks} currency={currency} open onOpenChange={close} />}
@@ -817,6 +880,7 @@ export default function ChequeSchedule({ cheques, currency, statuses = [], showP
                     }}
                 />
             )}
+            {dialog?.type === 'settle' && <ChequeSettleDialog key={dialog.cheque.id} cheque={dialog.cheque} currency={currency} open onOpenChange={close} />}
             {dialog?.type === 'history' && <ChequeHistoryDialog key={dialog.cheque.id} cheque={dialog.cheque} currency={currency} open onOpenChange={close} />}
             {dialog?.type === 'replace' && <ChequeReplaceDialog key={dialog.cheque.id} cheque={dialog.cheque} banks={banks} currency={currency} open onOpenChange={close} />}
             {dialog?.type === 'photo' && <ChequePhotoDialog key={dialog.cheque.id} cheque={dialog.cheque} open onOpenChange={close} />}

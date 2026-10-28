@@ -9,7 +9,8 @@ use Illuminate\Validation\Validator;
 
 /**
  * Paying a maintenance bill: the day, how, and a reference such as the
- * transfer or cheque number.
+ * transfer or cheque number. The amount charged can come with it, for
+ * work whose cost was not recorded yet or has changed since.
  */
 class MaintenanceBillPaymentRequest extends CompanyScopedRequest
 {
@@ -26,11 +27,12 @@ class MaintenanceBillPaymentRequest extends CompanyScopedRequest
             'paid_on' => ['required', 'date', 'before_or_equal:today'],
             'payment_method' => ['required', Rule::in(MaintenanceJob::PAYMENT_METHODS)],
             'reference' => ['nullable', 'string', 'max:100'],
+            'amount' => ['nullable', 'numeric', 'gt:0', 'max:100000000'],
         ];
     }
 
     /**
-     * Only a bill with an amount, not yet paid, can be paid.
+     * Only a bill with an amount (on file, or given now), not yet paid, can be paid.
      *
      * @return array<int, callable>
      */
@@ -40,7 +42,7 @@ class MaintenanceBillPaymentRequest extends CompanyScopedRequest
             function (Validator $validator) {
                 $job = $this->route('maintenanceJob');
 
-                if (! $job->isBill()) {
+                if (! $job->isBill() && ! $this->filled('amount')) {
                     $validator->errors()->add('bill', "Record what {$job->job_number} cost before paying it.");
                 } elseif ($job->isPaid()) {
                     $validator->errors()->add('bill', "{$job->job_number} is already paid.");
@@ -54,6 +56,6 @@ class MaintenanceBillPaymentRequest extends CompanyScopedRequest
      */
     public function attributes(): array
     {
-        return ['paid_on' => 'payment date', 'payment_method' => 'payment method'];
+        return ['paid_on' => 'payment date', 'payment_method' => 'payment method', 'amount' => 'amount charged'];
     }
 }

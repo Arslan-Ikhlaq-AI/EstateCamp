@@ -10,10 +10,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * Every movement of the company's money in one list, for the payments
  * overview and the reports: what came in (client payments that cleared,
- * the part of them that paid gas bills apart from the rest, and receipts
- * from individuals renting rooms) and what went out (landlord and
+ * and receipts from individuals renting rooms) and what went out (landlord and
  * maintenance contractor cheques that cleared, maintenance bills paid,
- * salaries paid and deposits handed back). Money still on its way, such as a cheque not yet cleared,
+ * one-off payments for a property, salaries paid and deposits handed back). Money still on its way, such as a cheque not yet cleared,
  * is left out until it moves.
  *
  * Each row has the same columns whatever it came from: category,
@@ -26,8 +25,8 @@ trait ReadsCashFlow
      * The kinds of money movement, by direction.
      */
     public const CASH_CATEGORIES = [
-        'in' => ['client_payment', 'gas_payment', 'rental_payment'],
-        'out' => ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund'],
+        'in' => ['client_payment', 'rental_payment'],
+        'out' => ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund', 'other_payment'],
     ];
 
     /**
@@ -43,20 +42,10 @@ trait ReadsCashFlow
     {
         $id = $company->id;
 
-        // How much of each client payment went to gas invoices; the rest of it is a client payment.
-        $gasShares = DB::table('payment_allocations')
-            ->join('invoices', 'invoices.id', '=', 'payment_allocations.invoice_id')
-            ->where('invoices.company_id', $id)
-            ->where('invoices.kind', 'gas')
-            ->groupBy('payment_allocations.payment_id')
-            ->select(['payment_allocations.payment_id', DB::raw('sum(payment_allocations.amount) as amount')]);
-
         $ledger = DB::table('payments')
             ->join('clients', 'clients.id', '=', 'payments.client_id')
-            ->leftJoinSub($gasShares, 'gas_shares', 'gas_shares.payment_id', '=', 'payments.id')
             ->where('payments.company_id', $id)
             ->where('payments.status', 'cleared')
-            ->whereRaw('payments.amount > coalesce(gas_shares.amount, 0)')
             ->select([
                 DB::raw("'client_payment' as category"),
                 DB::raw("'in' as direction"),
@@ -67,25 +56,8 @@ trait ReadsCashFlow
                 'payments.payment_number as number',
                 'payments.reference as detail',
                 'payments.method as method',
-                DB::raw('payments.amount - coalesce(gas_shares.amount, 0) as amount'),
+                'payments.amount',
             ])
-            ->unionAll(DB::table('payments')
-                ->join('clients', 'clients.id', '=', 'payments.client_id')
-                ->joinSub($gasShares, 'gas_shares', 'gas_shares.payment_id', '=', 'payments.id')
-                ->where('payments.company_id', $id)
-                ->where('payments.status', 'cleared')
-                ->select([
-                    DB::raw("'gas_payment'"),
-                    DB::raw("'in'"),
-                    'payments.id',
-                    'payments.client_id',
-                    'payments.received_on',
-                    'clients.name',
-                    'payments.payment_number',
-                    'payments.reference',
-                    'payments.method',
-                    'gas_shares.amount',
-                ]))
             ->unionAll(DB::table('rental_payments')
                 ->join('room_rentals', 'room_rentals.id', '=', 'rental_payments.room_rental_id')
                 ->join('clients', 'clients.id', '=', 'room_rentals.client_id')
@@ -170,6 +142,21 @@ trait ReadsCashFlow
                     DB::raw('cast(null as varchar(255))'),
                     'room_rentals.deposit_refund_method',
                     'room_rentals.deposit_refunded',
+                ]))
+            ->unionAll(DB::table('other_payments')
+                ->where('other_payments.company_id', $id)
+                ->where('other_payments.status', 'paid')
+                ->select([
+                    DB::raw("'other_payment'"),
+                    DB::raw("'out'"),
+                    'other_payments.id',
+                    'other_payments.property_id',
+                    'other_payments.payment_date',
+                    'other_payments.paid_to',
+                    'other_payments.payment_number',
+                    'other_payments.title',
+                    'other_payments.method',
+                    'other_payments.amount',
                 ]));
 
         if ($withSalaries) {

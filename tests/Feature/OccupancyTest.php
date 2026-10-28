@@ -50,7 +50,7 @@ test('checks a new worker into a free bed and counts them in the room', function
         ->assertRedirect(route('occupants.show', $worker));
 
     expect($worker->currentStay->bed_id)->toBe($this->freeBed->id)
-        ->and($this->room101->refresh()->occupied_count)->toBe(8);
+        ->and($this->room101->peopleStaying())->toBe(8);
 });
 
 test('refuses check-ins that break the rules', function (Closure $input, string $field) {
@@ -58,7 +58,7 @@ test('refuses check-ins that break the rules', function (Closure $input, string 
         ->post(route('occupancies.store'), $input->call($this))
         ->assertSessionHasErrors($field);
 
-    expect($this->room101->refresh()->occupied_count)->toBe(7);
+    expect($this->room101->peopleStaying())->toBe(7);
 })->with([
     'a bed someone is in' => [function () {
         $worker = Occupant::factory()->create(['client_id' => $this->gulfBuilders->id]);
@@ -107,7 +107,7 @@ test('refuses check-ins under a contract that is not running', function () {
         ->assertSessionHasErrors('contract_line_id');
 });
 
-test('checks a worker out and frees the bed', function () {
+test('checks a worker out and frees the bed, which stays let to the contract', function () {
     $stay = Occupant::where('full_name', 'Mohammed Rafiq')->sole()->currentStay;
 
     $this->actingAs($this->superAdmin)
@@ -115,7 +115,8 @@ test('checks a worker out and frees the bed', function () {
         ->assertSessionHasNoErrors();
 
     expect($stay->refresh()->check_out_date->toDateString())->toBe('2026-10-17')
-        ->and($this->room101->refresh()->occupied_count)->toBe(6);
+        ->and($this->room101->peopleStaying())->toBe(6)
+        ->and($this->room101->refresh()->occupied_count)->toBe(8);
 });
 
 test('refuses a check-out on or before the check-in date', function () {

@@ -104,30 +104,32 @@ export function InvoiceInput({ id, label, file, url, name, removed, onFile, onRe
 /**
  * What the work cost: the amount charged, how and when it was paid, the
  * invoice number and the invoice. `required` marks the amount and invoice
- * as needed (a finished job); `invoice` is the one on file, if any.
+ * as needed (a finished job); `isPaidNow` marks the amount, how and when it
+ * was paid as needed (a job paid as it is added); `invoice` is the one on
+ * file, if any.
  */
-export default function CostFields({ idPrefix, data, setData, errors, currency, paymentMethods, invoice = null, required = false }) {
+export default function CostFields({ idPrefix, data, setData, errors, currency, paymentMethods, invoice = null, required = false, isPaidNow = false }) {
     const { t } = useTranslation();
     const bind = (field) => ({ id: `${idPrefix}-${field}`, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
 
     return (
         <div className="grid gap-4 sm:grid-cols-2">
-            <MoneyField {...bind('amount')} label={t('maintenance.form.fields.amount')} currency={currency} optional={!required} />
+            <MoneyField {...bind('amount')} label={t('maintenance.form.fields.amount')} currency={currency} optional={!required && !isPaidNow} />
             <TextField {...bind('invoice_number')} label={t('maintenance.form.fields.invoiceNumber')} optional />
             <SelectField
                 {...bind('payment_method')}
                 label={t('maintenance.form.fields.paymentMethod')}
                 placeholder={t('maintenance.form.fields.choosePaymentMethod')}
                 items={paymentMethods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`) }))}
-                optional
+                optional={!isPaidNow}
             />
             <TextField
                 {...bind('paid_on')}
                 type="date"
                 max={todayIso()}
                 label={t('maintenance.form.fields.paidOn')}
-                description={t('maintenance.form.fields.paidOnHint')}
-                optional
+                description={isPaidNow ? undefined : t('maintenance.form.fields.paidOnHint')}
+                optional={!isPaidNow}
             />
             <InvoiceInput
                 id={`${idPrefix}-invoice`}

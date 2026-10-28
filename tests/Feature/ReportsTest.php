@@ -58,8 +58,8 @@ describe('the company summary', function () {
                 ->where('prepared', ['date' => '2026-10-17', 'time' => '14:00', 'by' => $this->admin->name])
                 ->where('cash.client_payment', ['count' => 4, 'amount' => 27875])
                 ->where('previousCash.rental_payment', ['count' => 1, 'amount' => 1500])
-                ->where('occupancy.beds.occupied', 27)
-                ->where('occupancy.beds.occupancyRate', 87.1)
+                ->where('occupancy.beds.occupied', 31)
+                ->where('occupancy.beds.occupancyRate', 100)
                 ->where('billing.receivables', [
                     'invoices' => ['count' => 5, 'amount' => 39500],
                     'overdue' => ['count' => 4, 'amount' => 37800],
@@ -115,7 +115,7 @@ describe('income and expenditure', function () {
                 ->where('months.11.in', 33280)
                 ->where('months.11.categories.rental_payment', 1500)
                 ->where('payers.0', ['party' => 'Gulf Builders Contracting L.L.C.', 'count' => 1, 'amount' => 14700])
-                ->where('invoiced', ['count' => 7, 'subtotal' => 45900, 'vat' => 1000, 'total' => 46900, 'gas' => ['count' => 0, 'total' => 0]])
+                ->where('invoiced', ['count' => 7, 'subtotal' => 45900, 'vat' => 1000, 'total' => 46900])
             );
     });
 
@@ -178,13 +178,11 @@ describe('occupancy', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Occupancy')
                 ->where('summary.staying', 27)
-                ->where('summary.beds', ['total' => 37, 'occupied' => 27, 'available' => 4, 'outOfService' => 6, 'occupancyRate' => 87.1])
-                ->where('properties.0.beds.occupancyRate', 91.7)
+                ->where('summary.beds', ['total' => 37, 'occupied' => 31, 'available' => 0, 'outOfService' => 6, 'occupancyRate' => 100])
+                ->where('properties.0.beds.occupancyRate', 100)
                 ->where('properties.0.potentialRent', 12000)
                 ->has('roomTypes', 3)
-                ->has('vacancies', 4)
-                ->where('vacancies.0.number', '101')
-                ->where('vacancies.0.free', 1)
+                ->has('vacancies', 0)
                 ->where('gender', ['male' => 25, 'female' => 2])
                 ->where('nationalities.0', ['nationality' => 'Indian', 'group' => 'named', 'count' => 9])
                 ->where('clients.0.name', 'Gulf Builders Contracting L.L.C.')

@@ -1,7 +1,7 @@
 import DataTable from '@/Components/DataTable';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
 import FlashMessages from '@/Components/FlashMessages';
-import { InvoiceKindBadge, InvoiceStatusBadge, PaymentStatusBadge } from '@/Components/LeasingBadges';
+import { InvoiceStatusBadge, PaymentStatusBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import PostButton from '@/Components/PostButton';
 import DashboardLayout from '@/Layouts/DashboardLayout';
@@ -65,12 +65,9 @@ export default function Show({ payment, allocations, currency }) {
                                         id: 'invoice',
                                         header: t('leasing.invoices.columns.invoice'),
                                         cell: (allocation) => (
-                                            <span className="flex flex-wrap items-center gap-2">
-                                                <Link href={route('invoices.show', allocation.invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
-                                                    {allocation.invoice.number}
-                                                </Link>
-                                                <InvoiceKindBadge kind={allocation.invoice.kind} />
-                                            </span>
+                                            <Link href={route('invoices.show', allocation.invoice.id)} className="font-medium underline-offset-4 hover:text-brand-ink hover:underline">
+                                                {allocation.invoice.number}
+                                            </Link>
                                         ),
                                     },
                                     {

@@ -5,10 +5,13 @@ namespace App\Models;
 use App\Models\Concerns\RentedUnderContracts;
 use Database\Factories\RoomFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -124,6 +127,26 @@ class Room extends Model
     }
 
     /**
+     * Stays in the room's beds, past and present.
+     *
+     * @return HasManyThrough<Occupancy, Bed, $this>
+     */
+    public function occupancies(): HasManyThrough
+    {
+        return $this->hasManyThrough(Occupancy::class, Bed::class);
+    }
+
+    /**
+     * Short-term rentals that hold the room, ended ones included.
+     *
+     * @return BelongsToMany<RoomRental, $this>
+     */
+    public function roomRentals(): BelongsToMany
+    {
+        return $this->belongsToMany(RoomRental::class, 'room_rental_rooms');
+    }
+
+    /**
      * Keep one active bed per unit of capacity. Raising the capacity brings
      * back beds taken out of service before adding new ones; lowering it takes
      * the highest-numbered empty beds out of service. Beds are never deleted,
@@ -159,13 +182,41 @@ class Room extends Model
     }
 
     /**
-     * Set `occupied_count` to the number of people staying in the room today.
-     * Check-ins and check-outs call this; the count is not typed in by hand.
+     * Set `occupied_count` to the beds taken today: those a running contract
+     * or short-term rental holds, or the people staying, whichever is more.
+     * A room let whole is taken from the agreement's first day, whether or
+     * not anyone has checked in. Agreements, check-ins and check-outs call
+     * this; the count is not typed in by hand.
      */
     public function recalculateOccupancy(): void
     {
-        $occupied = Occupancy::query()->current()->whereIn('bed_id', $this->beds()->select('id'))->count();
+        $this->update(['occupied_count' => min($this->capacity, max($this->bedsHeld(), $this->peopleStaying()))]);
+    }
 
-        $this->update(['occupied_count' => min($occupied, $this->capacity)]);
+    /**
+     * Beds running agreements hold today: every bed while an active contract
+     * rents the room whole or a short-term rental holds it, otherwise the
+     * beds active contracts rent in it.
+     */
+    public function bedsHeld(): int
+    {
+        $lines = $this->contractLines()
+            ->whereIn('unit_type', ['room', 'bed'])
+            ->whereDate('start_date', '<=', today())
+            ->whereDate('end_date', '>=', today())
+            ->whereHas('contract', fn (Builder $contracts) => $contracts->where('status', 'active'))
+            ->get(['unit_type', 'quantity']);
+        $isLetWhole = $lines->contains('unit_type', 'room')
+            || $this->roomRentals()->live()->whereDate('room_rentals.start_date', '<=', today())->exists();
+
+        return $isLetWhole ? $this->capacity : (int) $lines->sum('quantity');
+    }
+
+    /**
+     * People checked into the room's beds today.
+     */
+    public function peopleStaying(): int
+    {
+        return $this->occupancies()->current()->count();
     }
 }

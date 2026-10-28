@@ -56,12 +56,12 @@ export function groupByProperty(lines) {
 }
 
 /**
- * Everything the contract rents to the client, property by property, with
- * each unit's monthly amount and the totals underneath. Follows the form as
- * it is edited.
+ * Everything the contract rents to the client, property by property: its
+ * rooms, apartments and shops by number, with the totals underneath.
+ * Follows the form as it is edited.
  */
-export default function RentedSummary({ lines, properties, clientName, currency }) {
-    const { t, formatMoney } = useTranslation();
+export default function RentedSummary({ lines, properties, clientName }) {
+    const { t } = useTranslation();
     const describe = useDescribeLine(properties);
     const described = lines.map((line) => ({ line, ...describe(line) }));
     const count = (type) => lines.filter((line) => line.unit_type === type).length;
@@ -71,6 +71,7 @@ export default function RentedSummary({ lines, properties, clientName, currency 
         count('apartment') > 0 && t('propertyShow.clients.apartments', { count: count('apartment') }),
         count('shop') > 0 && t('propertyShow.clients.shops', { count: count('shop') }),
     ].filter(Boolean);
+    const byNumber = (a, b) => a.label.localeCompare(b.label, undefined, { numeric: true });
 
     return (
         <Card>
@@ -85,6 +86,10 @@ export default function RentedSummary({ lines, properties, clientName, currency 
                     <>
                         {groupByProperty(lines).map((group) => {
                             const property = properties.find((item) => item.id === group.propertyId);
+                            const items = group.indexes.map((index) => described[index]);
+                            const kinds = ['room', 'bed', 'apartment', 'shop']
+                                .map((type) => ({ type, items: items.filter((item) => item.line.unit_type === type).sort(byNumber) }))
+                                .filter((kind) => kind.items.length > 0);
 
                             return (
                                 <section key={group.propertyId} className="flex flex-col gap-2">
@@ -94,19 +99,14 @@ export default function RentedSummary({ lines, properties, clientName, currency 
                                         <span className="font-mono text-[0.6875rem] font-normal text-muted-foreground">{property?.code}</span>
                                     </h3>
                                     <ul className="flex flex-col gap-1.5 border-s ps-3 ms-2">
-                                        {group.indexes.map((index) => {
-                                            const item = described[index];
-                                            const Icon = UNIT_ICONS[item.line.unit_type];
+                                        {kinds.map(({ type, items: units }) => {
+                                            const Icon = UNIT_ICONS[type];
 
                                             return (
-                                                <li key={index} className="flex items-center gap-2 text-[0.8125rem]">
-                                                    <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-                                                    <span className="min-w-0 flex-1 truncate">
-                                                        <span className="font-medium">{item.label}</span>
-                                                        <span className="text-muted-foreground"> · {item.detail}</span>
-                                                    </span>
-                                                    <span className="tabular-nums">
-                                                        {formatMoney((Number(item.line.monthly_rate) || 0) * (Number(item.line.quantity) || 0), currency)}
+                                                <li key={type} className="flex items-start gap-2 text-[0.8125rem]">
+                                                    <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                                                    <span className="min-w-0 flex-1">
+                                                        {units.map((item) => (type === 'bed' ? `${item.label} (${item.detail})` : item.label)).join(', ')}
                                                     </span>
                                                 </li>
                                             );
@@ -116,7 +116,7 @@ export default function RentedSummary({ lines, properties, clientName, currency 
                             );
                         })}
                         <p className="border-t pt-3 text-xs font-medium text-muted-foreground">
-                            {t('leasing.contracts.form.rented.totals', { count: lines.length })}: {totals.join(' · ')}
+                            {t('leasing.contracts.form.rented.units', { count: lines.length })}: {totals.join(' · ')}
                         </p>
                     </>
                 )}

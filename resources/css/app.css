@@ -244,12 +244,13 @@
     --cash-in: #0e7fb8;
     --cash-out: #eda100;
     --cash-clients: #2a78d6;
-    --cash-gas: #e8590c;
     --cash-rentals: #1baf7a;
     --cash-landlords: #eda100;
     --cash-maintenance: #6250d6;
     --cash-contracts: #7f4315;
     --cash-salaries: #e87ba4;
+    /* One-off payments read as the "other" bucket: the chart-3 neutral, never a new hue. */
+    --cash-other: #8e95a8;
     /* Categorical series: cyan, yellow, aqua, validated all-pairs in both themes; a fourth+ series folds into chart-3 grey. */
     --cat-1: #1a9fd9;
     --cat-2: #eda100;
@@ -307,12 +308,12 @@
     --cash-in: #2897cb;
     --cash-out: #c98500;
     --cash-clients: #3987e5;
-    --cash-gas: #e8590c;
     --cash-rentals: #199e70;
     --cash-landlords: #c98500;
     --cash-maintenance: #9085e9;
     --cash-contracts: #9c5010;
     --cash-salaries: #d55181;
+    --cash-other: #6b7390;
     --cat-1: #2196d1;
     --cat-2: #c98500;
     --cat-3: #199e70;

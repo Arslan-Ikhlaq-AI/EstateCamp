@@ -44,13 +44,13 @@ describe('the overview', function () {
                 ->where('period.kind', 'month')
                 ->where('totals', [
                     'client_payment' => ['count' => 6, 'amount' => 31780],
-                    'gas_payment' => ['count' => 0, 'amount' => 0],
                     'rental_payment' => ['count' => 1, 'amount' => 1500],
                     'landlord_rent' => ['count' => 0, 'amount' => 0],
                     'maintenance' => ['count' => 1, 'amount' => 2400],
                     'salary' => ['count' => 0, 'amount' => 0],
                     'maintenance_contract' => ['count' => 0, 'amount' => 0],
                     'deposit_refund' => ['count' => 0, 'amount' => 0],
+                    'other_payment' => ['count' => 0, 'amount' => 0],
                 ])
                 ->where('transactions.total', 8)
             );

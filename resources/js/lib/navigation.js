@@ -14,7 +14,6 @@ import {
     ClipboardCheckIcon,
     CoinsIcon,
     ContactRoundIcon,
-    CylinderIcon,
     DoorOpenIcon,
     DropletsIcon,
     FileKeyIcon,
@@ -132,7 +131,6 @@ export const navigation = [
                 children: [
                     { title: 'nav.paymentsOverview', icon: ChartPieIcon, routeName: 'payments.overview' },
                     { title: 'nav.invoices', icon: ReceiptTextIcon, routeName: 'invoices.index', activeFor: ['invoices.*'] },
-                    { title: 'nav.gasBills', icon: CylinderIcon, routeName: 'gas-bills.index', activeFor: ['gas-bills.*'] },
                     { title: 'nav.paymentsReceived', icon: HandCoinsIcon, routeName: 'payments.index', activeFor: ['payments.index', 'payments.create', 'payments.show'] },
                     { title: 'nav.rentCollections', icon: ReceiptIcon, routeName: 'rental-payments.index', activeFor: ['rental-payments.*'] },
                     { title: 'nav.cheques', icon: WalletCardsIcon, routeName: 'cheques.index', activeFor: ['cheques.*'] },
@@ -214,7 +212,6 @@ export const createActions = [
     { title: 'leasing.landlords.add', icon: LandmarkIcon, routeName: 'landlords.create', group: 'nav.landlordsMenu' },
     { title: 'leasing.headLeases.add', icon: FileKeyIcon, routeName: 'head-leases.create', group: 'nav.landlordsMenu' },
     { title: 'leasing.payments.add', icon: ReceiptIcon, routeName: 'payments.create', group: 'nav.payments' },
-    { title: 'finance.gas.add', icon: CylinderIcon, routeName: 'gas-bills.create', group: 'nav.payments' },
     { title: 'maintenance.add', icon: WrenchIcon, routeName: 'maintenance.create', group: 'nav.maintenance' },
     { title: 'amcs.services.fire_safety.add', icon: FlameIcon, routeName: 'amcs.fire-safety.create', group: 'nav.contractsMenu' },
     { title: 'amcs.services.lifts.add', icon: ArrowUpDownIcon, routeName: 'amcs.lifts.create', group: 'nav.contractsMenu' },

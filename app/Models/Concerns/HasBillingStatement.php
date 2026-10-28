@@ -18,8 +18,8 @@ use Illuminate\Validation\ValidationException;
  * it and takes off what was received in it; what is left is carried into
  * the next period's bill.
  *
- * The using model lists its charges and the payments it has received, and
- * records money collected towards them.
+ * The using model lists its charges and the payments it has received,
+ * records money collected towards them, and says how far ahead it bills.
  */
 trait HasBillingStatement
 {
@@ -39,9 +39,15 @@ trait HasBillingStatement
     abstract public function billingPayments(): array;
 
     /**
-     * Record `$amount` received today towards what has fallen due by `$through`.
+     * Record `$amount` received today towards what has fallen due by
+     * `$through`; anything beyond it is paid ahead.
      */
     abstract protected function recordCollection(float $amount, CarbonInterface $through, string $method, ?User $by): Model;
+
+    /**
+     * The last day the agreement can bill for, or null when it has none.
+     */
+    abstract protected function lastBillingDay(): ?CarbonInterface;
 
     /**
      * Called before money is collected, so every charge due by `$through`
@@ -100,12 +106,25 @@ trait HasBillingStatement
     }
 
     /**
+     * The most that can be collected today: everything still to pay up to
+     * the agreement's last day, so a payment can run ahead of the bill but
+     * not past the end of the agreement. Null when it has no last day.
+     */
+    public function collectionLimit(): ?float
+    {
+        $lastDay = $this->lastBillingDay();
+
+        return $lastDay === null ? null : $this->amountToCollect($lastDay);
+    }
+
+    /**
      * Collect money received today towards the bill up to `$through`,
      * settling the oldest charges first, so the balance brought forward is
-     * cleared before the new charges. Nobody can collect more than is
-     * owed, and two people collecting at once wait for each other.
+     * cleared before the new charges. More than the bill is paid ahead: it
+     * shows as credit and comes off the next bill. Two people collecting at
+     * once wait for each other.
      *
-     * @throws ValidationException When the amount is more than is still to pay.
+     * @throws ValidationException When the amount would pay beyond the end of the agreement.
      */
     public function collectPayment(float $amount, CarbonInterface $through, string $method, ?User $by = null): Model
     {
@@ -113,12 +132,12 @@ trait HasBillingStatement
             static::query()->whereKey($this->getKey())->lockForUpdate()->first();
 
             $this->prepareCollection($through);
-            $owed = $this->amountToCollect($through);
+            $limit = $this->collectionLimit();
 
-            if ($amount > $owed + 0.005) {
-                throw ValidationException::withMessages(['amount' => $owed > 0
-                    ? 'Only '.number_format($owed, 2).' is still to pay on this bill.'
-                    : 'Nothing is left to pay on this bill.']);
+            if ($limit !== null && $amount > $limit + 0.005) {
+                throw ValidationException::withMessages(['amount' => $limit > 0
+                    ? 'At most '.number_format($limit, 2).' can be taken: that pays everything up to the end of the agreement.'
+                    : 'Nothing is left to pay up to the end of the agreement.']);
             }
 
             return $this->recordCollection(round($amount, 2), $through, $method, $by);

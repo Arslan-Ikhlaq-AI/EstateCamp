@@ -116,6 +116,7 @@ class RoomRentalSeeder extends Seeder
             'created_by' => $user?->id,
         ])->save();
         $rental->rooms()->attach($room->id, ['company_id' => $company->id]);
+        $rental->recountRooms();
 
         return $rental;
     }

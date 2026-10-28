@@ -9,7 +9,6 @@ use App\Http\Controllers\CompanyOnboardingController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\GasBillController;
 use App\Http\Controllers\HeadLeaseController;
 use App\Http\Controllers\IncomeReportController;
 use App\Http\Controllers\InvoiceController;
@@ -24,12 +23,14 @@ use App\Http\Controllers\MaintenanceVisitController;
 use App\Http\Controllers\OccupancyController;
 use App\Http\Controllers\OccupancyReportController;
 use App\Http\Controllers\OccupantController;
+use App\Http\Controllers\OtherPaymentController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentOverviewController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PropertyBillingController;
 use App\Http\Controllers\PropertyController;
+use App\Http\Controllers\PropertyPaymentController;
 use App\Http\Controllers\PropertyTypeController;
 use App\Http\Controllers\ReceivablesReportController;
 use App\Http\Controllers\RegionalOfficeController;
@@ -110,6 +111,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('properties/{property}/allocation', [RoomAllocationController::class, 'show'])->whereNumber('property')->name('properties.allocation');
         Route::post('properties/{property}/billing', [PropertyBillingController::class, 'store'])->whereNumber('property')->name('properties.billing.store');
         Route::get('properties/{property}/tenant-contracts', [TenantContractController::class, 'show'])->whereNumber('property')->name('properties.tenant-contracts');
+        Route::get('properties/{property}/payments', [PropertyPaymentController::class, 'show'])->whereNumber('property')->name('properties.payments');
+
+        // One-off payments for a property, such as a permit fee, added from its payments page.
+        Route::resource('other-payments', OtherPaymentController::class)->only(['create', 'store', 'edit', 'update'])->parameters(['other-payments' => 'otherPayment'])->whereNumber('otherPayment');
+        Route::post('other-payments/{otherPayment}/status', [OtherPaymentController::class, 'changeStatus'])->whereNumber('otherPayment')->name('other-payments.status');
+        Route::get('other-payments/{otherPayment}/receipt', [OtherPaymentController::class, 'receipt'])->whereNumber('otherPayment')->name('other-payments.receipt');
         Route::resource('rooms', RoomController::class)->except(['show', 'destroy']);
         Route::resource('apartments', ApartmentController::class)->except(['destroy']);
         Route::resource('shops', ShopController::class)->except(['destroy']);
@@ -146,10 +153,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('rental-payments/{rentalPayment}', [RentalPaymentController::class, 'show'])->whereNumber('rentalPayment')->name('rental-payments.show');
         Route::post('rental-payments/{rentalPayment}/void', [RentalPaymentController::class, 'void'])->whereNumber('rentalPayment')->name('rental-payments.void');
 
-        // Gas bills: each month's gas, charged to clients whose contracts do not include it.
-        Route::resource('gas-bills', GasBillController::class)->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['gas-bills' => 'gasBill'])->whereNumber('gasBill');
-        Route::get('gas-bills/{gasBill}/document', [GasBillController::class, 'document'])->whereNumber('gasBill')->name('gas-bills.document');
-
         // Maintenance bills: paying vendors for finished work, with a voucher for each payment.
         Route::get('maintenance-bills', [MaintenanceBillController::class, 'index'])->name('maintenance-bills.index');
         Route::post('maintenance-bills/{maintenanceJob}/pay', [MaintenanceBillController::class, 'pay'])->whereNumber('maintenanceJob')->name('maintenance-bills.pay');
@@ -161,6 +164,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('cheques/status', [ChequeController::class, 'bulkStatus'])->name('cheques.bulk-status');
         Route::put('cheques/{cheque}', [ChequeController::class, 'update'])->name('cheques.update');
         Route::post('cheques/{cheque}/status', [ChequeController::class, 'changeStatus'])->name('cheques.status');
+        Route::post('cheques/{cheque}/settle', [ChequeController::class, 'settle'])->name('cheques.settle');
         Route::post('cheques/{cheque}/replace', [ChequeController::class, 'replace'])->name('cheques.replace');
         Route::get('cheques/{cheque}/images/{side}', [ChequeController::class, 'image'])->whereIn('side', ['front', 'back'])->name('cheques.image');
 

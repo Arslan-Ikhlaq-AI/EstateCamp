@@ -268,6 +268,37 @@ class Cheque extends Model
     }
 
     /**
+     * Whether the money can be marked as moved in one step: a client's
+     * cheque in hand or at the bank cashed, or a cheque handed over paid.
+     */
+    public function canBeSettled(): bool
+    {
+        return in_array($this->status, $this->direction === 'received' ? ['received', 'deposited'] : ['issued'], true);
+    }
+
+    /**
+     * Mark the money as moved on `$on`: a client's cheque still in hand is
+     * deposited and cleared that day, any other is cleared, each step
+     * taking its stage's first status and kept in the history.
+     *
+     * @throws ValidationException When the cheque cannot be settled now.
+     */
+    public function settle(CarbonInterface $on, ?string $note = null, ?User $by = null): void
+    {
+        if (! $this->canBeSettled()) {
+            throw ValidationException::withMessages(['cheque' => 'This cheque cannot be marked as '.($this->direction === 'received' ? 'cashed' : 'paid').' now.']);
+        }
+
+        DB::transaction(function () use ($on, $note, $by) {
+            if ($this->status === 'received') {
+                $this->moveTo(ChequeStatus::firstIn('deposited'), $on, by: $by);
+            }
+
+            $this->moveTo(ChequeStatus::firstIn('cleared'), $on, $note, by: $by);
+        });
+    }
+
+    /**
      * Whether the cheque can move to `$status` now: another status of the
      * stage it is in, or one of a stage its next step leads to.
      */
@@ -582,9 +613,11 @@ class Cheque extends Model
             'cheque_date' => $this->cheque_date,
             'bank_name' => $this->bank_name,
         ]);
+        // Tagged with the contract, so what the cheque pays beyond its open invoices is credit for the next ones.
         $payment->forceFill([
             'company_id' => $this->company_id,
             'client_id' => $contract->client_id,
+            'contract_id' => $contract->id,
             'cheque_id' => $this->id,
             'payment_number' => Payment::nextNumber($this->company_id, $on),
         ])->save();
@@ -592,10 +625,10 @@ class Cheque extends Model
         $remaining = (float) $this->amount;
         $amounts = [];
 
-        // The rent invoice for the cheque's own period first, then other rent, then gas bills.
+        // The invoice for the cheque's own period first, then the others.
         $invoices = $contract->invoices()
             ->whereIn('status', ['issued', 'partially_paid'])
-            ->orderByRaw("case when kind = 'rent' and period_start = ? then 0 when kind = 'rent' then 1 else 2 end", [($this->period_start ?? $this->cheque_date)->toDateString()])
+            ->orderByRaw('case when period_start = ? then 0 else 1 end', [($this->period_start ?? $this->cheque_date)->toDateString()])
             ->orderBy('period_start')
             ->orderBy('id')
             ->get();

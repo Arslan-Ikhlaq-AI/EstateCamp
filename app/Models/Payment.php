@@ -116,6 +116,28 @@ class Payment extends Model
     }
 
     /**
+     * The contract the payment was collected towards, when it was; what it
+     * paid beyond that contract's open invoices is credit for its next ones.
+     *
+     * @return BelongsTo<Contract, $this>
+     */
+    public function contract(): BelongsTo
+    {
+        return $this->belongsTo(Contract::class);
+    }
+
+    /**
+     * What is left of the payment after its allocations. Uses a loaded
+     * `allocated` sum when present.
+     */
+    public function unallocatedAmount(): float
+    {
+        $allocated = $this->getAttribute('allocated') ?? $this->allocatedAmount();
+
+        return round(max(0, (float) $this->amount - (float) $allocated), 2);
+    }
+
+    /**
      * The cheque this payment was made by, when it came from clearing one.
      *
      * @return BelongsTo<Cheque, $this>

@@ -55,6 +55,12 @@ class PropertyRequest extends FormRequest
     public const LEASE_TERMS = ['ejari_number', 'annual_rent', 'payments_per_year', 'security_deposit', 'notice_period_days'];
 
     /**
+     * The shared rooms counted with a property. They are numbers only, not
+     * units that can be let.
+     */
+    public const FACILITIES = ['medical_rooms', 'kitchens', 'washrooms', 'supervisor_rooms'];
+
+    /**
      * Landlord, lease and cheque details only apply to leased properties. A
      * leased property either picks one of the company's landlords
      * (`existing`) or brings the details of a new one (`new`).
@@ -149,6 +155,7 @@ class PropertyRequest extends FormRequest
 
             'total_floors' => ['nullable', 'integer', 'between:1,200'],
             'total_units' => ['nullable', 'integer', 'between:1,10000'],
+            ...array_fill_keys(self::FACILITIES, ['nullable', 'integer', 'between:0,1000']),
 
             'documents' => ['array', 'max:20'],
             'documents.*.id' => ['nullable', 'integer'],
@@ -333,6 +340,10 @@ class PropertyRequest extends FormRequest
             'notice_period_days' => 'notice period',
             'total_floors' => 'number of floors',
             'total_units' => 'number of units',
+            'medical_rooms' => 'number of medical rooms',
+            'kitchens' => 'number of kitchens',
+            'washrooms' => 'number of washrooms',
+            'supervisor_rooms' => 'number of supervisor rooms',
             'units.*.*.count' => 'how many',
             'units.*.*.first_number' => 'first number',
             'units.rooms.*.room_type_id' => 'room type',

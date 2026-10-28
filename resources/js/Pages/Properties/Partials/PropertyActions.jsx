@@ -24,6 +24,7 @@ import {
     PencilIcon,
     PlusIcon,
     PhoneIcon,
+    WalletIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -80,6 +81,10 @@ export default function PropertyActions({ property, onImage = false }) {
                     <DropdownMenuItem render={<Link href={route('properties.tenant-contracts', property.id)} />}>
                         <FileSignatureIcon />
                         {t('properties.actions.tenantContracts')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem render={<Link href={route('properties.payments', property.id)} />}>
+                        <WalletIcon />
+                        {t('properties.actions.payments')}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                         render={<Link href={route('rooms.index', { properties: [property.code] })} />}

@@ -71,7 +71,7 @@ function rentedRooms(Room|array $rooms, array $attributes = [], float $paid = 0,
 }
 
 describe('renting rooms short-term', function () {
-    test('rents whole rooms to a new company for a term of months, checking nobody in', function () {
+    test('rents whole rooms to a new company for a term of months, taking them without checking anyone in', function () {
         $response = $this->actingAs($this->admin)->post(route('rentals.store'), rentalInput());
 
         $rental = RoomRental::sole();
@@ -85,7 +85,8 @@ describe('renting rooms short-term', function () {
             ->and($rental->rooms()->pluck('rooms.id')->sort()->values()->all())->toBe([$this->privateRoom->id, $this->twinRoom->id])
             ->and($rental->end_date->toDateString())->toBe('2026-12-31')
             ->and($rental->termMonths())->toBe(3)
-            ->and(Occupancy::count())->toBe(0);
+            ->and(Occupancy::count())->toBe(0)
+            ->and($this->privateRoom->refresh()->occupied_count)->toBe(1);
     });
 
     test('records the first month and the deposit as paid now, with the new company’s other details', function () {
@@ -168,7 +169,8 @@ describe('renting rooms short-term', function () {
                 ...$dates,
                 'billing_cycle' => 'monthly',
                 'payment_terms_days' => 7,
-                'lines' => [['unit_type' => 'room', 'property_id' => $this->dormRoom->property_id, 'room_id' => $this->dormRoom->id, 'quantity' => 1, 'monthly_rate' => 2400, 'billing_basis' => 'contracted', 'vat_rate' => 0, ...$dates]],
+                'monthly_rent' => 2400,
+                'lines' => [['unit_type' => 'room', 'property_id' => $this->dormRoom->property_id, 'room_id' => $this->dormRoom->id]],
             ])
             ->assertSessionHasErrors(['lines.0.room_id' => "Rented short-term under {$rental->rental_number} until 31 Dec 2026."]);
     });
@@ -301,7 +303,7 @@ describe('rent', function () {
 });
 
 describe('a running rental', function () {
-    test('moves the tenant out, handing back the deposit', function () {
+    test('moves the tenant out, handing back the deposit and freeing the room', function () {
         $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-09-01', 'monthly_rent' => 900], paid: 1800, depositPaid: 900);
 
         $this->actingAs($this->admin)
@@ -314,7 +316,8 @@ describe('a running rental', function () {
             ->and($rental->moved_out_on->toDateString())->toBe('2026-10-17')
             ->and((float) $rental->deposit_refunded)->toBe(600.0)
             ->and($rental->depositStanding()['held'])->toBe(300.0)
-            ->and(RoomRental::heldRoomIds($this->company->id))->toBe([]);
+            ->and(RoomRental::heldRoomIds($this->company->id))->toBe([])
+            ->and($this->dormRoom->refresh()->occupied_count)->toBe(0);
     });
 
     test('hands back no more deposit than was paid', function () {

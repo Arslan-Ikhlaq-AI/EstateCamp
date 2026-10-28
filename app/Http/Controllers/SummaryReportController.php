@@ -71,7 +71,6 @@ class SummaryReportController extends Controller
             'tenancy' => $this->tenancy($company, $period),
             'billing' => [
                 'invoiced' => $this->totals($this->wherePeriod($company->invoices()->whereNot('status', 'void'), 'issue_date', $period), 'total'),
-                'gas' => $this->totals($this->wherePeriod($company->invoices()->where('kind', 'gas')->whereNot('status', 'void'), 'issue_date', $period), 'total'),
                 'receivables' => $this->receivableTotals($company),
             ],
             'cheques' => [

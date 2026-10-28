@@ -147,6 +147,7 @@ class RoomRentalController extends Controller
                 'created_by' => $request->user()->id,
             ])->save();
             $rental->rooms()->attach($request->validated('room_ids'), ['company_id' => $company->id]);
+            $rental->recountRooms();
 
             if ($request->validated('first_payment') === 'now') {
                 $this->recordFirstPayment($rental, $request->validated('payment_method'), $request->validated('payment_reference'), $request->user());
@@ -259,6 +260,7 @@ class RoomRentalController extends Controller
         }
 
         $roomRental->fill($terms)->save();
+        $roomRental->recountRooms();
 
         return to_route('rentals.show', $roomRental)->with('success', "{$roomRental->rental_number} was updated.");
     }

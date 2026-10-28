@@ -8,12 +8,12 @@ import {
     CircleCheckIcon,
     ClockIcon,
     CreditCardIcon,
-    CylinderIcon,
     FileSignatureIcon,
     FileStackIcon,
     HandCoinsIcon,
     KeyRoundIcon,
     LandmarkIcon,
+    ReceiptIcon,
     ScrollTextIcon,
     Undo2Icon,
     UsersRoundIcon,
@@ -27,25 +27,25 @@ import {
  */
 export const CASH_CATEGORIES = {
     client_payment: { icon: FileSignatureIcon, color: 'var(--cash-clients)', routeName: 'payments.index' },
-    gas_payment: { icon: CylinderIcon, color: 'var(--cash-gas)', routeName: 'gas-bills.index' },
     rental_payment: { icon: KeyRoundIcon, color: 'var(--cash-rentals)', routeName: 'rental-payments.index' },
     landlord_rent: { icon: LandmarkIcon, color: 'var(--cash-landlords)', routeName: 'cheques.index' },
     maintenance: { icon: WrenchIcon, color: 'var(--cash-maintenance)', routeName: 'maintenance-bills.index' },
     maintenance_contract: { icon: FileStackIcon, color: 'var(--cash-contracts)', routeName: 'cheques.index' },
     salary: { icon: UsersRoundIcon, color: 'var(--cash-salaries)', routeName: 'salaries.index' },
     deposit_refund: { icon: Undo2Icon, color: 'var(--cash-rentals)', routeName: 'rentals.index' },
+    other_payment: { icon: ReceiptIcon, color: 'var(--cash-other)', routeName: null },
 };
 
 export const METHOD_ICONS = { cash: BanknoteIcon, bank_transfer: LandmarkIcon, cheque: ScrollTextIcon, card: CreditCardIcon };
 
 /**
  * Where a transaction in the ledger opens: the payment, receipt, voucher,
- * lease, maintenance contract, staff member or rental behind it.
+ * lease, maintenance contract, staff member or rental behind it, or for a
+ * one-off payment its property's payments.
  */
 export function transactionHref(row) {
     switch (row.category) {
         case 'client_payment':
-        case 'gas_payment':
             return route('payments.show', row.recordId);
         case 'rental_payment':
             return route('rental-payments.show', row.recordId);
@@ -57,6 +57,8 @@ export function transactionHref(row) {
             return route('amcs.contract', row.parentId);
         case 'salary':
             return route('staff.show', row.parentId);
+        case 'other_payment':
+            return route('properties.payments', { property: row.parentId, tab: 'out' });
         default:
             return route('rentals.show', row.recordId);
     }
@@ -97,6 +99,31 @@ export function ReceiptStatusBadge({ status }) {
     return (
         <ToneBadge tone={status === 'void' ? 'muted' : 'success'} icon={status === 'void' ? BanIcon : CircleCheckIcon}>
             {t(`finance.receipts.status.${status}`)}
+        </ToneBadge>
+    );
+}
+
+const OTHER_PAYMENT_TONES = { pending: 'warning', paid: 'success', cancelled: 'muted' };
+const OTHER_PAYMENT_ICONS = { pending: ClockIcon, paid: CircleCheckIcon, cancelled: BanIcon };
+
+/**
+ * Where a one-off payment stands: to pay (overdue once its day has
+ * passed), paid or cancelled.
+ */
+export function OtherPaymentStatusBadge({ status, isOverdue = false }) {
+    const { t } = useTranslation();
+
+    if (isOverdue) {
+        return (
+            <ToneBadge tone="danger" icon={CircleAlertIcon}>
+                {t('finance.otherPayments.status.overdue')}
+            </ToneBadge>
+        );
+    }
+
+    return (
+        <ToneBadge tone={OTHER_PAYMENT_TONES[status]} icon={OTHER_PAYMENT_ICONS[status]}>
+            {t(`finance.otherPayments.status.${status}`)}
         </ToneBadge>
     );
 }

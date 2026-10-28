@@ -211,7 +211,7 @@ describe('for the seeded demo company', function () {
         $room = $this->alQuoz->rooms()->where('room_number', '101')->sole();
 
         $this->actingAs($this->superAdmin)
-            ->put(route('rooms.update', $room), validRoomInput($this->alQuoz, ['room_number' => '101', 'capacity' => $room->occupied_count - 1]))
+            ->put(route('rooms.update', $room), validRoomInput($this->alQuoz, ['room_number' => '101', 'capacity' => $room->peopleStaying() - 1]))
             ->assertSessionHasErrors('capacity');
 
         expect($room->refresh()->capacity)->toBe(8);

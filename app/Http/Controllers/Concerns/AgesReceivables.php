@@ -33,7 +33,7 @@ trait AgesReceivables
     /**
      * Every invoice with something left to pay, the one due longest ago first.
      *
-     * @return Collection<int, array{id: int, number: string, kind: string, clientId: int, client: string, clientType: string, issueDate: string, dueDate: string, total: float, paid: float, balance: float, daysPastDue: int, bucket: string}>
+     * @return Collection<int, array{id: int, number: string, clientId: int, client: string, clientType: string, issueDate: string, dueDate: string, total: float, paid: float, balance: float, daysPastDue: int, bucket: string}>
      */
     protected function openInvoices(Company $company): Collection
     {
@@ -49,7 +49,6 @@ trait AgesReceivables
                 return [
                     'id' => $invoice->id,
                     'number' => $invoice->invoice_number,
-                    'kind' => $invoice->kind,
                     'clientId' => $invoice->client_id,
                     'client' => $invoice->client->name,
                     'clientType' => $invoice->client->client_type,

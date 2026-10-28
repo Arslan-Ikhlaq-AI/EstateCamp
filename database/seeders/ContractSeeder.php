@@ -11,8 +11,7 @@ use Illuminate\Database\Seeder;
  * Eleven client contracts covering every kind of line: blocks of beds
  * billed as contracted or as actually used, whole rooms, apartments and
  * shops (with VAT). Nine are running; two drafts hold units that are
- * reserved for next month. Gas is included in the rent except for the
- * Gulf Builders crews and the Brew Corner café, who pay monthly gas bills.
+ * reserved for next month.
  *
  * The occupied and reserved apartments and shops from ApartmentSeeder and
  * ShopSeeder are exactly the ones these contracts rent, and syncing the
@@ -107,7 +106,7 @@ class ContractSeeder extends Seeder
             [
                 'contract_number' => 'CTR-2026-0001', 'client' => ClientSeeder::GULF_BUILDERS, 'status' => 'active',
                 'start_date' => '2026-01-01', 'end_date' => '2027-12-31', 'signed_on' => '2025-12-20', 'billing_cycle' => 'monthly',
-                'payment_terms_days' => 7, 'security_deposit' => 10000, 'gas_included' => false, 'ejari_number' => 'EJ-2026-118720',
+                'payment_terms_days' => 7, 'security_deposit' => 10000, 'ejari_number' => 'EJ-2026-118720',
                 'notes' => 'Site crews for the Al Quoz warehouse project. Sixteen beds are paid for whether used or not.',
                 'lines' => [
                     ['type' => 'bed', 'property' => $aq, 'room' => '101', 'quantity' => 8, 'rate' => 450, 'description' => 'Dormitory beds for the site crew'],
@@ -184,8 +183,8 @@ class ContractSeeder extends Seeder
             [
                 'contract_number' => 'CTR-2026-0009', 'client' => ClientSeeder::BREW_CORNER, 'status' => 'active',
                 'start_date' => '2026-07-01', 'end_date' => '2028-06-30', 'signed_on' => '2026-06-20', 'billing_cycle' => 'monthly',
-                'payment_terms_days' => 7, 'security_deposit' => 5600, 'gas_included' => false, 'ejari_number' => 'EJ-2026-150218',
-                'notes' => 'Commercial lease; 5% VAT on rent. The café pays for its kitchen gas each month.',
+                'payment_terms_days' => 7, 'security_deposit' => 5600, 'ejari_number' => 'EJ-2026-150218',
+                'notes' => 'Commercial lease; 5% VAT on rent.',
                 'lines' => [
                     ['type' => 'shop', 'property' => $ja, 'shop' => 'G-01', 'rate' => 5600, 'vat' => 5],
                 ],

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, FileSignatureIcon, LayoutPanelLeftIcon, MapPinIcon } from 'lucide-react';
+import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, FileSignatureIcon, LayoutPanelLeftIcon, MapPinIcon, WalletIcon } from 'lucide-react';
 import { ComplianceBadge, LeaseNote, OwnershipBadge, StatusBadge } from './PropertyBadges';
 import PropertyActions from './PropertyActions';
 import UnitOccupancyCounts from './UnitOccupancy';
@@ -112,6 +112,16 @@ function PropertyGridCard({ property, currency }) {
                     >
                         <FileSignatureIcon data-icon="inline-start" className="text-brand-ink" />
                         {t('properties.actions.tenantContracts')}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        nativeButton={false}
+                        render={<Link href={route('properties.payments', property.id)} />}
+                        aria-label={`${t('properties.actions.payments')}: ${property.name}`}
+                        className="min-w-fit flex-1"
+                    >
+                        <WalletIcon data-icon="inline-start" className="text-brand-ink" />
+                        {t('properties.actions.payments')}
                     </Button>
                 </div>
 

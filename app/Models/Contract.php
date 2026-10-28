@@ -23,14 +23,14 @@ use Illuminate\Validation\ValidationException;
  * A client renting from the operator. What is rented, and at what rate,
  * lives in its ContractLines. The client pays by cheques, one per billing
  * period (four a year on a quarterly cycle), plus one for the security
- * deposit; clearing a cheque settles that period's invoice. Gas is either
- * included in the rent (`gas_included`) or charged on top: then each
- * month's gas at a property is a GasBill with its own invoice.
+ * deposit; clearing a cheque settles that period's invoice.
  *
- * Lifecycle: draft → active → ended (its end date passed) or terminated
- * (stopped early). Status changes go through activate(), markEnded() and
+ * Lifecycle: active from the moment it is saved → ended (its end date
+ * passed) or terminated (stopped early). A renewal waits as a draft until
+ * its form is saved. Its units are taken for the term whether or not anyone
+ * checks in. Status changes go through activate(), markEnded() and
  * terminate(), which also check occupants out and keep apartment and shop
- * statuses in step.
+ * statuses and room counts in step.
  */
 #[Fillable([
     'ejari_number',
@@ -39,7 +39,6 @@ use Illuminate\Validation\ValidationException;
     'billing_cycle',
     'payment_terms_days',
     'security_deposit',
-    'gas_included',
     'signed_on',
     'notes',
 ])]
@@ -73,7 +72,6 @@ class Contract extends Model
             'terminated_on' => 'date',
             'payment_terms_days' => 'integer',
             'security_deposit' => 'decimal:2',
-            'gas_included' => 'boolean',
         ];
     }
 
@@ -178,7 +176,7 @@ class Contract extends Model
     }
 
     /**
-     * Put a draft into force.
+     * Put a draft into force. Cheques can be collected afterwards.
      *
      * @throws ValidationException When the contract is not a draft or has no lines.
      */
@@ -192,29 +190,8 @@ class Contract extends Model
             throw ValidationException::withMessages(['lines' => 'Add at least one line before activating the contract.']);
         }
 
-        $missing = $this->chequesMissingForThisYear();
-
-        if ($missing > 0) {
-            throw ValidationException::withMessages(['cheques' => "Collect this year's cheques before activating: {$missing} still need their number, bank and a photo of the front."]);
-        }
-
         $this->forceFill(['status' => 'active', 'signed_on' => $this->signed_on ?? $signedOn ?? today()])->save();
         $this->syncUnitStatuses();
-    }
-
-    /**
-     * How many cheques dated up to the end of the current contract year are
-     * not in hand yet, or have no photo of the front.
-     */
-    public function chequesMissingForThisYear(): int
-    {
-        [, $yearEnd] = $this->currentChequeYear();
-
-        return $this->cheques()
-            ->whereIn('status', ['pending', 'received'])
-            ->whereDate('cheque_date', '<=', $yearEnd)
-            ->where(fn ($query) => $query->where('status', 'pending')->orWhereNull('front_image_path'))
-            ->count();
     }
 
     /**
@@ -286,13 +263,13 @@ class Contract extends Model
     /**
      * The next period to invoice, from the day after the last invoiced period
      * (or the start date) for one billing cycle, capped at the end date. Null
-     * once the whole term is invoiced. Gas invoices are not billing periods.
+     * once the whole term is invoiced.
      *
      * @return array{0: CarbonImmutable, 1: CarbonImmutable}|null
      */
     public function nextBillingPeriod(): ?array
     {
-        $lastEnd = $this->invoices()->where('kind', 'rent')->whereNot('status', 'void')->max('period_end');
+        $lastEnd = $this->invoices()->whereNot('status', 'void')->max('period_end');
         $start = $lastEnd ? CarbonImmutable::parse($lastEnd)->addDay() : $this->start_date->toImmutable();
 
         if ($start->gt($this->end_date)) {
@@ -389,7 +366,6 @@ class Contract extends Model
                 'company_id' => $this->company_id,
                 'contract_id' => $this->id,
                 'client_id' => $this->client_id,
-                'kind' => 'rent',
                 'invoice_number' => Invoice::nextNumber($this->company_id, $issued),
                 'subtotal' => $subtotal,
                 'vat_amount' => $vatAmount,
@@ -404,14 +380,49 @@ class Contract extends Model
                 $items,
             ));
 
-            return $invoice;
+            $this->applyCredit($invoice);
+
+            return $invoice->refresh();
         });
     }
 
     /**
-     * The client's bill: every invoice not voided, rent on the first day
-     * of its period and gas on the day it was issued, then, while the
-     * contract runs, each billing period begun by `$through` that is not
+     * Settle a new invoice from money the client paid ahead on this
+     * contract: the credit left on payments collected towards it, oldest
+     * first.
+     */
+    private function applyCredit(Invoice $invoice): void
+    {
+        $due = $invoice->balance();
+
+        if ($due <= 0) {
+            return;
+        }
+
+        $payments = $this->payments()
+            ->where('status', 'cleared')
+            ->withSum('allocations as allocated', 'amount')
+            ->orderBy('received_on')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($payments as $payment) {
+            $share = min($payment->unallocatedAmount(), $due);
+
+            if ($share > 0) {
+                $payment->allocate([$invoice->id => $share]);
+                $due = round($due - $share, 2);
+            }
+
+            if ($due <= 0) {
+                break;
+            }
+        }
+    }
+
+    /**
+     * The client's bill: every invoice not voided, on the first day of its
+     * period, then, while the contract runs, each billing period begun by `$through` that is not
      * invoiced yet, at what its invoice is planned to come to (the first
      * also collects the deposit). Uses loaded `invoices` when present.
      *
@@ -424,12 +435,12 @@ class Contract extends Model
         $charges = $invoices
             ->map(fn (Invoice $invoice) => [
                 'key' => "invoice-{$invoice->id}",
-                'type' => $invoice->kind,
+                'type' => 'rent',
                 'id' => $invoice->id,
                 'number' => $invoice->invoice_number,
                 'start' => $invoice->period_start->toImmutable(),
                 'end' => $invoice->period_end->toImmutable(),
-                'chargedOn' => ($invoice->kind === 'rent' ? $invoice->period_start : $invoice->issue_date)->toImmutable(),
+                'chargedOn' => $invoice->period_start->toImmutable(),
                 'amount' => (float) $invoice->total,
                 'isPlanned' => false,
             ])
@@ -437,7 +448,7 @@ class Contract extends Model
             ->values();
 
         if ($this->status === 'active') {
-            $lastEnd = $invoices->where('kind', 'rent')->max('period_end');
+            $lastEnd = $invoices->max('period_end');
             $start = $lastEnd ? $lastEnd->toImmutable()->addDay() : $this->start_date->toImmutable();
             $months = self::BILLING_CYCLES[$this->billing_cycle];
 
@@ -459,9 +470,11 @@ class Contract extends Model
     }
 
     /**
-     * Cleared payments allocated to the contract's invoices, each counting
-     * what it put towards them. Uses loaded `invoices.allocations.payment`
-     * when present.
+     * Cleared payments towards the contract, each counting what it put
+     * towards the contract's invoices plus, when it was collected towards
+     * this contract, the credit it still holds for the next ones. Uses
+     * loaded `invoices.allocations.payment` and `payments` (with an
+     * `allocated` sum) when present.
      *
      * @return list<array{key: string, id: int, number: string, paidOn: CarbonImmutable, method: string, amount: float}>
      */
@@ -470,21 +483,39 @@ class Contract extends Model
         $allocations = $this->relationLoaded('invoices')
             ? $this->invoices->flatMap(fn (Invoice $invoice) => $invoice->allocations)
             : PaymentAllocation::query()->whereIn('invoice_id', $this->invoices()->select('id'))->with('payment')->get();
+        $credits = ($this->relationLoaded('payments') ? $this->payments : $this->payments()->withSum('allocations as allocated', 'amount')->get())
+            ->filter(fn (Payment $payment) => $payment->status === 'cleared');
+        $entry = fn (Payment $payment, float $amount) => [
+            'key' => "payment-{$payment->id}",
+            'id' => $payment->id,
+            'number' => $payment->payment_number,
+            'paidOn' => $payment->received_on->toImmutable(),
+            'method' => $payment->method,
+            'amount' => $amount,
+        ];
 
-        return $allocations
+        $entries = $allocations
             ->filter(fn (PaymentAllocation $allocation) => $allocation->payment->status === 'cleared')
             ->groupBy('payment_id')
-            ->map(fn ($shares) => [
-                'key' => "payment-{$shares->first()->payment_id}",
-                'id' => $shares->first()->payment->id,
-                'number' => $shares->first()->payment->payment_number,
-                'paidOn' => $shares->first()->payment->received_on->toImmutable(),
-                'method' => $shares->first()->payment->method,
-                'amount' => round($shares->sum(fn (PaymentAllocation $share) => (float) $share->amount), 2),
-            ])
-            ->sortBy([['paidOn', 'asc'], ['id', 'asc']])
-            ->values()
-            ->all();
+            ->map(fn ($shares) => $entry($shares->first()->payment, round($shares->sum(fn (PaymentAllocation $share) => (float) $share->amount), 2)));
+
+        foreach ($credits as $payment) {
+            $credit = $payment->unallocatedAmount();
+
+            if ($credit > 0) {
+                $entries->put($payment->id, $entry($payment, round(($entries->get($payment->id)['amount'] ?? 0) + $credit, 2)));
+            }
+        }
+
+        return $entries->sortBy([['paidOn', 'asc'], ['id', 'asc']])->values()->all();
+    }
+
+    /**
+     * Bills run to the contract's end date.
+     */
+    protected function lastBillingDay(): ?CarbonInterface
+    {
+        return $this->end_date;
     }
 
     /**
@@ -495,11 +526,13 @@ class Contract extends Model
     {
         $this->invoiceThrough($through);
         $this->unsetRelation('invoices');
+        $this->unsetRelation('payments');
     }
 
     /**
-     * A payment from the client, spread over the contract's open invoices
-     * oldest first.
+     * A payment from the client towards this contract, spread over its open
+     * invoices oldest first. What is left over stays on the payment as
+     * credit, which settles the contract's next invoices as they are issued.
      */
     protected function recordCollection(float $amount, CarbonInterface $through, string $method, ?User $by): Payment
     {
@@ -508,6 +541,7 @@ class Contract extends Model
         $payment->forceFill([
             'company_id' => $this->company_id,
             'client_id' => $this->client_id,
+            'contract_id' => $this->id,
             'payment_number' => Payment::nextNumber($this->company_id, $receivedOn),
         ])->save();
 
@@ -534,13 +568,14 @@ class Contract extends Model
      * for it today: occupied while a running line covers today, reserved for a
      * draft or a line that starts later, vacant once the contract is over and
      * no other live contract holds it. Units under maintenance or inactive are
-     * left alone.
+     * left alone. Its rooms recount the beds taken in them.
      */
     public function syncUnitStatuses(): void
     {
         $today = today();
+        $lines = $this->lines()->with(['apartment', 'shop'])->get();
 
-        foreach ($this->lines()->with(['apartment', 'shop'])->get() as $line) {
+        foreach ($lines as $line) {
             $unit = $line->apartment ?? $line->shop;
 
             if ($unit === null || ! in_array($unit->status, ['vacant', 'occupied', 'reserved'], true)) {
@@ -559,6 +594,8 @@ class Contract extends Model
 
             $unit->update(['status' => $status]);
         }
+
+        Room::query()->whereKey($lines->pluck('room_id')->filter()->unique())->get()->each->recalculateOccupancy();
     }
 
     /**
@@ -624,13 +661,14 @@ class Contract extends Model
     }
 
     /**
-     * The client's monthly gas bills, when gas is not included in the rent.
+     * Payments collected towards this contract's bill. Payments made
+     * against the client's invoices in general are not among them.
      *
-     * @return HasMany<GasBill, $this>
+     * @return HasMany<Payment, $this>
      */
-    public function gasBills(): HasMany
+    public function payments(): HasMany
     {
-        return $this->hasMany(GasBill::class);
+        return $this->hasMany(Payment::class);
     }
 
     /**

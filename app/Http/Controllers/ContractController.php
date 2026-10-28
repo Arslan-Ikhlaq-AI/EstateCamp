@@ -12,7 +12,6 @@ use App\Models\Company;
 use App\Models\Contract;
 use App\Models\ContractDocument;
 use App\Models\ContractLine;
-use App\Models\GasBill;
 use App\Models\Invoice;
 use App\Models\Occupancy;
 use App\Models\Property;
@@ -36,12 +35,7 @@ class ContractController extends Controller
     /**
      * Request fields saved by hand rather than mass assigned.
      */
-    private const RELATION_FIELDS = ['client_mode', 'client_id', 'new_client', 'lines', 'documents'];
-
-    /**
-     * The list's gas filter: gas included in the rent, or billed monthly.
-     */
-    private const GAS_OPTIONS = ['included', 'billed'];
+    private const RELATION_FIELDS = ['client_mode', 'client_id', 'new_client', 'monthly_rent', 'lines', 'documents'];
 
     /**
      * List the company's contracts with their value, what they rent and who is staying.
@@ -54,7 +48,7 @@ class ContractController extends Controller
             return Inertia::render('Contracts/Index', ['company' => null]);
         }
 
-        $filters = $this->listFilters($request, ['status' => Contract::STATUSES, 'types' => Client::TYPES, 'gas' => self::GAS_OPTIONS]);
+        $filters = $this->listFilters($request, ['status' => Contract::STATUSES, 'types' => Client::TYPES]);
         $typeCounts = $this->filteredQuery($company, $filters, except: 'types')
             ->join('clients', 'clients.id', '=', 'contracts.client_id')
             ->toBase()
@@ -68,10 +62,6 @@ class ContractController extends Controller
             'facets' => [
                 'status' => $this->facetOptions(Contract::STATUSES, $this->countBy($this->filteredQuery($company, $filters, except: 'status'), 'status')),
                 'types' => array_map(fn (string $type) => ['value' => $type, 'count' => (int) $typeCounts->get($type, 0)], Client::TYPES),
-                'gas' => array_map(fn (string $option) => [
-                    'value' => $option,
-                    'count' => $this->filteredQuery($company, $filters, except: 'gas')->where('contracts.gas_included', $option === 'included')->count(),
-                ], self::GAS_OPTIONS),
             ],
             'summary' => $this->summary($company),
             'contracts' => $this->filteredQuery($company, $filters)
@@ -102,7 +92,8 @@ class ContractController extends Controller
     }
 
     /**
-     * Save a new draft contract with its lines and cheque schedule.
+     * Save a new contract with its lines and cheque schedule. It is active
+     * at once, so its units are taken for the term without anyone checking in.
      */
     public function store(ContractRequest $request): RedirectResponse
     {
@@ -114,10 +105,11 @@ class ContractController extends Controller
                 'company_id' => $company->id,
                 'client_id' => $this->clientId($request, $company),
                 'contract_number' => Contract::nextNumber($company->id, $request->date('start_date')),
-                'status' => 'draft',
+                'status' => 'active',
+                'signed_on' => $contract->signed_on ?? today(),
             ])->save();
 
-            $this->syncLines($contract, $request->validated('lines'));
+            $this->syncLines($contract, $request->validated('lines'), (float) $request->validated('monthly_rent'));
             $contract->syncUnitStatuses();
             $this->syncDocuments($contract, $request);
             $contract->syncCheques($request->chequeEntries(), $request->user());
@@ -125,12 +117,12 @@ class ContractController extends Controller
             return $contract;
         });
 
-        return to_route('contracts.show', $contract)->with('success', "Contract {$contract->contract_number} was saved as a draft. Activate it once it is signed.");
+        return to_route('contracts.show', $contract)->with('success', "Contract {$contract->contract_number} is active. Its units are taken from {$contract->start_date->format('j M Y')}.");
     }
 
     /**
-     * Show a contract with its lines, the people staying under it, its
-     * invoices and, when the client pays for gas, its gas bills.
+     * Show a contract with its lines, the people staying under it and its
+     * invoices.
      */
     public function show(Request $request, Contract $contract): Response
     {
@@ -154,7 +146,6 @@ class ContractController extends Controller
             ->get();
         $current = $stays->whereNull('check_out_date');
         $invoices = $contract->invoices()->orderByDesc('period_start')->orderByDesc('id')->get();
-        $gasBills = $contract->gasBills()->with(GasBillController::listRelations())->orderByDesc('period_start')->orderByDesc('id')->get();
         $period = $contract->status === 'active' ? $contract->nextBillingPeriod() : null;
         $cheques = $contract->cheques()
             ->with(['chequeStatus:id,name,slug,color,stage', 'replacement:id,replaces_id', 'payment:id,cheque_id,payment_number', ...ChequeController::historyRelations()])
@@ -205,7 +196,6 @@ class ContractController extends Controller
                 'paid' => round((float) $invoices->where('status', '!=', 'void')->sum('amount_paid'), 2),
             ],
             'nextPeriod' => $period ? ['start' => $period[0]->toDateString(), 'end' => $period[1]->toDateString()] : null,
-            'gasBills' => $gasBills->map(fn (GasBill $bill) => GasBillController::details($bill)),
             'cheques' => $cheques->map(fn (Cheque $cheque) => ChequeController::details($cheque)),
             'banks' => ChequeController::knownBanks($contract->company),
             'chequeStatuses' => ChequeController::statusOptions(),
@@ -225,7 +215,6 @@ class ContractController extends Controller
                 'invoice' => $period !== null,
                 'checkIn' => $contract->status === 'active' && $contract->lines->contains(fn (ContractLine $line) => $line->housesOccupants()),
                 'scheduleCheques' => $contract->isEditable() && $cheques->isEmpty() && $contract->lines->isNotEmpty(),
-                'billGas' => ! $contract->gas_included && $contract->status !== 'draft',
             ],
         ]);
     }
@@ -252,10 +241,11 @@ class ContractController extends Controller
                 'id' => $contract->id,
                 'contract_number' => $contract->contract_number,
                 'status' => $contract->status,
-                ...$contract->only(['client_id', 'ejari_number', 'billing_cycle', 'payment_terms_days', 'security_deposit', 'gas_included', 'notes']),
+                ...$contract->only(['client_id', 'ejari_number', 'billing_cycle', 'payment_terms_days', 'security_deposit', 'notes']),
                 'start_date' => $contract->start_date->toDateString(),
                 'end_date' => $contract->end_date->toDateString(),
                 'signed_on' => $contract->signed_on?->toDateString(),
+                'monthly_rent' => round($contract->lines->sum(fn (ContractLine $line) => (float) $line->monthly_rate * $line->quantity), 2),
                 'lines' => $contract->lines->map(fn (ContractLine $line) => [
                     'id' => $line->id,
                     ...$line->only(['unit_type', 'property_id', 'room_id', 'apartment_id', 'shop_id', 'quantity', 'monthly_rate', 'billing_basis', 'vat_rate', 'description']),
@@ -278,7 +268,8 @@ class ContractController extends Controller
     }
 
     /**
-     * Save changes to a contract, its lines and its cheques.
+     * Save changes to a contract, its lines and its cheques. Saving a draft
+     * (a renewal) puts it in force.
      *
      * @throws ValidationException When the contract has ended, or a removed line has stays.
      */
@@ -288,20 +279,29 @@ class ContractController extends Controller
             throw ValidationException::withMessages(['status' => 'An ended or terminated contract can no longer be changed.']);
         }
 
-        $rebuilt = DB::transaction(function () use ($request, $contract) {
+        $wasDraft = $contract->status === 'draft';
+
+        $rebuilt = DB::transaction(function () use ($request, $contract, $wasDraft) {
             $contract->fill($request->safe()->except(self::RELATION_FIELDS));
             $contract->forceFill(['client_id' => $this->clientId($request, $contract->company)])->save();
 
-            $this->syncLines($contract, $request->validated('lines'));
-            $contract->syncUnitStatuses();
+            $this->syncLines($contract, $request->validated('lines'), (float) $request->validated('monthly_rent'));
+
+            if ($wasDraft) {
+                $contract->activate();
+            } else {
+                $contract->syncUnitStatuses();
+            }
+
             $this->syncDocuments($contract, $request);
 
             return $contract->syncCheques($request->chequeEntries(), $request->user());
         });
+        $saved = $wasDraft ? "Contract {$contract->contract_number} is now active." : "Contract {$contract->contract_number} was updated.";
 
         return to_route('contracts.show', $contract)->with('success', $rebuilt
-            ? "Contract {$contract->contract_number} was updated."
-            : "Contract {$contract->contract_number} was updated. Its cheque schedule was kept because cheques have already been deposited; adjust them on the contract page.");
+            ? $saved
+            : "{$saved} Its cheque schedule was kept because cheques have already been deposited; adjust them on the contract page.");
     }
 
     /**
@@ -361,7 +361,6 @@ class ContractController extends Controller
             'startDate' => $contract->start_date->toDateString(),
             'endDate' => $contract->end_date->toDateString(),
             'billingCycle' => $contract->billing_cycle,
-            'gasIncluded' => (bool) $contract->gas_included,
             'monthlyValue' => $contract->monthlyValue(),
             'units' => [
                 'beds' => (int) $lines->where('unit_type', 'bed')->sum('quantity'),
@@ -404,33 +403,50 @@ class ContractController extends Controller
     }
 
     /**
-     * Create, update and remove lines to match the submitted list. A line
-     * that people have stayed under cannot be removed; end it instead.
+     * Create, update and remove lines to match the submitted units, sharing
+     * the monthly rent between them. A new line rents its unit whole, with
+     * VAT on a shop; a line already on the contract keeps how many beds it
+     * rents, how it is billed and its VAT. A line that people have stayed
+     * under cannot be removed. Rooms the lines held before recount their beds.
      *
      * @param  list<array<string, mixed>>  $lines
      *
      * @throws ValidationException When a removed line has stays.
      */
-    private function syncLines(Contract $contract, array $lines): void
+    private function syncLines(Contract $contract, array $lines, float $monthlyRent): void
     {
         $existing = $contract->lines()->withCount('occupancies')->get()->keyBy('id');
-        $keptIds = [];
+        $previousRoomIds = $existing->pluck('room_id')->filter()->unique();
+        $kept = [];
 
         foreach ($lines as $attributes) {
-            $line = $existing->get($attributes['id'] ?? null) ?? new ContractLine;
-            $line->fill(collect($attributes)->except('id')->all());
-            $line->forceFill(['company_id' => $contract->company_id, 'contract_id' => $contract->id])->save();
-            $keptIds[] = $line->id;
+            $line = $existing->get($attributes['id'] ?? null) ?? new ContractLine([
+                'quantity' => 1,
+                'billing_basis' => 'contracted',
+                'vat_rate' => $attributes['unit_type'] === 'shop' ? ContractLine::SHOP_VAT_RATE : 0,
+            ]);
+            $line->fill(Arr::only($attributes, ['unit_type', 'property_id', 'room_id', 'apartment_id', 'shop_id', 'start_date', 'end_date']));
+            $kept[] = $line;
         }
+
+        ContractLine::shareRent($kept, $monthlyRent);
+
+        foreach ($kept as $line) {
+            $line->forceFill(['company_id' => $contract->company_id, 'contract_id' => $contract->id])->save();
+        }
+
+        $keptIds = array_map(fn (ContractLine $line) => $line->id, $kept);
 
         foreach ($existing->except($keptIds) as $removed) {
             if ($removed->occupancies_count > 0) {
-                throw ValidationException::withMessages(['lines' => 'A line that people have stayed under cannot be removed. Shorten its end date instead.']);
+                throw ValidationException::withMessages(['lines' => 'People have stayed in a unit you took off, so it stays on the contract.']);
             }
 
             $removed->delete();
             $this->releaseUnit($removed);
         }
+
+        Room::query()->whereKey($previousRoomIds)->get()->each->recalculateOccupancy();
     }
 
     /**
@@ -572,7 +588,6 @@ class ContractController extends Controller
             'billingCycles' => array_keys(Contract::BILLING_CYCLES),
             'banks' => ChequeController::knownBanks($company),
             'unitTypes' => ContractLine::UNIT_TYPES,
-            'billingBases' => ContractLine::BILLING_BASES,
         ];
     }
 
@@ -591,8 +606,7 @@ class ContractController extends Controller
                 ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%"))))
             ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('contracts.status', $filters['status']))
             ->when($except !== 'types' && $filters['types'] !== [], fn (Builder $query) => $query
-                ->whereHas('client', fn (Builder $clients) => $clients->whereIn('client_type', $filters['types'])))
-            ->when($except !== 'gas' && count($filters['gas']) === 1, fn (Builder $query) => $query->where('contracts.gas_included', $filters['gas'][0] === 'included'));
+                ->whereHas('client', fn (Builder $clients) => $clients->whereIn('client_type', $filters['types'])));
     }
 
     /**

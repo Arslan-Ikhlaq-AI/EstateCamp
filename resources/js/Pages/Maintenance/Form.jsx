@@ -34,12 +34,16 @@ const initialValues = (job, defaults, statuses, properties) => ({
     completed_on: job?.completed_on ?? todayIso(),
     notes: job?.notes ?? '',
     ...costValues(job),
+    // Added from a property's payments page: paid as it is added, today by default.
+    ...(!job && defaults?.from_payments ? { from_payments: true, payment_method: 'cash', paid_on: todayIso() } : {}),
 });
 
 /**
  * Report a problem, or correct one: where it is, what is wrong, who fixes
  * it and what it cost. A new job also takes the status it starts in; a
- * finished one needs the amount charged and the invoice.
+ * finished one needs the amount charged and the invoice. Opened from a
+ * property's payments page, the job is paid as it is added and saving
+ * goes back to that page.
  */
 export default function Form({ job, defaults, properties, categories, statuses, priorities, unitTypes, paymentMethods, currency }) {
     const { t } = useTranslation();
@@ -50,7 +54,22 @@ export default function Form({ job, defaults, properties, categories, statuses, 
     const property = properties.find((option) => option.id === data.property_id);
     const status = isEditing ? job.status : statuses.find((option) => option.id === data.maintenance_status_id);
     const isFinished = status?.stage === 'completed';
-    const title = isEditing ? t('maintenance.form.editTitle', { number: job.number }) : t('maintenance.form.addTitle');
+    const isPaidNow = !isEditing && Boolean(data.from_payments);
+    const paymentsProperty = isPaidNow ? properties.find((option) => option.id === defaults.property_id) : null;
+    const title = isEditing ? t('maintenance.form.editTitle', { number: job.number }) : t(isPaidNow ? 'maintenance.form.addPaidTitle' : 'maintenance.form.addTitle');
+    const breadcrumbs = paymentsProperty
+        ? [
+              { label: t('properties.title'), href: route('properties.index') },
+              { label: paymentsProperty.name, href: route('properties.show', paymentsProperty.id) },
+              { label: t('propertyPayments.title'), href: route('properties.payments', paymentsProperty.id) },
+              { label: title },
+          ]
+        : [{ label: t('maintenance.title'), href: route('maintenance.index') }, { label: isEditing ? job.number : title }];
+    const cancelHref = isEditing
+        ? route('maintenance.show', job.id)
+        : paymentsProperty
+          ? route('properties.payments', { property: paymentsProperty.id, tab: 'out' })
+          : route('maintenance.index');
     const unitList = UNIT_LISTS[data.unit_type];
     const units = unitList ? (property?.[unitList] ?? []) : [];
 
@@ -83,11 +102,11 @@ export default function Form({ job, defaults, properties, categories, statuses, 
             <Head title={title} />
 
             <FormShell
-                breadcrumbs={[{ label: t('maintenance.title'), href: route('maintenance.index') }, { label: isEditing ? job.number : title }]}
+                breadcrumbs={breadcrumbs}
                 title={title}
-                description={t('maintenance.form.description')}
-                cancelHref={isEditing ? route('maintenance.show', job.id) : route('maintenance.index')}
-                submitLabel={isEditing ? t('leasing.common.saveChanges') : t('maintenance.form.save')}
+                description={t(isPaidNow ? 'maintenance.form.paidDescription' : 'maintenance.form.description')}
+                cancelHref={cancelHref}
+                submitLabel={isEditing ? t('leasing.common.saveChanges') : t(isPaidNow ? 'maintenance.form.savePaid' : 'maintenance.form.save')}
                 processing={processing}
                 onSubmit={submit}
             >
@@ -212,7 +231,10 @@ export default function Form({ job, defaults, properties, categories, statuses, 
                     </FieldGroup>
                 </FormSection>
 
-                <FormSection title={t('maintenance.form.cost.title')} description={t('maintenance.form.cost.description')}>
+                <FormSection
+                    title={t(isPaidNow ? 'maintenance.form.payment.title' : 'maintenance.form.cost.title')}
+                    description={t(isPaidNow ? 'maintenance.form.payment.description' : 'maintenance.form.cost.description')}
+                >
                     <div className="flex flex-col gap-4">
                         {isFinished && (
                             <p className="flex items-center gap-2 rounded-lg bg-warning/[0.08] px-3 py-2 text-[0.8125rem] text-warning ring-1 ring-warning/25">
@@ -229,6 +251,7 @@ export default function Form({ job, defaults, properties, categories, statuses, 
                             paymentMethods={paymentMethods}
                             invoice={job?.invoice_url ? { url: job.invoice_url, name: job.invoice_name } : null}
                             required={isFinished}
+                            isPaidNow={isPaidNow}
                         />
                     </div>
                 </FormSection>

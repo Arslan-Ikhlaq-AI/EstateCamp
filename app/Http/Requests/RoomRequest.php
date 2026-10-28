@@ -53,12 +53,13 @@ class RoomRequest extends FormRequest
             'gender_policy' => ['nullable', Rule::in(Room::GENDER_POLICIES)],
             'capacity' => [
                 'required', 'integer', 'between:1,100',
-                // Occupancy comes from check-ins, so a room cannot shrink below the people in it.
+                // A room cannot shrink below the people checked into it.
                 function (string $attribute, mixed $value, Closure $fail) {
                     $room = $this->route('room');
+                    $staying = $room instanceof Room ? $room->peopleStaying() : 0;
 
-                    if ($room instanceof Room && (int) $value < $room->occupied_count) {
-                        $fail("{$room->occupied_count} people are staying in this room, so it needs at least {$room->occupied_count} beds.");
+                    if ((int) $value < $staying) {
+                        $fail("{$staying} people are staying in this room, so it needs at least {$staying} beds.");
                     }
                 },
             ],

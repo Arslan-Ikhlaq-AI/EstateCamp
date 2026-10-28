@@ -15,6 +15,9 @@ use Illuminate\Validation\Validator;
  * what kind, who reported it and who fixes it, and what it cost. A new job
  * also takes the status it starts in; after that the status moves through
  * MaintenanceStatusChangeRequest, so its history is kept.
+ *
+ * A new job added from a property's payments page (`from_payments`) is
+ * paid as it is added: its amount, how it was paid and the day are needed.
  */
 class MaintenanceJobRequest extends CompanyScopedRequest
 {
@@ -51,7 +54,22 @@ class MaintenanceJobRequest extends CompanyScopedRequest
             'completed_on' => ['nullable', 'date', 'before_or_equal:today', 'after_or_equal:reported_on'],
             'notes' => ['nullable', 'string', 'max:5000'],
             ...$this->costRules(),
+            ...($job ? [] : ['from_payments' => ['nullable', 'boolean']]),
+            ...($this->recordsPayment() ? [
+                'amount' => ['required', 'numeric', 'gt:0', 'max:100000000'],
+                'payment_method' => ['required', Rule::in(MaintenanceJob::PAYMENT_METHODS)],
+                'paid_on' => ['required', 'date', 'before_or_equal:today'],
+            ] : []),
         ];
+    }
+
+    /**
+     * Whether this is a new job added from a property's payments page,
+     * whose payment is recorded with it.
+     */
+    public function recordsPayment(): bool
+    {
+        return $this->route('maintenanceJob') === null && $this->boolean('from_payments');
     }
 
     /**

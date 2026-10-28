@@ -27,52 +27,42 @@ beforeEach(function () {
 });
 
 /**
- * A contract renting one apartment, with its line covering the whole term.
+ * A contract renting one apartment for the whole term, at its list price.
  *
  * @return array<string, mixed>
  */
-function apartmentContractInput(Client $client, Apartment $apartment, array $overrides = [], array $lineOverrides = []): array
+function apartmentContractInput(Client $client, Apartment $apartment, array $overrides = []): array
 {
-    $start = $overrides['start_date'] ?? '2026-11-01';
-    $end = $overrides['end_date'] ?? '2027-10-31';
-
     return [
         'client_id' => $client->id,
-        'start_date' => $start,
-        'end_date' => $end,
+        'start_date' => '2026-11-01',
+        'end_date' => '2027-10-31',
         'billing_cycle' => 'monthly',
         'payment_terms_days' => 7,
         'security_deposit' => null,
+        'monthly_rent' => 5200,
         ...$overrides,
-        'lines' => [[
-            'unit_type' => 'apartment',
-            'property_id' => $apartment->property_id,
-            'apartment_id' => $apartment->id,
-            'quantity' => 1,
-            'monthly_rate' => 5200,
-            'billing_basis' => 'contracted',
-            'vat_rate' => 0,
-            'start_date' => $start,
-            'end_date' => $end,
-            ...$lineOverrides,
-        ]],
+        'lines' => [['unit_type' => 'apartment', 'property_id' => $apartment->property_id, 'apartment_id' => $apartment->id]],
     ];
 }
 
 /**
- * The submitted form for an existing contract, with its lines as they are.
+ * The submitted form for an existing contract, with its units and rent as they are.
  *
  * @return array<string, mixed>
  */
 function existingContractInput(Contract $contract): array
 {
+    $lines = $contract->lines()->orderBy('id')->get();
+
     return [
         ...$contract->only(['client_id', 'billing_cycle', 'payment_terms_days', 'security_deposit']),
         'start_date' => $contract->start_date->toDateString(),
         'end_date' => $contract->end_date->toDateString(),
-        'lines' => $contract->lines()->orderBy('id')->get()->map(fn (ContractLine $line) => [
+        'monthly_rent' => $lines->sum(fn (ContractLine $line) => (float) $line->monthly_rate * $line->quantity),
+        'lines' => $lines->map(fn (ContractLine $line) => [
             'id' => $line->id,
-            ...$line->only(['unit_type', 'property_id', 'room_id', 'apartment_id', 'shop_id', 'quantity', 'monthly_rate', 'billing_basis', 'vat_rate']),
+            ...$line->only(['unit_type', 'property_id', 'room_id', 'apartment_id', 'shop_id']),
             'start_date' => $line->start_date->toDateString(),
             'end_date' => $line->end_date->toDateString(),
         ])->all(),
@@ -165,7 +155,7 @@ describe('contracts', function () {
             );
     });
 
-    test('saves a new contract as a draft and reserves its apartment', function () {
+    test('saves a new contract as active and reserves its apartment until it starts', function () {
         $apartment = $this->alQuoz->apartments()->where('apartment_number', 'C-102')->sole();
 
         $this->actingAs($this->superAdmin)
@@ -174,7 +164,8 @@ describe('contracts', function () {
 
         $contract = Contract::where('contract_number', 'CTR-2026-0012')->sole();
 
-        expect($contract->status)->toBe('draft')
+        expect($contract->status)->toBe('active')
+            ->and($contract->signed_on->toDateString())->toBe('2026-10-17')
             ->and($contract->client_id)->toBe($this->alNoor->id)
             ->and($contract->lines()->count())->toBe(1)
             ->and($apartment->refresh()->status)->toBe('reserved');
@@ -188,29 +179,41 @@ describe('contracts', function () {
             ->assertSessionHasErrors('lines.0.apartment_id');
     });
 
-    test('refuses more beds than a room has free', function (string $roomNumber, int $beds) {
+    test('rents whole rooms only, and never a room another contract has beds in', function (string $type, string $roomNumber, string $field) {
         $room = $this->alQuoz->rooms()->where('room_number', $roomNumber)->sole();
 
         $this->actingAs($this->superAdmin)
             ->post(route('contracts.store'), [
                 ...apartmentContractInput($this->alNoor, $this->alQuoz->apartments()->first()),
-                'lines' => [[
-                    'unit_type' => 'bed',
-                    'property_id' => $this->alQuoz->id,
-                    'room_id' => $room->id,
-                    'quantity' => $beds,
-                    'monthly_rate' => 450,
-                    'billing_basis' => 'contracted',
-                    'vat_rate' => 0,
-                    'start_date' => '2026-11-01',
-                    'end_date' => '2027-10-31',
-                ]],
+                'lines' => [['unit_type' => $type, 'property_id' => $this->alQuoz->id, 'room_id' => $room->id]],
             ])
-            ->assertSessionHasErrors('lines.0.quantity');
+            ->assertSessionHasErrors($field);
     })->with([
-        'every bed already let' => ['101', 1],
-        'more than the room holds' => ['202', 7],
+        'beds in a free room' => ['bed', '202', 'lines.0.unit_type'],
+        'a room another contract has beds in' => ['room', '101', 'lines.0.room_id'],
     ]);
+
+    test('shares one monthly rent between the units in proportion to their list prices', function () {
+        $apartment = $this->alQuoz->apartments()->where('apartment_number', 'C-102')->sole();
+        $room = $this->alQuoz->rooms()->where('room_number', '202')->sole();
+        $room->update(['status' => 'active']);
+
+        $this->actingAs($this->superAdmin)
+            ->post(route('contracts.store'), [
+                ...apartmentContractInput($this->alNoor, $apartment, ['monthly_rent' => 8000]),
+                'lines' => [
+                    ['unit_type' => 'apartment', 'property_id' => $this->alQuoz->id, 'apartment_id' => $apartment->id],
+                    ['unit_type' => 'room', 'property_id' => $this->alQuoz->id, 'room_id' => $room->id],
+                ],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $lines = Contract::where('contract_number', 'CTR-2026-0012')->sole()->lines()->orderBy('id')->get();
+
+        // The apartment lists at 5,200 and the six-bed room at 3,300.
+        expect($lines->map(fn (ContractLine $line) => (float) $line->monthly_rate)->all())->toBe([4894.12, 3105.88])
+            ->and($lines->pluck('quantity')->all())->toBe([1, 1]);
+    });
 
     test('refuses a unit from a different property than the line', function () {
         $jebelAliRoom = $this->jebelAli->rooms()->first();
@@ -233,36 +236,45 @@ describe('contracts', function () {
             ->assertSessionHasErrors('lines.0.room_id');
     });
 
-    test('activating a contract that starts today marks its apartment occupied', function () {
+    test('a new contract that starts today takes its apartment before any cheque is collected', function () {
         $apartment = $this->alQuoz->apartments()->where('apartment_number', 'C-102')->sole();
 
         $this->actingAs($this->superAdmin)
-            ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $apartment, ['start_date' => '2026-10-17']));
+            ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $apartment, ['start_date' => '2026-10-17']))
+            ->assertSessionHasNoErrors();
 
         $contract = Contract::where('contract_number', 'CTR-2026-0012')->sole();
-        Storage::fake('local');
-        collectChequesDueThisYear($contract);
 
-        $this->actingAs($this->superAdmin)->post(route('contracts.activate', $contract))->assertSessionHasNoErrors();
-
-        expect($contract->refresh()->status)->toBe('active')
-            ->and($contract->signed_on->toDateString())->toBe('2026-10-17')
+        expect($contract->status)->toBe('active')
+            ->and($contract->cheques()->where('status', 'pending')->count())->toBe(13)
             ->and($apartment->refresh()->status)->toBe('occupied');
     });
 
-    test('refuses to activate a contract until this year\'s cheques are collected', function () {
-        $apartment = $this->alQuoz->apartments()->where('apartment_number', 'C-102')->sole();
+    test('a new contract takes a whole room without anyone checking in', function () {
+        $room = $this->alQuoz->rooms()->where('room_number', '202')->sole();
+        $room->update(['status' => 'active']);
 
         $this->actingAs($this->superAdmin)
-            ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $apartment, ['start_date' => '2026-10-17']));
+            ->post(route('contracts.store'), [
+                ...apartmentContractInput($this->alNoor, $this->alQuoz->apartments()->first(), ['start_date' => '2026-10-17', 'monthly_rent' => 3300]),
+                'lines' => [['unit_type' => 'room', 'property_id' => $this->alQuoz->id, 'room_id' => $room->id]],
+            ])
+            ->assertSessionHasNoErrors();
 
-        $contract = Contract::where('contract_number', 'CTR-2026-0012')->sole();
+        expect($room->peopleStaying())->toBe(0)
+            ->and($room->refresh()->occupied_count)->toBe($room->capacity);
+    });
+
+    test('saving a renewal puts it in force', function () {
+        $contract = Contract::where('contract_number', 'CTR-2026-0004')->sole();
+        $this->actingAs($this->superAdmin)->post(route('contracts.renew', $contract));
+        $renewal = $contract->renewal()->sole();
 
         $this->actingAs($this->superAdmin)
-            ->post(route('contracts.activate', $contract))
-            ->assertSessionHasErrors(['cheques' => "Collect this year's cheques before activating: 12 still need their number, bank and a photo of the front."]);
+            ->put(route('contracts.update', $renewal), existingContractInput($renewal))
+            ->assertSessionHasNoErrors();
 
-        expect($contract->refresh()->status)->toBe('draft');
+        expect($renewal->refresh()->status)->toBe('active');
     });
 
     test('activating a contract that starts later keeps its shop reserved', function () {
@@ -308,10 +320,9 @@ describe('contracts', function () {
             ->and($renewal->lines()->count())->toBe(1);
     });
 
-    test('updates the rate on a line', function () {
+    test('updates the contract\'s monthly rent', function () {
         $contract = Contract::where('contract_number', 'CTR-2026-0006')->sole();
-        $input = existingContractInput($contract);
-        $input['lines'][0]['monthly_rate'] = 3900;
+        $input = [...existingContractInput($contract), 'monthly_rent' => 3900];
 
         $this->actingAs($this->superAdmin)->put(route('contracts.update', $contract), $input)->assertSessionHasNoErrors();
 
