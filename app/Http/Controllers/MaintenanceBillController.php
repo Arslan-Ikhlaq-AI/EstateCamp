@@ -152,6 +152,9 @@ class MaintenanceBillController extends Controller
             'paymentReference' => $job->payment_reference,
             'voucherNumber' => $job->voucher_number,
             'paidBy' => $job->relationLoaded('paidBy') ? $job->paidBy?->name : null,
+            'awaitsHandover' => $job->awaitsHandover(),
+            'handedOverOn' => $job->handed_over_at?->toDateString(),
+            'handedOverTo' => $job->relationLoaded('handedOverTo') ? $job->handedOverTo?->name : null,
         ];
     }
 

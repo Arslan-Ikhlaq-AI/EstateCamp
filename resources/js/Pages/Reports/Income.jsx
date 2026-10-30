@@ -11,7 +11,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { ArrowDownLeftIcon, ArrowUpRightIcon, ReceiptTextIcon, ScaleIcon } from 'lucide-react';
 
-const IN = ['client_payment', 'rental_payment'];
+const IN = ['client_payment', 'rental_payment', 'extra_income'];
 const OUT = ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund', 'other_payment'];
 const METHODS = ['cash', 'bank_transfer', 'cheque', 'card'];
 

@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { todayIso } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link, useForm } from '@inertiajs/react';
@@ -123,7 +125,7 @@ function BillFigures({ figures, currency, isLarge = false }) {
 /**
  * What an account holds here, such as "2 rooms · 1 shop".
  */
-function useUnitsSummary() {
+export function useUnitsSummary() {
     const { t } = useTranslation();
 
     return (units) =>
@@ -173,11 +175,16 @@ function CollectHint({ error, toPay, carriedForward, amount, limit, currency }) 
  * are left to the cheque register, where they wait to clear. More than is
  * due is paid ahead and comes off the next bill, up to the end of the
  * agreement; once nothing more can be taken, the bill says so instead.
+ * With a single method, such as cash only, there is nothing to choose.
+ * Where `methods` offers a cheque, choosing it asks for the cheque's
+ * number, bank (`banks` are suggested) and date, and the cheque goes to
+ * the cheque register to be submitted.
  */
-function CollectForm({ account, currency, propertyId, through, methods }) {
+export function CollectForm({ account, currency, propertyId, through, methods, banks = [] }) {
     const { t, formatCurrency } = useTranslation();
     const [isRecorded, setIsRecorded] = useState(false);
-    const form = useForm({ amount: '', method: methods[0] });
+    const form = useForm({ amount: '', method: methods[0], cheque_number: '', bank_name: '', cheque_date: todayIso() });
+    const isCheque = form.data.method === 'cheque';
     const { toPay, carriedForward } = account.statement;
     const limit = account.collectionLimit;
     const amount = Number(form.data.amount) || 0;
@@ -202,7 +209,7 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => {
-                form.reset('amount');
+                form.reset('amount', 'cheque_number');
                 setIsRecorded(true);
             },
         });
@@ -262,21 +269,23 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
                         </InputGroupAddon>
                     )}
                 </InputGroup>
-                <Select items={methodItems} value={form.data.method} onValueChange={(value) => form.setData('method', value)}>
-                    <SelectTrigger aria-label={t('propertyAllocation.billing.collect.method')} className="w-30 shrink-0 md:w-36">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectGroup>
-                            {methodItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                    <item.icon />
-                                    {item.label}
-                                </SelectItem>
-                            ))}
-                        </SelectGroup>
-                    </SelectContent>
-                </Select>
+                {methodItems.length > 1 && (
+                    <Select items={methodItems} value={form.data.method} onValueChange={(value) => form.setData('method', value)}>
+                        <SelectTrigger aria-label={t('propertyAllocation.billing.collect.method')} className="w-30 shrink-0 md:w-36">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                {methodItems.map((item) => (
+                                    <SelectItem key={item.value} value={item.value}>
+                                        <item.icon />
+                                        {item.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                )}
                 <Tooltip>
                     <TooltipTrigger
                         render={
@@ -285,7 +294,7 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
                                 variant="brand"
                                 size="icon"
                                 className="shrink-0"
-                                disabled={form.processing || amount <= 0 || isOverLimit}
+                                disabled={form.processing || amount <= 0 || isOverLimit || (isCheque && (!form.data.cheque_number.trim() || !form.data.bank_name.trim()))}
                                 aria-label={t('propertyAllocation.billing.collect.record')}
                             />
                         }
@@ -295,6 +304,39 @@ function CollectForm({ account, currency, propertyId, through, methods }) {
                     <TooltipContent>{t('propertyAllocation.billing.collect.record')}</TooltipContent>
                 </Tooltip>
             </div>
+            {isCheque && (
+                <div className="grid w-full grid-cols-2 gap-2 md:w-auto md:grid-cols-[8rem_10rem_9rem]">
+                    <Input
+                        value={form.data.cheque_number}
+                        onChange={(event) => form.setData('cheque_number', event.target.value)}
+                        placeholder={t('propertyAllocation.billing.collect.chequeNumber')}
+                        aria-label={t('propertyAllocation.billing.collect.chequeNumber')}
+                        aria-invalid={Boolean(form.errors.cheque_number)}
+                        className="font-mono"
+                    />
+                    <Input
+                        value={form.data.bank_name}
+                        onChange={(event) => form.setData('bank_name', event.target.value)}
+                        list={`collect-banks-${account.key}`}
+                        placeholder={t('propertyAllocation.billing.collect.bank')}
+                        aria-label={t('propertyAllocation.billing.collect.bank')}
+                        aria-invalid={Boolean(form.errors.bank_name)}
+                    />
+                    <datalist id={`collect-banks-${account.key}`}>
+                        {banks.map((bank) => (
+                            <option key={bank} value={bank} />
+                        ))}
+                    </datalist>
+                    <Input
+                        type="date"
+                        value={form.data.cheque_date}
+                        onChange={(event) => form.setData('cheque_date', event.target.value)}
+                        aria-label={t('propertyAllocation.billing.collect.chequeDate')}
+                        aria-invalid={Boolean(form.errors.cheque_date)}
+                        className="col-span-2 md:col-span-1"
+                    />
+                </div>
+            )}
             <CollectHint error={error} toPay={toPay} carriedForward={carriedForward} amount={amount} limit={limit} currency={currency} />
             {recorded}
         </form>

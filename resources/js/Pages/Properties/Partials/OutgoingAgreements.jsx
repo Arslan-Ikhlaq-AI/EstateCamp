@@ -2,7 +2,6 @@ import { ContractStateBadge, amcNavTitle, amcRoute } from '@/Components/AmcBadge
 import ChequeSchedule from '@/Components/ChequeSchedule';
 import { LeaseStatusBadge } from '@/Components/LeasingBadges';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { useTranslation } from '@/hooks/use-translation';
@@ -193,17 +192,15 @@ export default function OutgoingAgreements({ agreements, currency, statuses, ban
 
     if (agreements.length === 0) {
         return (
-            <Card>
-                <Empty>
-                    <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                            <FileStackIcon />
-                        </EmptyMedia>
-                        <EmptyTitle>{t('propertyPayments.out.empty.title')}</EmptyTitle>
-                        <EmptyDescription>{t('propertyPayments.out.empty.description')}</EmptyDescription>
-                    </EmptyHeader>
-                </Empty>
-            </Card>
+            <Empty className="py-8 md:py-10">
+                <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                        <FileStackIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>{t('propertyPayments.out.empty.title')}</EmptyTitle>
+                    <EmptyDescription>{t('propertyPayments.out.empty.description')}</EmptyDescription>
+                </EmptyHeader>
+            </Empty>
         );
     }
 
@@ -211,18 +208,15 @@ export default function OutgoingAgreements({ agreements, currency, statuses, ban
     const setOpen = (key, isOpen) => setOpenKeys((keys) => (isOpen ? [...keys, key] : keys.filter((openKey) => openKey !== key)));
 
     return (
-        <Card className="gap-0 overflow-hidden py-0">
-            <CardHeader className="border-b pt-(--card-spacing)">
-                <CardTitle>{t('propertyPayments.out.title', { period: periodLabel })}</CardTitle>
-                <CardDescription>{t('propertyPayments.out.description')}</CardDescription>
-                <CardAction>
-                    <Button variant="outline" onClick={() => setOpenKeys(allOpen ? [] : agreements.map((agreement) => agreement.key))}>
-                        {allOpen ? <ChevronsDownUpIcon data-icon="inline-start" /> : <ChevronsUpDownIcon data-icon="inline-start" />}
-                        {t(`propertyPayments.out.${allOpen ? 'collapseAll' : 'expandAll'}`)}
-                    </Button>
-                </CardAction>
-            </CardHeader>
-            <div className="flex flex-col divide-y">
+        <div className="flex flex-col">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
+                <h3 className="text-[0.9375rem] font-semibold">{t('propertyPayments.out.listTitle', { count: agreements.length })}</h3>
+                <Button variant="outline" size="sm" onClick={() => setOpenKeys(allOpen ? [] : agreements.map((agreement) => agreement.key))}>
+                    {allOpen ? <ChevronsDownUpIcon data-icon="inline-start" /> : <ChevronsUpDownIcon data-icon="inline-start" />}
+                    {t(`propertyPayments.out.${allOpen ? 'collapseAll' : 'expandAll'}`)}
+                </Button>
+            </div>
+            <div className="flex flex-col divide-y border-t">
                 {agreements.map((agreement) => (
                     <AgreementRow
                         key={agreement.key}
@@ -237,6 +231,6 @@ export default function OutgoingAgreements({ agreements, currency, statuses, ban
                     />
                 ))}
             </div>
-        </Card>
+        </div>
     );
 }

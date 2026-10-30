@@ -2,8 +2,7 @@ import { BillStatusBadge, METHOD_ICONS } from '@/Components/FinanceBadges';
 import { ToneBadge } from '@/Components/LeasingBadges';
 import { useUnitLabel } from '@/Components/MaintenanceBadges';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
@@ -13,15 +12,21 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link, useForm } from '@inertiajs/react';
 import { CheckIcon, CircleDashedIcon, StampIcon, WrenchIcon } from 'lucide-react';
+import { HandoverBadge } from './CashHandover';
 
 /**
  * What a bill cost, how it is paid and a tick to pay it today. The amount
  * starts at the cost on file and can be changed, or typed in for work not
- * costed yet; paying records it as the cost and issues a voucher.
+ * costed yet; paying records it as the cost and issues a voucher. Paid
+ * other than in cash, it can carry the cheque or transfer reference.
  */
 function PayBillForm({ bill, currency, methods }) {
     const { t } = useTranslation();
-    const form = useForm({ amount: bill.amount === null ? '' : String(bill.amount), payment_method: bill.paymentMethod ?? methods[0] });
+    const form = useForm({
+        amount: bill.amount === null ? '' : String(bill.amount),
+        payment_method: methods.includes(bill.paymentMethod) ? bill.paymentMethod : methods[0],
+        reference: '',
+    });
     const amount = Number(form.data.amount) || 0;
     const methodItems = methods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`), icon: METHOD_ICONS[method] }));
     const error = Object.values(form.errors)[0];
@@ -85,6 +90,16 @@ function PayBillForm({ bill, currency, methods }) {
                     <TooltipContent>{t('propertyPayments.bills.pay')}</TooltipContent>
                 </Tooltip>
             </div>
+            {form.data.payment_method !== 'cash' && (
+                <Input
+                    value={form.data.reference}
+                    onChange={(event) => form.setData('reference', event.target.value)}
+                    maxLength={100}
+                    placeholder={t(`propertyPayments.bills.reference.${form.data.payment_method === 'cheque' ? 'cheque' : 'other'}`)}
+                    aria-label={t(`propertyPayments.bills.reference.${form.data.payment_method === 'cheque' ? 'cheque' : 'other'}`)}
+                    className="h-8 w-full font-mono text-sm md:w-[calc(11rem+9rem+0.5rem)]"
+                />
+            )}
             {error && <p className="text-xs text-destructive md:text-end">{error}</p>}
         </form>
     );
@@ -100,7 +115,9 @@ function PaidBill({ bill, currency }) {
         <div className="flex flex-col gap-0.5 md:items-end">
             <span className="font-heading text-[0.9375rem] font-bold text-success tabular-nums">{formatCurrency(bill.amount, currency)}</span>
             <span className="text-xs text-muted-foreground">
-                {t('propertyPayments.bills.paidOn', { date: formatDate(bill.paidOn), method: t(`leasing.methods.${bill.paymentMethod}`) })}
+                {[t('propertyPayments.bills.paidOn', { date: formatDate(bill.paidOn), method: t(`leasing.methods.${bill.paymentMethod}`) }), bill.paymentReference]
+                    .filter(Boolean)
+                    .join(' · ')}
             </span>
             {bill.voucherNumber && (
                 <Link
@@ -116,86 +133,75 @@ function PaidBill({ bill, currency }) {
 }
 
 /**
- * The maintenance work done here that the company pays for: bills still
- * unpaid, those paid in the period, and finished work not costed yet.
- * Each unpaid one is paid in its row by typing the amount and ticking.
+ * Maintenance work done here that the company pays for: bills still
+ * unpaid or not costed yet, each paid in its row by typing the amount,
+ * choosing how and ticking, and bills paid, with their voucher. Bills the
+ * camp boss paid in cash say whether they are settled with an admin when
+ * `showHandover` is set. Nothing is shown when there are no bills.
  */
-export default function MaintenanceBillsPanel({ bills, currency, methods, periodLabel }) {
+export default function MaintenanceBillsPanel({ bills, currency, methods, showHandover = false }) {
     const { t, formatDate } = useTranslation();
     const unitLabel = useUnitLabel();
 
+    if (bills.length === 0) {
+        return null;
+    }
+
     return (
-        <Card className="gap-0 overflow-hidden py-0">
-            <CardHeader className="border-b pt-(--card-spacing)">
-                <CardTitle>{t('propertyPayments.bills.title', { period: periodLabel })}</CardTitle>
-                <CardDescription>{t('propertyPayments.bills.description')}</CardDescription>
-            </CardHeader>
+        <ul className="flex flex-col divide-y border-t">
+            {bills.map((bill) => {
+                const detail = [
+                    unitLabel(bill),
+                    bill.vendor ?? t('finance.bills.noVendor'),
+                    bill.completedOn ? t('finance.bills.finishedOn', { date: formatDate(bill.completedOn) }) : null,
+                    showHandover && bill.handedOverOn && t('propertyPayments.receipts.confirmedBy', { name: bill.handedOverTo ?? '—', date: formatDate(bill.handedOverOn) }),
+                ]
+                    .filter(Boolean)
+                    .join(' · ');
 
-            {bills.length === 0 ? (
-                <Empty>
-                    <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                            <WrenchIcon />
-                        </EmptyMedia>
-                        <EmptyTitle>{t('propertyPayments.bills.empty.title', { period: periodLabel })}</EmptyTitle>
-                        <EmptyDescription>{t('propertyPayments.bills.empty.description')}</EmptyDescription>
-                    </EmptyHeader>
-                </Empty>
-            ) : (
-                <ul className="flex flex-col divide-y">
-                    {bills.map((bill) => {
-                        const detail = [
-                            unitLabel(bill),
-                            bill.vendor ?? t('finance.bills.noVendor'),
-                            bill.completedOn ? t('finance.bills.finishedOn', { date: formatDate(bill.completedOn) }) : null,
-                        ]
-                            .filter(Boolean)
-                            .join(' · ');
-
-                        return (
-                            <li key={bill.id} className="flex flex-col gap-3 px-4 py-4 sm:px-5 md:flex-row md:items-center md:gap-4 lg:px-6">
-                                <div className="flex min-w-0 flex-1 items-center gap-3">
-                                    <span
-                                        className={cn(
-                                            'flex size-10 shrink-0 items-center justify-center rounded-xl',
-                                            bill.isPaid ? 'bg-success/12 text-success' : 'bg-gold/20 text-gold-ink',
-                                        )}
+                return (
+                    <li key={bill.id} className="flex flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:gap-4">
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                            <span
+                                className={cn(
+                                    'flex size-10 shrink-0 items-center justify-center rounded-xl',
+                                    bill.isPaid ? 'bg-success/12 text-success' : 'bg-gold/20 text-gold-ink',
+                                )}
+                            >
+                                <WrenchIcon aria-hidden="true" className="size-5" />
+                            </span>
+                            <div className="flex min-w-0 flex-col gap-1">
+                                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                                    <Link
+                                        href={route('maintenance.show', bill.id)}
+                                        dir="auto"
+                                        className="min-w-0 truncate font-heading text-base font-bold underline-offset-4 hover:text-brand-ink hover:underline"
                                     >
-                                        <WrenchIcon aria-hidden="true" className="size-5" />
+                                        {bill.title}
+                                    </Link>
+                                    <span className="rounded-md bg-brand-cyan/10 px-1.5 py-px font-mono text-[0.6875rem] font-semibold whitespace-nowrap text-brand-ink">
+                                        {bill.number}
                                     </span>
-                                    <div className="flex min-w-0 flex-col gap-1">
-                                        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                                            <Link
-                                                href={route('maintenance.show', bill.id)}
-                                                dir="auto"
-                                                className="min-w-0 truncate font-heading text-base font-bold underline-offset-4 hover:text-brand-ink hover:underline"
-                                            >
-                                                {bill.title}
-                                            </Link>
-                                            <span className="rounded-md bg-brand-cyan/10 px-1.5 py-px font-mono text-[0.6875rem] font-semibold whitespace-nowrap text-brand-ink">
-                                                {bill.number}
-                                            </span>
-                                            {bill.amount === null ? (
-                                                <ToneBadge tone="muted" icon={CircleDashedIcon}>
-                                                    {t('propertyPayments.bills.noCost')}
-                                                </ToneBadge>
-                                            ) : (
-                                                <BillStatusBadge isPaid={bill.isPaid} />
-                                            )}
-                                        </span>
-                                        <span dir="auto" className="truncate text-xs text-muted-foreground">
-                                            {detail}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="md:shrink-0">
-                                    {bill.isPaid ? <PaidBill bill={bill} currency={currency} /> : <PayBillForm bill={bill} currency={currency} methods={methods} />}
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
-            )}
-        </Card>
+                                    {bill.amount === null ? (
+                                        <ToneBadge tone="muted" icon={CircleDashedIcon}>
+                                            {t('propertyPayments.bills.noCost')}
+                                        </ToneBadge>
+                                    ) : (
+                                        <BillStatusBadge isPaid={bill.isPaid} />
+                                    )}
+                                    {showHandover && bill.isPaid && <HandoverBadge item={bill} spent />}
+                                </span>
+                                <span dir="auto" className="line-clamp-2 text-xs text-muted-foreground sm:truncate">
+                                    {detail}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="md:shrink-0">
+                            {bill.isPaid ? <PaidBill bill={bill} currency={currency} /> : <PayBillForm bill={bill} currency={currency} methods={methods} />}
+                        </div>
+                    </li>
+                );
+            })}
+        </ul>
     );
 }

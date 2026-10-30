@@ -151,6 +151,9 @@ class RentalPaymentController extends Controller
             'voidReason' => $payment->void_reason,
             'fromCheque' => $payment->cheque_id !== null,
             'receivedBy' => $payment->relationLoaded('receivedBy') ? $payment->receivedBy?->name : null,
+            'awaitsHandover' => $payment->awaitsHandover(),
+            'handedOverOn' => $payment->handed_over_at?->toDateString(),
+            'handedOverTo' => $payment->relationLoaded('handedOverTo') ? $payment->handedOverTo?->name : null,
             'rental' => $rental ? [
                 'id' => $rental->id,
                 'number' => $rental->rental_number,

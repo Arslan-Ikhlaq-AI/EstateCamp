@@ -9,6 +9,7 @@ use App\Http\Controllers\CompanyOnboardingController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExtraIncomeController;
 use App\Http\Controllers\HeadLeaseController;
 use App\Http\Controllers\IncomeReportController;
 use App\Http\Controllers\InvoiceController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\PaymentOverviewController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PropertyBillingController;
+use App\Http\Controllers\PropertyCashHandoverController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyPaymentController;
 use App\Http\Controllers\PropertyTypeController;
@@ -112,11 +114,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('properties/{property}/billing', [PropertyBillingController::class, 'store'])->whereNumber('property')->name('properties.billing.store');
         Route::get('properties/{property}/tenant-contracts', [TenantContractController::class, 'show'])->whereNumber('property')->name('properties.tenant-contracts');
         Route::get('properties/{property}/payments', [PropertyPaymentController::class, 'show'])->whereNumber('property')->name('properties.payments');
+        Route::post('properties/{property}/cash-handover', [PropertyCashHandoverController::class, 'store'])->whereNumber('property')->name('properties.cash-handover.store');
 
         // One-off payments for a property, such as a permit fee, added from its payments page.
         Route::resource('other-payments', OtherPaymentController::class)->only(['create', 'store', 'edit', 'update'])->parameters(['other-payments' => 'otherPayment'])->whereNumber('otherPayment');
         Route::post('other-payments/{otherPayment}/status', [OtherPaymentController::class, 'changeStatus'])->whereNumber('otherPayment')->name('other-payments.status');
         Route::get('other-payments/{otherPayment}/receipt', [OtherPaymentController::class, 'receipt'])->whereNumber('otherPayment')->name('other-payments.receipt');
+
+        // Extra income for a property besides rent, such as an internet or washing machine provider's share.
+        Route::resource('extra-incomes', ExtraIncomeController::class)->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['extra-incomes' => 'extraIncome'])->whereNumber('extraIncome');
+        Route::post('extra-incomes/{extraIncome}/status', [ExtraIncomeController::class, 'changeStatus'])->whereNumber('extraIncome')->name('extra-incomes.status');
+        Route::get('extra-incomes/{extraIncome}/invoice', [ExtraIncomeController::class, 'invoice'])->whereNumber('extraIncome')->name('extra-incomes.invoice');
         Route::resource('rooms', RoomController::class)->except(['show', 'destroy']);
         Route::resource('apartments', ApartmentController::class)->except(['destroy']);
         Route::resource('shops', ShopController::class)->except(['destroy']);

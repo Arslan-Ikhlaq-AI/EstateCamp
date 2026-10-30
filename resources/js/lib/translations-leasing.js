@@ -343,6 +343,14 @@ export const leasing = {
                     date: 'Paid on',
                     submit: 'Mark as paid',
                 },
+                submitted: {
+                    button: 'Submit',
+                    action: 'Submit to the bank',
+                    title: 'Submit cheque {label}',
+                    description: 'The cheque goes to the bank and counts as received: it comes off the company’s bill.',
+                    date: 'Submitted on',
+                    submit: 'Submit cheque',
+                },
             },
             statusDialog: {
                 title: 'Update cheque {label}',
@@ -1140,6 +1148,14 @@ export const leasing = {
                     description: 'خرج المبلغ من البنك: يُحتسب مدفوعًا.',
                     date: 'تاريخ الدفع',
                     submit: 'تسجيل كمدفوع',
+                },
+                submitted: {
+                    button: 'تقديم',
+                    action: 'تقديم إلى البنك',
+                    title: 'تقديم الشيك {label}',
+                    description: 'يُقدَّم الشيك إلى البنك ويُحتسب مستلمًا: يُخصم من فاتورة الشركة.',
+                    date: 'تاريخ التقديم',
+                    submit: 'تقديم الشيك',
                 },
             },
             statusDialog: {

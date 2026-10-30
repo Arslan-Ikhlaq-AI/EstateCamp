@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Every movement of the company's money in one list, for the payments
  * overview and the reports: what came in (client payments that cleared,
- * and receipts from individuals renting rooms) and what went out (landlord and
+ * receipts from individuals renting rooms, and extra income such as a
+ * provider's share for serving a property) and what went out (landlord and
  * maintenance contractor cheques that cleared, maintenance bills paid,
  * one-off payments for a property, salaries paid and deposits handed back). Money still on its way, such as a cheque not yet cleared,
  * is left out until it moves.
@@ -25,7 +26,7 @@ trait ReadsCashFlow
      * The kinds of money movement, by direction.
      */
     public const CASH_CATEGORIES = [
-        'in' => ['client_payment', 'rental_payment'],
+        'in' => ['client_payment', 'rental_payment', 'extra_income'],
         'out' => ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund', 'other_payment'],
     ];
 
@@ -74,6 +75,21 @@ trait ReadsCashFlow
                     'room_rentals.rental_number',
                     'rental_payments.method',
                     'rental_payments.amount',
+                ]))
+            ->unionAll(DB::table('extra_incomes')
+                ->where('extra_incomes.company_id', $id)
+                ->where('extra_incomes.status', 'received')
+                ->select([
+                    DB::raw("'extra_income'"),
+                    DB::raw("'in'"),
+                    'extra_incomes.id',
+                    'extra_incomes.property_id',
+                    'extra_incomes.received_on',
+                    'extra_incomes.received_from',
+                    'extra_incomes.income_number',
+                    'extra_incomes.title',
+                    'extra_incomes.method',
+                    'extra_incomes.amount',
                 ]))
             ->unionAll(DB::table('cheques')
                 ->join('head_leases', fn ($join) => $join->on('head_leases.id', '=', 'cheques.chequeable_id')->where('cheques.chequeable_type', 'head_lease'))

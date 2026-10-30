@@ -130,6 +130,13 @@ function StatusDate({ cheque }) {
     return text ? <span className="max-w-36 text-xs text-pretty text-muted-foreground">{text}</span> : null;
 }
 
+/**
+ * The words for settling a cheque in one step: cashed for a client's,
+ * paid for one the company handed over, or the wording `quickSettle`
+ * names, such as submitted.
+ */
+const settleWording = (cheque, quickSettle) => (typeof quickSettle === 'string' ? quickSettle : cheque.direction === 'received' ? 'cashed' : 'paid');
+
 function ChequeActions({ cheque, statuses, quickSettle, onOpen }) {
     const { t } = useTranslation();
     const label = useChequeLabel()(cheque);
@@ -157,7 +164,7 @@ function ChequeActions({ cheque, statuses, quickSettle, onOpen }) {
                     {quickSettle && cheque.canSettle && (
                         <DropdownMenuItem onClick={() => onOpen('settle')}>
                             <CircleCheckIcon />
-                            {t(`leasing.cheques.settle.${cheque.direction === 'received' ? 'cashed' : 'paid'}.action`)}
+                            {t(`leasing.cheques.settle.${settleWording(cheque, quickSettle)}.action`)}
                         </DropdownMenuItem>
                     )}
                     {cheque.canEdit && (
@@ -435,12 +442,11 @@ function ChequeStatusDialog({ cheque, statuses, statusId, currency, open, onOpen
  * cheque cashed (deposited and cleared together when it is still in hand),
  * or one the company handed over paid.
  */
-function ChequeSettleDialog({ cheque, currency, open, onOpenChange }) {
+function ChequeSettleDialog({ cheque, way, currency, open, onOpenChange }) {
     const { t, formatMoney } = useTranslation();
     const label = useChequeLabel()(cheque);
     const form = useForm({ date: todayIso(), note: '' });
     const { data, setData, errors, processing } = form;
-    const way = cheque.direction === 'received' ? 'cashed' : 'paid';
 
     return (
         <ActionDialog
@@ -690,7 +696,8 @@ function ChequePhotoDialog({ cheque, open, onOpenChange }) {
  * its history or replace it. `showParty` adds who it is from or to and
  * under which agreement; `selectable` adds checkboxes for updating the
  * status of several cheques at once; `quickSettle` adds a button to mark a
- * client's cheque cashed, or one handed over paid, in one step.
+ * client's cheque cashed, or one handed over paid, in one step (or worded
+ * as it names, such as `submitted`).
  */
 export default function ChequeSchedule({ cheques, currency, statuses = [], showParty = false, selectable = false, banks = [], quickSettle = false }) {
     const { t, formatDate, formatMoney } = useTranslation();
@@ -812,7 +819,7 @@ export default function ChequeSchedule({ cheques, currency, statuses = [], showP
                     {quickSettle && cheque.canSettle && (
                         <Button type="button" variant="outline" size="xs" onClick={() => setDialog({ type: 'settle', cheque })} className="text-success">
                             <CircleCheckIcon data-icon="inline-start" />
-                            {t(`leasing.cheques.settle.${cheque.direction === 'received' ? 'cashed' : 'paid'}.button`)}
+                            {t(`leasing.cheques.settle.${settleWording(cheque, quickSettle)}.button`)}
                         </Button>
                     )}
                     {cheque.payment && (
@@ -880,7 +887,16 @@ export default function ChequeSchedule({ cheques, currency, statuses = [], showP
                     }}
                 />
             )}
-            {dialog?.type === 'settle' && <ChequeSettleDialog key={dialog.cheque.id} cheque={dialog.cheque} currency={currency} open onOpenChange={close} />}
+            {dialog?.type === 'settle' && (
+                <ChequeSettleDialog
+                    key={dialog.cheque.id}
+                    cheque={dialog.cheque}
+                    way={settleWording(dialog.cheque, quickSettle)}
+                    currency={currency}
+                    open
+                    onOpenChange={close}
+                />
+            )}
             {dialog?.type === 'history' && <ChequeHistoryDialog key={dialog.cheque.id} cheque={dialog.cheque} currency={currency} open onOpenChange={close} />}
             {dialog?.type === 'replace' && <ChequeReplaceDialog key={dialog.cheque.id} cheque={dialog.cheque} banks={banks} currency={currency} open onOpenChange={close} />}
             {dialog?.type === 'photo' && <ChequePhotoDialog key={dialog.cheque.id} cheque={dialog.cheque} open onOpenChange={close} />}

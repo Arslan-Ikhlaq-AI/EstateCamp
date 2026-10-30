@@ -7,6 +7,7 @@ use App\Models\HeadLease;
 use App\Models\MaintenanceContract;
 use App\Models\RoomRental;
 use App\Models\User;
+use App\Models\UserRole;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -52,5 +53,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('use-app', fn (User $user): bool => $user->canUseApp());
         Gate::define('view-staff', fn (User $user): bool => in_array($user->staffAccess(), ['supervisor', 'admin'], true));
         Gate::define('manage-staff', fn (User $user): bool => $user->staffAccess() === 'admin');
+
+        // The camp boss collects cash on site; only an admin confirms the company has received it.
+        Gate::define('confirm-cash-handover', fn (User $user): bool => $user->is_admin || $user->role?->slug === UserRole::SUPER_ADMIN);
     }
 }

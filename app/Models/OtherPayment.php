@@ -52,12 +52,22 @@ class OtherPayment extends Model
         return [
             'amount' => 'decimal:2',
             'payment_date' => 'date',
+            'handed_over_at' => 'datetime',
         ];
     }
 
     public function isPaid(): bool
     {
         return $this->status === 'paid';
+    }
+
+    /**
+     * Whether the camp boss paid this in cash out of the cash collected,
+     * not yet settled with an admin in a handover.
+     */
+    public function awaitsHandover(): bool
+    {
+        return $this->isPaid() && $this->method === 'cash' && $this->handed_over_at === null;
     }
 
     /**
@@ -73,12 +83,12 @@ class OtherPayment extends Model
      */
     public function markPending(): void
     {
-        $this->forceFill(['status' => 'pending', 'paid_by' => null])->save();
+        $this->forceFill(['status' => 'pending', 'paid_by' => null, 'handed_over_at' => null, 'handed_over_to' => null])->save();
     }
 
     public function cancel(): void
     {
-        $this->forceFill(['status' => 'cancelled', 'paid_by' => null])->save();
+        $this->forceFill(['status' => 'cancelled', 'paid_by' => null, 'handed_over_at' => null, 'handed_over_to' => null])->save();
     }
 
     /**
@@ -135,5 +145,16 @@ class OtherPayment extends Model
     public function paidBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'paid_by');
+    }
+
+    /**
+     * The admin who settled this cash payment in a handover with the camp
+     * boss.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function handedOverTo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'handed_over_to');
     }
 }

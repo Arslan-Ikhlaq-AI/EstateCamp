@@ -45,6 +45,7 @@ describe('the overview', function () {
                 ->where('totals', [
                     'client_payment' => ['count' => 6, 'amount' => 31780],
                     'rental_payment' => ['count' => 1, 'amount' => 1500],
+                    'extra_income' => ['count' => 0, 'amount' => 0],
                     'landlord_rent' => ['count' => 0, 'amount' => 0],
                     'maintenance' => ['count' => 1, 'amount' => 2400],
                     'salary' => ['count' => 0, 'amount' => 0],

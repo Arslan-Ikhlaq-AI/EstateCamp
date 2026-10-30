@@ -44,7 +44,7 @@ import {
 import { useMemo } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
-const IN = ['client_payment', 'rental_payment'];
+const IN = ['client_payment', 'rental_payment', 'extra_income'];
 const OUT = ['landlord_rent', 'salary', 'maintenance', 'maintenance_contract', 'deposit_refund', 'other_payment'];
 
 const sum = (totals, categories) => categories.reduce((total, category) => total + (totals?.[category]?.amount ?? 0), 0);

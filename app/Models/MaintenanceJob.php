@@ -86,6 +86,7 @@ class MaintenanceJob extends Model
             'started_on' => 'date',
             'completed_on' => 'date',
             'paid_on' => 'date',
+            'handed_over_at' => 'datetime',
             'amount' => 'decimal:2',
         ];
     }
@@ -146,6 +147,7 @@ class MaintenanceJob extends Model
     {
         $this->fill(Arr::only($cost, ['amount', 'payment_method', 'paid_on', 'invoice_number']));
         $this->syncVoucher();
+        $this->syncHandover();
         $this->save();
 
         if (! empty($cost['remove_invoice'])) {
@@ -195,6 +197,15 @@ class MaintenanceJob extends Model
     }
 
     /**
+     * Whether this is a bill the camp boss paid in cash out of the cash
+     * collected, not yet settled with an admin in a handover.
+     */
+    public function awaitsHandover(): bool
+    {
+        return $this->isPaid() && $this->isBill() && $this->payment_method === 'cash' && $this->handed_over_at === null;
+    }
+
+    /**
      * Record that the bill was paid on `$on`, issuing its payment voucher.
      */
     public function markPaid(CarbonInterface $on, string $method, ?string $reference = null, ?User $by = null): void
@@ -216,7 +227,18 @@ class MaintenanceJob extends Model
     {
         $this->forceFill(['paid_on' => null, 'payment_reference' => null, 'paid_by' => null]);
         $this->syncVoucher();
+        $this->syncHandover();
         $this->save();
+    }
+
+    /**
+     * An unpaid bill is no longer part of a cash handover.
+     */
+    private function syncHandover(): void
+    {
+        if ($this->paid_on === null) {
+            $this->forceFill(['handed_over_at' => null, 'handed_over_to' => null]);
+        }
     }
 
     /**
@@ -325,5 +347,16 @@ class MaintenanceJob extends Model
     public function paidBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'paid_by');
+    }
+
+    /**
+     * The admin who settled this cash payment in a handover with the camp
+     * boss.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function handedOverTo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'handed_over_to');
     }
 }

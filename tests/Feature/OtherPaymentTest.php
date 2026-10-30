@@ -60,9 +60,9 @@ test('adds a payment made now for a property, listed on its payments and in the 
     $this->actingAs($this->user)
         ->get(route('properties.payments', ['property' => $this->property, 'tab' => 'out']))
         ->assertInertia(fn (Assert $page) => $page
-            ->has('outgoing.others', 1)
-            ->where('outgoing.others.0.number', 'OP-2026-0001')
-            ->where('outgoing.others.0.paidTo', 'Dubai Civil Defence')
+            ->has('outgoing.bankOthers', 1)
+            ->where('outgoing.bankOthers.0.number', 'OP-2026-0001')
+            ->where('outgoing.bankOthers.0.paidTo', 'Dubai Civil Defence')
             ->where('summary.paidOut', 1250)
         );
 
@@ -90,7 +90,7 @@ test('a payment to pay is paid, put back to pay or cancelled, counting as money 
     $this->actingAs($this->user)
         ->get(route('properties.payments', $this->property))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('outgoing.others.0.isOverdue', true)
+            ->where('outgoing.othersToPay.0.isOverdue', true)
             ->where('summary.toPay', 400)
             ->where('summary.paidOut', 0)
         );
@@ -112,7 +112,7 @@ test('a payment to pay is paid, put back to pay or cancelled, counting as money 
     $this->actingAs($this->user)
         ->get(route('properties.payments', $this->property))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('outgoing.others.0.status', 'cancelled')
+            ->where('outgoing.othersToPay.0.status', 'cancelled')
             ->where('summary.toPay', 0)
             ->where('summary.paidOut', 0)
         );

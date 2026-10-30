@@ -161,6 +161,9 @@ class OtherPaymentController extends Controller
             'notes' => $payment->notes,
             'receiptUrl' => self::receiptUrl($payment),
             'isOverdue' => $payment->status === 'pending' && $payment->payment_date->lt(today()),
+            'awaitsHandover' => $payment->awaitsHandover(),
+            'handedOverOn' => $payment->handed_over_at?->toDateString(),
+            'handedOverTo' => $payment->relationLoaded('handedOverTo') ? $payment->handedOverTo?->name : null,
         ];
     }
 
