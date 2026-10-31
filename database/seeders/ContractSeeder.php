@@ -8,10 +8,9 @@ use App\Models\Property;
 use Illuminate\Database\Seeder;
 
 /**
- * Eleven client contracts covering every kind of line: blocks of beds
- * billed as contracted or as actually used, whole rooms, apartments and
- * shops (with VAT). Nine are running; two drafts hold units that are
- * reserved for next month.
+ * Eleven client contracts covering every kind of line: whole rooms,
+ * apartments and shops (with VAT). Nine are running; two drafts hold units
+ * that are reserved for next month.
  *
  * The occupied and reserved apartments and shops from ApartmentSeeder and
  * ShopSeeder are exactly the ones these contracts rent, and syncing the
@@ -68,9 +67,7 @@ class ContractSeeder extends Seeder
             [
                 'company_id' => $company->id,
                 'property_id' => $property->id,
-                'quantity' => $line['quantity'] ?? 1,
                 'monthly_rate' => $line['rate'],
-                'billing_basis' => $line['basis'] ?? 'contracted',
                 'vat_rate' => $line['vat'] ?? 0,
                 'start_date' => $contract->start_date,
                 'end_date' => $contract->end_date,
@@ -107,10 +104,10 @@ class ContractSeeder extends Seeder
                 'contract_number' => 'CTR-2026-0001', 'client' => ClientSeeder::GULF_BUILDERS, 'status' => 'active',
                 'start_date' => '2026-01-01', 'end_date' => '2027-12-31', 'signed_on' => '2025-12-20', 'billing_cycle' => 'monthly',
                 'payment_terms_days' => 7, 'security_deposit' => 10000, 'ejari_number' => 'EJ-2026-118720',
-                'notes' => 'Site crews for the Al Quoz warehouse project. Sixteen beds are paid for whether used or not.',
+                'notes' => 'Site crews for the Al Quoz warehouse project. Both dormitories are rented whole.',
                 'lines' => [
-                    ['type' => 'bed', 'property' => $aq, 'room' => '101', 'quantity' => 8, 'rate' => 450, 'description' => 'Dormitory beds for the site crew'],
-                    ['type' => 'bed', 'property' => $aq, 'room' => '102', 'quantity' => 8, 'rate' => 450, 'description' => 'Dormitory beds for the site crew'],
+                    ['type' => 'room', 'property' => $aq, 'room' => '101', 'rate' => 3600, 'description' => 'Dormitory for the site crew'],
+                    ['type' => 'room', 'property' => $aq, 'room' => '102', 'rate' => 3600, 'description' => 'Dormitory for the site crew'],
                     ['type' => 'apartment', 'property' => $aq, 'apartment' => 'C-101', 'rate' => 7500, 'description' => 'Project manager accommodation'],
                 ],
             ],
@@ -118,17 +115,17 @@ class ContractSeeder extends Seeder
                 'contract_number' => 'CTR-2026-0002', 'client' => ClientSeeder::AL_NOOR, 'status' => 'active',
                 'start_date' => '2026-03-01', 'end_date' => '2027-12-31', 'signed_on' => '2026-02-20', 'billing_cycle' => 'monthly',
                 'payment_terms_days' => 10, 'security_deposit' => 4800, 'ejari_number' => 'EJ-2026-131055',
-                'notes' => 'Supervisor beds billed on actual use: only beds with someone in them during the month are charged.',
+                'notes' => 'Two rooms for the facilities supervisors.',
                 'lines' => [
-                    ['type' => 'bed', 'property' => $aq, 'room' => '103', 'quantity' => 4, 'rate' => 600, 'basis' => 'actual', 'description' => 'Supervisor beds'],
-                    ['type' => 'bed', 'property' => $aq, 'room' => '201', 'quantity' => 4, 'rate' => 600, 'basis' => 'actual', 'description' => 'Supervisor beds'],
+                    ['type' => 'room', 'property' => $aq, 'room' => '103', 'rate' => 2400, 'description' => 'Supervisor room'],
+                    ['type' => 'room', 'property' => $aq, 'room' => '201', 'rate' => 2400, 'description' => 'Supervisor room'],
                 ],
             ],
             [
                 'contract_number' => 'CTR-2026-0003', 'client' => ClientSeeder::DESERT_LINE, 'status' => 'active',
                 'start_date' => '2026-02-01', 'end_date' => '2028-01-31', 'signed_on' => '2026-01-25', 'billing_cycle' => 'quarterly',
                 'payment_terms_days' => 14, 'security_deposit' => 12300, 'ejari_number' => 'EJ-2026-125409',
-                'notes' => 'Office staff housing. Whole rooms are charged per room, however many beds are used.',
+                'notes' => 'Office staff housing. Each room is charged whole, however many people stay in it.',
                 'lines' => [
                     ['type' => 'room', 'property' => $ja, 'room' => '103', 'rate' => 2200, 'description' => 'Twin room for female staff'],
                     ['type' => 'room', 'property' => $ja, 'room' => '201', 'rate' => 2200, 'description' => 'Twin room for male staff'],

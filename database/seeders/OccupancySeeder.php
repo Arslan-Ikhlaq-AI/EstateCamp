@@ -7,18 +7,17 @@ use App\Models\Room;
 use Illuminate\Database\Seeder;
 
 /**
- * The people staying in the demo rooms, checked into specific beds under
- * the contract lines that pay for them. The number of people in each room
- * matches RoomSeeder's occupied counts, which are then recalculated from
- * these stays. One past stay (a worker who left in June) shows history.
+ * The people staying in the demo rooms, checked into the rooms the
+ * contract lines rent. Each room's occupancy is then recalculated. One
+ * past stay (a worker who left in June) shows history.
  *
  * Safe to re-run: occupants are matched on their passport and stays on
- * their check-in date. Requires BedSeeder and ContractSeeder.
+ * their check-in date. Requires ContractSeeder.
  */
 class OccupancySeeder extends Seeder
 {
     /**
-     * Contracts by number, and rooms with their beds by "property code/room number".
+     * Contracts by number, and rooms by "property code/room number".
      *
      * @var array<string, mixed>
      */
@@ -52,7 +51,6 @@ class OccupancySeeder extends Seeder
             ->firstOrFail()
             ->rooms()
             ->where('room_number', $stay['room'])
-            ->with('beds')
             ->firstOrFail();
 
         $occupant = $company->occupants()->updateOrCreate(
@@ -75,7 +73,7 @@ class OccupancySeeder extends Seeder
             ->forceFill([
                 'company_id' => $company->id,
                 'contract_line_id' => $contract->lines->firstOrFail('room_id', $room->id)->id,
-                'bed_id' => $room->beds->firstOrFail('label', (string) $stay['bed'])->id,
+                'room_id' => $room->id,
                 'check_in_date' => $stay['in'],
                 'check_out_date' => $stay['out'] ?? null,
             ])
@@ -83,7 +81,7 @@ class OccupancySeeder extends Seeder
     }
 
     /**
-     * One entry per stay; a group of workers fills a room's beds in order.
+     * One entry per stay; a group of workers moves into a room together.
      *
      * @return list<array<string, mixed>>
      */
@@ -103,7 +101,7 @@ class OccupancySeeder extends Seeder
                 ['Abdul Karim', 'Bangladeshi', 'BD5520916'],
             ]),
             [
-                'contract' => 'CTR-2026-0001', 'property' => $aq, 'room' => '101', 'bed' => 8,
+                'contract' => 'CTR-2026-0001', 'property' => $aq, 'room' => '101',
                 'name' => 'Santosh Rai', 'nationality' => 'Nepali', 'passport' => 'NP3391047', 'phone' => '+971 52 300 1108',
                 'employee' => 'GB-1008', 'in' => '2026-01-05', 'out' => '2026-06-30',
                 'notes' => 'Finished his contract with Gulf Builders and flew home in June.',
@@ -129,10 +127,10 @@ class OccupancySeeder extends Seeder
                 ['Mark Dela Cruz', 'Filipino', 'P3957463B'],
             ]),
             [
-                'contract' => 'CTR-2026-0002', 'property' => $aq, 'room' => '201', 'bed' => 4,
+                'contract' => 'CTR-2026-0002', 'property' => $aq, 'room' => '201',
                 'name' => 'Sunil Perera', 'nationality' => 'Sri Lankan', 'passport' => 'SL8473021', 'phone' => '+971 52 300 2007',
                 'employee' => 'AN-2007', 'in' => '2026-05-03',
-                'notes' => 'Joined in May, so March and April were billed for three beds in room 201.',
+                'notes' => 'Joined the other supervisors in room 201 in May.',
             ],
             ...$this->crew('CTR-2026-0003', $ja, '103', '2026-02-01', 'DL', 3001, [
                 ['Grace Mendoza', 'Filipino', 'P4068574C', 'female'],
@@ -142,18 +140,18 @@ class OccupancySeeder extends Seeder
                 ['Kevin Fernandes', 'Indian', 'N9957463'],
             ]),
             [
-                'contract' => 'CTR-2026-0004', 'property' => $ja, 'room' => '101', 'bed' => 1,
+                'contract' => 'CTR-2026-0004', 'property' => $ja, 'room' => '101',
                 'name' => ClientSeeder::RAHUL, 'nationality' => 'Indian', 'passport' => 'P4821937', 'phone' => '+971 50 334 2190', 'in' => '2026-06-01',
             ],
             [
-                'contract' => 'CTR-2026-0005', 'property' => $ja, 'room' => '202', 'bed' => 1,
+                'contract' => 'CTR-2026-0005', 'property' => $ja, 'room' => '202',
                 'name' => ClientSeeder::DANIEL, 'nationality' => 'Nigerian', 'passport' => 'A07264519', 'phone' => '+971 54 771 0832', 'in' => '2026-04-15',
             ],
         ];
     }
 
     /**
-     * Stays for a group checking into consecutive beds of one room on the same day.
+     * Stays for a group checking into one room on the same day.
      *
      * @param  list<array{0: string, 1: string, 2: string, 3?: string}>  $people  Name, nationality, passport and optional gender.
      * @return list<array<string, mixed>>
@@ -164,7 +162,6 @@ class OccupancySeeder extends Seeder
             'contract' => $contract,
             'property' => $property,
             'room' => $room,
-            'bed' => $index + 1,
             'name' => $person[0],
             'nationality' => $person[1],
             'passport' => $person[2],

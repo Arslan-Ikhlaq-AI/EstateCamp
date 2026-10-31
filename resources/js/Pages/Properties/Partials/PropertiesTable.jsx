@@ -110,22 +110,22 @@ function PropertyCell({ property }) {
     );
 }
 
-function OccupancyCell({ beds }) {
+function OccupancyCell({ rooms }) {
     const { t, formatPercent } = useTranslation();
 
-    if (beds.total === 0) {
-        return <span className="text-xs text-muted-foreground">{t('properties.occupancy.noBeds')}</span>;
+    if (rooms.total === 0) {
+        return <span className="text-xs text-muted-foreground">{t('properties.occupancy.noRooms')}</span>;
     }
 
     return (
         <div className="flex items-center gap-2.5">
-            <RadialGauge value={beds.occupancyRate ?? 0} size={36} thickness={5} label={t('properties.columns.occupancy')} />
+            <RadialGauge value={rooms.occupancyRate ?? 0} size={36} thickness={5} label={t('properties.columns.occupancy')} />
             <div className="flex flex-col leading-tight">
                 <span className="text-sm font-bold tabular-nums">
-                    {beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
+                    {rooms.occupancyRate === null ? '—' : formatPercent(rooms.occupancyRate)}
                 </span>
                 <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-                    {t('properties.occupancy.beds', { occupied: beds.occupied, total: beds.total })}
+                    {t('properties.occupancy.rooms', { occupied: rooms.occupied, total: rooms.total })}
                 </span>
             </div>
         </div>
@@ -162,7 +162,7 @@ function Cell({ column, property, currency }) {
                 </div>
             );
         case 'occupancy':
-            return <OccupancyCell beds={property.beds} />;
+            return <OccupancyCell rooms={property.roomOccupancy} />;
         case 'units':
             return <UnitOccupancyCounts units={property.unitOccupancy} className="flex-nowrap" />;
         case 'rentRoll':

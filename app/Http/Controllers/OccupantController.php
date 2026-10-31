@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ListsRecords;
 use App\Http\Requests\OccupantRequest;
-use App\Models\Bed;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\ContractLine;
 use App\Models\Occupancy;
 use App\Models\Occupant;
 use Illuminate\Database\Eloquent\Builder;
@@ -51,7 +51,7 @@ class OccupantController extends Controller
             ],
             'summary' => $this->summary($company),
             'occupants' => $this->filteredQuery($company, $filters)
-                ->with(['client:id,name', 'currentStay.bed.room:id,room_number,property_id', 'currentStay.bed.room.property:id,name,code'])
+                ->with(['client:id,name', 'currentStay.room:id,room_number,property_id', 'currentStay.room.property:id,name,code'])
                 ->orderBy('full_name')
                 ->paginate($filters['perPage'])
                 ->withQueryString()
@@ -83,7 +83,7 @@ class OccupantController extends Controller
     {
         $occupant = $this->currentCompany($request)->occupants()->create($request->validated());
 
-        return to_route('occupants.show', $occupant)->with('success', "{$occupant->full_name} was registered. Check them into a bed when they arrive.");
+        return to_route('occupants.show', $occupant)->with('success', "{$occupant->full_name} was registered. Check them into a room when they arrive.");
     }
 
     /**
@@ -96,8 +96,8 @@ class OccupantController extends Controller
         $occupant->load([
             'client:id,name,client_type',
             'occupancies' => fn (HasMany $stays) => $stays->orderByDesc('check_in_date'),
-            'occupancies.bed.room:id,room_number,property_id,gender_policy',
-            'occupancies.bed.room.property:id,name,code',
+            'occupancies.room:id,room_number,property_id,gender_policy',
+            'occupancies.room.property:id,name,code',
             'occupancies.contractLine.contract:id,contract_number',
             'occupancies.roomRental:id,rental_number',
         ]);
@@ -184,10 +184,9 @@ class OccupantController extends Controller
     {
         return [
             'id' => $stay->id,
-            'property' => $stay->bed->room->property->only(['id', 'name', 'code']),
-            'roomId' => $stay->bed->room->id,
-            'roomNumber' => $stay->bed->room->room_number,
-            'bedLabel' => $stay->bed->label,
+            'property' => $stay->room->property->only(['id', 'name', 'code']),
+            'roomId' => $stay->room->id,
+            'roomNumber' => $stay->room->room_number,
             'checkInDate' => $stay->check_in_date->toDateString(),
         ];
     }
@@ -222,11 +221,18 @@ class OccupantController extends Controller
 
         return [
             'staying' => $company->occupancies()->whereNull('check_out_date')->count(),
-            'freeBeds' => Bed::query()
-                ->where('is_active', true)
-                ->whereHas('room', fn (Builder $rooms) => $rooms->where('company_id', $company->id)->where('status', 'active'))
-                ->whereDoesntHave('currentOccupancy')
-                ->count(),
+            // Places left in the rooms running contracts rent today, where people can still check in.
+            'freePlaces' => (int) ContractLine::query()
+                ->where('company_id', $company->id)
+                ->where('unit_type', 'room')
+                ->whereDate('start_date', '<=', today())
+                ->whereDate('end_date', '>=', today())
+                ->whereHas('contract', fn (Builder $contracts) => $contracts->where('status', 'active'))
+                ->whereHas('room', fn (Builder $rooms) => $rooms->where('status', 'active'))
+                ->with('room:id,capacity')
+                ->withCount(['occupancies as staying_count' => fn (Builder $stays) => $stays->whereNull('check_out_date')])
+                ->get()
+                ->sum(fn (ContractLine $line) => max(0, $line->capacity() - $line->staying_count)),
             'checkedIn' => $company->occupancies()->whereBetween('check_in_date', $month)->count(),
             'checkedOut' => $company->occupancies()->whereBetween('check_out_date', $month)->count(),
         ];

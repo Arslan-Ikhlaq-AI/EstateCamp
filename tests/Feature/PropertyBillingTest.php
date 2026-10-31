@@ -18,7 +18,7 @@ beforeEach(function () {
 
     $this->property = Property::factory()->create();
     $this->user = User::factory()->create(['company_id' => $this->property->company_id]);
-    $this->room = fn (string $number) => Room::factory()->create(['property_id' => $this->property->id, 'room_number' => $number, 'capacity' => 4, 'occupied_count' => 0, 'rent_per_bed' => 500]);
+    $this->room = fn (string $number) => Room::factory()->create(['property_id' => $this->property->id, 'room_number' => $number, 'capacity' => 4, 'monthly_rent' => 2000]);
     $this->contract = function (string $clientName, array $rooms, array $attributes = []): Contract {
         $contract = Contract::factory()->active()->create([
             'client_id' => Client::factory()->create(['company_id' => $this->property->company_id, 'name' => $clientName])->id,
@@ -26,7 +26,7 @@ beforeEach(function () {
         ]);
 
         foreach ($rooms as $room) {
-            ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => $room->id, 'quantity' => 1, 'monthly_rate' => 2000]);
+            ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => $room->id, 'monthly_rate' => 2000]);
         }
 
         return $contract;

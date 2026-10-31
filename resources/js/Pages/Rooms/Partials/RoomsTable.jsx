@@ -12,7 +12,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, DoorOpenIcon } from 'lucide-react';
 import RoomActions from './RoomActions';
-import { AmenityIcons, AvailabilityBadge, BedDots, RoomStatusBadge, useRoomPlacement } from './RoomBits';
+import { AmenityIcons, AvailabilityBadge, RoomStatusBadge, useRoomPlacement } from './RoomBits';
 import { GENDER_ICONS } from './roomOptions';
 
 /**
@@ -107,21 +107,16 @@ function Cell({ column, room, currency }) {
         }
         case 'occupancy':
             return (
-                <div className="flex w-36 flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                            {t('roomList.beds', { occupied: room.occupied, capacity: room.capacity })}
-                        </span>
-                        <AvailabilityBadge room={room} />
-                    </div>
-                    <BedDots capacity={room.capacity} occupied={room.occupied} status={room.status} />
+                <div className="flex w-36 items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground tabular-nums">{t('common.sleeps', { count: room.capacity })}</span>
+                    <AvailabilityBadge room={room} />
                 </div>
             );
         case 'rent':
-            return room.rentPerBed === null ? (
+            return room.monthlyRent === null ? (
                 <span className="text-xs text-muted-foreground">{t('roomList.noRate')}</span>
             ) : (
-                <span className="font-medium tabular-nums">{formatCurrency(room.rentPerBed, currency)}</span>
+                <span className="font-medium tabular-nums">{formatCurrency(room.monthlyRent, currency)}</span>
             );
         case 'amenities':
             return <AmenityIcons amenities={room.amenities} />;

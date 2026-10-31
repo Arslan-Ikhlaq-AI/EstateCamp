@@ -1,4 +1,4 @@
-import { BED_SEGMENTS } from '@/Components/BedBar';
+import { ROOM_SEGMENTS } from '@/Components/RoomBar';
 import {
     Card,
     CardContent,
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/empty';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
-import { BedDoubleIcon } from 'lucide-react';
+import { DoorOpenIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { Pie, PieChart } from 'recharts';
 
@@ -30,37 +30,37 @@ const COLORS = {
 };
 
 /**
- * Every bed by status as a donut, with the occupied count in the middle and
- * each status's count and share beside its swatch.
+ * Every room by state as a donut, with the occupied count in the middle and
+ * each state's count and share beside its swatch.
  */
-export default function BedCapacity({ beds, className }) {
+export default function RoomStatus({ rooms, className }) {
     const { t, dir, formatNumber, formatPercent } = useTranslation();
     const isAnimated = useMemo(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches, []);
 
     const config = Object.fromEntries(
-        BED_SEGMENTS.map(({ key }) => [key, { label: t(`dashboard.beds.${key}`), color: COLORS[key] }]),
+        ROOM_SEGMENTS.map(({ key }) => [key, { label: t(`dashboard.roomStates.${key}`), color: COLORS[key] }]),
     );
-    const segments = BED_SEGMENTS.filter(({ key }) => beds[key] > 0).map(({ key }) => ({
+    const segments = ROOM_SEGMENTS.filter(({ key }) => rooms[key] > 0).map(({ key }) => ({
         key,
-        value: beds[key],
+        value: rooms[key],
         fill: `var(--color-${key})`,
     }));
 
     return (
         <Card className={className}>
             <CardHeader>
-                <CardTitle>{t('dashboard.bedStatus.title')}</CardTitle>
-                <CardDescription>{t('dashboard.bedStatus.description')}</CardDescription>
+                <CardTitle>{t('dashboard.roomStatus.title')}</CardTitle>
+                <CardDescription>{t('dashboard.roomStatus.description')}</CardDescription>
             </CardHeader>
 
             <CardContent className="flex flex-col gap-5">
-                {beds.total === 0 ? (
+                {rooms.total === 0 ? (
                     <Empty className="p-4">
                         <EmptyHeader>
                             <EmptyMedia variant="icon">
-                                <BedDoubleIcon />
+                                <DoorOpenIcon />
                             </EmptyMedia>
-                            <EmptyTitle>{t('dashboard.bedStatus.empty')}</EmptyTitle>
+                            <EmptyTitle>{t('dashboard.roomStatus.empty')}</EmptyTitle>
                         </EmptyHeader>
                     </Empty>
                 ) : (
@@ -89,21 +89,21 @@ export default function BedCapacity({ beds, className }) {
                                 </PieChart>
                             </ChartContainer>
                             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                                <span className="font-heading text-3xl font-semibold tracking-tight">{formatNumber(beds.occupied)}</span>
+                                <span className="font-heading text-3xl font-semibold tracking-tight">{formatNumber(rooms.occupied)}</span>
                                 <span className="max-w-28 text-xs text-muted-foreground">
-                                    {t('dashboard.bedStatus.centerLabel', { count: beds.total })}
+                                    {t('dashboard.roomStatus.centerLabel', { count: rooms.total })}
                                 </span>
                             </div>
                         </div>
 
                         <ul className="flex flex-col divide-y rounded-lg ring-1 ring-foreground/[0.07]">
-                            {BED_SEGMENTS.map(({ key, swatch }) => (
+                            {ROOM_SEGMENTS.map(({ key, swatch }) => (
                                 <li key={key} className="flex items-center gap-2.5 px-3 py-2 text-sm">
                                     <span aria-hidden="true" className={cn('size-2.5 shrink-0 rounded-[3px]', swatch)} />
-                                    <span className="flex-1 text-muted-foreground">{t(`dashboard.beds.${key}`)}</span>
-                                    <span className="font-medium tabular-nums">{formatNumber(beds[key])}</span>
+                                    <span className="flex-1 text-muted-foreground">{t(`dashboard.roomStates.${key}`)}</span>
+                                    <span className="font-medium tabular-nums">{formatNumber(rooms[key])}</span>
                                     <span className="w-12 text-end text-xs text-muted-foreground tabular-nums">
-                                        {formatPercent((beds[key] / beds.total) * 100)}
+                                        {formatPercent((rooms[key] / rooms.total) * 100)}
                                     </span>
                                 </li>
                             ))}

@@ -6,7 +6,6 @@ use App\Models\ContractLine;
 use App\Models\Occupancy;
 use App\Models\Occupant;
 use App\Models\Property;
-use App\Models\Room;
 use App\Models\User;
 use Database\Seeders\ClientSeeder;
 use Database\Seeders\DatabaseSeeder;
@@ -24,32 +23,30 @@ beforeEach(function () {
     $this->room102 = $alQuoz->rooms()->where('room_number', '102')->sole();
     $this->line101 = ContractLine::where('room_id', $this->room101->id)->sole();
     $this->line102 = ContractLine::where('room_id', $this->room102->id)->sole();
-    $this->freeBed = $this->room101->beds()->where('label', '8')->sole();
 });
 
 /**
  * @return array<string, mixed>
  */
-function checkInInput(ContractLine $line, Occupant $occupant, int $bedId, array $overrides = []): array
+function checkInInput(ContractLine $line, Occupant $occupant, array $overrides = []): array
 {
     return [
         'contract_line_id' => $line->id,
         'occupant_id' => $occupant->id,
-        'bed_id' => $bedId,
         'check_in_date' => '2026-10-17',
         ...$overrides,
     ];
 }
 
-test('checks a new worker into a free bed and counts them in the room', function () {
+test('checks a new worker into the room their contract line rents', function () {
     $worker = Occupant::factory()->create(['client_id' => $this->gulfBuilders->id]);
 
     $this->actingAs($this->superAdmin)
-        ->post(route('occupancies.store'), checkInInput($this->line101, $worker, $this->freeBed->id))
+        ->post(route('occupancies.store'), checkInInput($this->line101, $worker))
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('occupants.show', $worker));
 
-    expect($worker->currentStay->bed_id)->toBe($this->freeBed->id)
+    expect($worker->currentStay->room_id)->toBe($this->room101->id)
         ->and($this->room101->peopleStaying())->toBe(8);
 });
 
@@ -60,30 +57,31 @@ test('refuses check-ins that break the rules', function (Closure $input, string 
 
     expect($this->room101->peopleStaying())->toBe(7);
 })->with([
-    'a bed someone is in' => [function () {
+    'a room already sleeping as many as it takes' => [function () {
         $worker = Occupant::factory()->create(['client_id' => $this->gulfBuilders->id]);
 
-        return checkInInput($this->line101, $worker, $this->room101->beds()->where('label', '1')->value('id'));
-    }, 'bed_id'],
-    'a line whose beds are all taken' => [function () {
+        return checkInInput($this->line102, $worker);
+    }, 'contract_line_id'],
+    'a room out of service' => [function () {
+        $this->room101->update(['status' => 'under_maintenance']);
         $worker = Occupant::factory()->create(['client_id' => $this->gulfBuilders->id]);
 
-        return checkInInput($this->line102, $worker, $this->room102->beds()->value('id'));
+        return checkInInput($this->line101, $worker);
     }, 'contract_line_id'],
     'someone registered with another client' => [function () {
         $stranger = Occupant::factory()->create(['client_id' => Client::where('name', ClientSeeder::AL_NOOR)->value('id')]);
 
-        return checkInInput($this->line101, $stranger, $this->freeBed->id);
+        return checkInInput($this->line101, $stranger);
     }, 'occupant_id'],
     'someone already staying' => [function () {
         $staying = Occupant::where('full_name', 'Mohammed Rafiq')->sole();
 
-        return checkInInput($this->line101, $staying, $this->freeBed->id);
+        return checkInInput($this->line101, $staying);
     }, 'occupant_id'],
     'a date in the future' => [function () {
         $worker = Occupant::factory()->create(['client_id' => $this->gulfBuilders->id]);
 
-        return checkInInput($this->line101, $worker, $this->freeBed->id, ['check_in_date' => '2026-10-20']);
+        return checkInInput($this->line101, $worker, ['check_in_date' => '2026-10-20']);
     }, 'check_in_date'],
 ]);
 
@@ -91,11 +89,10 @@ test('refuses a room meant for the other gender', function () {
     $desertLine = Client::where('name', ClientSeeder::DESERT_LINE)->sole();
     $maleRoom = Property::where('code', PropertySeeder::JEBEL_ALI)->sole()->rooms()->where('room_number', '201')->sole();
     $woman = Occupant::factory()->female()->create(['client_id' => $desertLine->id]);
-    $freeBed = $maleRoom->beds()->whereDoesntHave('currentOccupancy')->sole();
 
     $this->actingAs($this->superAdmin)
-        ->post(route('occupancies.store'), checkInInput(ContractLine::where('room_id', $maleRoom->id)->sole(), $woman, $freeBed->id))
-        ->assertSessionHasErrors('bed_id');
+        ->post(route('occupancies.store'), checkInInput(ContractLine::where('room_id', $maleRoom->id)->sole(), $woman))
+        ->assertSessionHasErrors('occupant_id');
 });
 
 test('refuses check-ins under a contract that is not running', function () {
@@ -103,11 +100,11 @@ test('refuses check-ins under a contract that is not running', function () {
     $worker = Occupant::factory()->create(['client_id' => $this->gulfBuilders->id]);
 
     $this->actingAs($this->superAdmin)
-        ->post(route('occupancies.store'), checkInInput($this->line101, $worker, $this->freeBed->id))
+        ->post(route('occupancies.store'), checkInInput($this->line101, $worker))
         ->assertSessionHasErrors('contract_line_id');
 });
 
-test('checks a worker out and frees the bed, which stays let to the contract', function () {
+test('checks a worker out and frees their place, while the room stays let to the contract', function () {
     $stay = Occupant::where('full_name', 'Mohammed Rafiq')->sole()->currentStay;
 
     $this->actingAs($this->superAdmin)
@@ -116,7 +113,7 @@ test('checks a worker out and frees the bed, which stays let to the contract', f
 
     expect($stay->refresh()->check_out_date->toDateString())->toBe('2026-10-17')
         ->and($this->room101->peopleStaying())->toBe(6)
-        ->and($this->room101->refresh()->occupied_count)->toBe(8);
+        ->and($this->room101->refresh()->is_occupied)->toBeTrue();
 });
 
 test('refuses a check-out on or before the check-in date', function () {
@@ -127,16 +124,18 @@ test('refuses a check-out on or before the check-in date', function () {
         ->assertSessionHasErrors('check_out_date');
 });
 
-test('the check-in page offers the line\'s free beds and the client\'s people who are not staying', function () {
+test('the check-in page shows each line\'s room and the client\'s people who are not staying', function () {
     $this->actingAs($this->superAdmin)
         ->get(route('occupancies.create', ['contract_line' => $this->line101->id]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Occupancies/CheckIn')
             ->has('lines', 8)
+            ->where('lines.0.id', $this->line101->id)
+            ->where('lines.0.roomNumber', '101')
+            ->where('lines.0.capacity', 8)
+            ->where('lines.0.staying', 7)
             ->where('selectedLineId', $this->line101->id)
-            ->has('beds', 1)
-            ->where('beds.0.id', $this->freeBed->id)
             ->has('occupants', 1)
             ->where('occupants.0.name', 'Santosh Rai')
         );
@@ -169,10 +168,9 @@ test('an occupant checked in cannot move to another client', function () {
 
 test('hides other companies\' stays and occupants', function () {
     $line = ContractLine::factory()->for(Contract::factory()->active())->create();
-    $room = Room::factory()->create(['property_id' => $line->property_id, 'capacity' => 2]);
     $occupant = Occupant::factory()->create(['client_id' => $line->contract->client_id]);
     $stay = new Occupancy(['check_in_date' => '2026-10-01']);
-    $stay->forceFill(['company_id' => $line->company_id, 'occupant_id' => $occupant->id, 'contract_line_id' => $line->id, 'bed_id' => $room->beds()->value('id')])->save();
+    $stay->forceFill(['company_id' => $line->company_id, 'occupant_id' => $occupant->id, 'contract_line_id' => $line->id, 'room_id' => $line->room_id])->save();
 
     $this->actingAs($this->superAdmin)->get(route('occupants.show', $occupant))->assertNotFound();
     $this->actingAs($this->superAdmin)->patch(route('occupancies.check-out', $stay), ['check_out_date' => '2026-10-17'])->assertNotFound();

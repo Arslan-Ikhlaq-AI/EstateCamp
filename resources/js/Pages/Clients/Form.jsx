@@ -15,13 +15,17 @@ const FIELDS = [
 
 const DEFAULTS = { client_type: 'company', status: 'active', id_type: 'passport' };
 
-export default function Form({ client, types, statuses, idTypes }) {
+export default function Form({ client, defaultType = 'company', types, statuses, idTypes }) {
     const { t } = useTranslation();
     const isEditing = client !== null;
-    const form = useForm(Object.fromEntries(FIELDS.map((field) => [field, client?.[field] ?? DEFAULTS[field] ?? ''])));
+    const defaults = { ...DEFAULTS, client_type: defaultType };
+    const form = useForm(Object.fromEntries(FIELDS.map((field) => [field, client?.[field] ?? defaults[field] ?? ''])));
     const { data, setData, errors, processing } = form;
     const isCompany = data.client_type === 'company';
     const title = isEditing ? t('leasing.clients.form.editTitle') : t('leasing.clients.form.addTitle');
+    const isPersonList = (client?.client_type ?? defaultType) === 'individual';
+    const listTitle = isPersonList ? t('leasing.individuals.title') : t('leasing.clients.title');
+    const listHref = isPersonList ? route('individuals.index') : route('clients.index');
 
     const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
 
@@ -32,10 +36,10 @@ export default function Form({ client, types, statuses, idTypes }) {
             <Head title={title} />
 
             <FormShell
-                breadcrumbs={[{ label: t('leasing.clients.title'), href: route('clients.index') }, { label: isEditing ? client.name : title }]}
+                breadcrumbs={[{ label: listTitle, href: listHref }, { label: isEditing ? client.name : title }]}
                 title={title}
                 description={t('leasing.clients.form.description')}
-                cancelHref={isEditing ? route('clients.show', client.id) : route('clients.index')}
+                cancelHref={isEditing ? route('clients.show', client.id) : listHref}
                 submitLabel={isEditing ? t('leasing.common.saveChanges') : t('leasing.clients.form.save')}
                 processing={processing}
                 onSubmit={submit}

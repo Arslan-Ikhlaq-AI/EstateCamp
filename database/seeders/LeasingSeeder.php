@@ -6,9 +6,9 @@ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 /**
- * The demo company's leasing: beds, landlords and head leases, clients and
- * their contracts, the people staying, the invoices and payments, the
- * cheques behind them, and individuals renting a room without a contract.
+ * The demo company's leasing: landlords and head leases, clients and their
+ * contracts, the people staying, the invoices and payments, the cheques
+ * behind them, and rooms rented short-term without a contract.
  * Requires PortfolioSeeder.
  */
 class LeasingSeeder extends Seeder
@@ -22,7 +22,6 @@ class LeasingSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            BedSeeder::class,
             LandlordSeeder::class,
             HeadLeaseSeeder::class,
             ClientSeeder::class,

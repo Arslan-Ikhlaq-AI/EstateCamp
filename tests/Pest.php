@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Cheque;
+use App\Models\Property;
+use Database\Seeders\PropertySeeder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -50,6 +52,17 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Let rooms 101 to 103 at Al Quoz and 101 at Jebel Ali, for tests that seed
+ * the portfolio without the contracts and stays a room's occupancy follows.
+ */
+function letDemoRooms(): void
+{
+    foreach ([PropertySeeder::AL_QUOZ => ['101', '102', '103'], PropertySeeder::JEBEL_ALI => ['101']] as $code => $roomNumbers) {
+        Property::where('code', $code)->sole()->rooms()->whereIn('room_number', $roomNumbers)->update(['is_occupied' => true]);
+    }
 }
 
 /**

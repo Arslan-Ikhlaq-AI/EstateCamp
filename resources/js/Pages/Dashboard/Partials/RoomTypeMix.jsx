@@ -22,7 +22,7 @@ const SLOTS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)'];
 const OTHER = 'var(--chart-3)';
 
 /**
- * How the portfolio's beds split across room types, with each type's
+ * How the portfolio's rooms split across room types, with each type's
  * occupancy beside it.
  */
 export default function RoomTypeMix({ roomTypes, className }) {
@@ -32,7 +32,7 @@ export default function RoomTypeMix({ roomTypes, className }) {
     const named = roomTypes.slice(0, SLOTS.length).map((roomType, index) => ({
         key: roomType.slug,
         label: tOr(`roomTypes.${roomType.slug}`, roomType.name),
-        beds: roomType.beds,
+        rooms: roomType.roomOccupancy,
         color: SLOTS[index],
     }));
     const rest = roomTypes.slice(SLOTS.length);
@@ -43,11 +43,11 @@ export default function RoomTypeMix({ roomTypes, className }) {
                   key: 'other',
                   label: t('dashboard.roomMix.other'),
                   color: OTHER,
-                  beds: rest.reduce(
+                  rooms: rest.reduce(
                       (sum, roomType) => ({
-                          total: sum.total + roomType.beds.total,
-                          occupied: sum.occupied + roomType.beds.occupied,
-                          available: sum.available + roomType.beds.available,
+                          total: sum.total + roomType.roomOccupancy.total,
+                          occupied: sum.occupied + roomType.roomOccupancy.occupied,
+                          available: sum.available + roomType.roomOccupancy.available,
                       }),
                       { total: 0, occupied: 0, available: 0 },
                   ),
@@ -55,9 +55,9 @@ export default function RoomTypeMix({ roomTypes, className }) {
           ]
         : named;
 
-    const total = slices.reduce((sum, slice) => sum + slice.beds.total, 0);
+    const total = slices.reduce((sum, slice) => sum + slice.rooms.total, 0);
     const config = Object.fromEntries(slices.map((slice) => [slice.key, { label: slice.label, color: slice.color }]));
-    const data = slices.map((slice) => ({ key: slice.key, value: slice.beds.total, fill: slice.color }));
+    const data = slices.map((slice) => ({ key: slice.key, value: slice.rooms.total, fill: slice.color }));
     const occupancy = ({ occupied, available }) => (occupied + available > 0 ? (occupied / (occupied + available)) * 100 : null);
 
     if (total === 0) {
@@ -76,7 +76,7 @@ export default function RoomTypeMix({ roomTypes, className }) {
                         <PieChart accessibilityLayer>
                             <ChartTooltip
                                 cursor={false}
-                                content={<ChartTooltipContent dir={dir} hideLabel nameKey="key" valueFormatter={(value) => `${formatNumber(value)} ${t('dashboard.roomMix.beds')}`} />}
+                                content={<ChartTooltipContent dir={dir} hideLabel nameKey="key" valueFormatter={(value) => `${formatNumber(value)} ${t('dashboard.roomMix.rooms')}`} />}
                             />
                             <Pie
                                 data={data}
@@ -95,13 +95,13 @@ export default function RoomTypeMix({ roomTypes, className }) {
                     </ChartContainer>
                     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                         <span className="font-heading text-2xl font-bold tracking-tight">{formatNumber(total)}</span>
-                        <span className="text-xs text-muted-foreground">{t('dashboard.roomMix.beds')}</span>
+                        <span className="text-xs text-muted-foreground">{t('dashboard.roomMix.rooms')}</span>
                     </div>
                 </div>
 
                 <ul className="flex w-full flex-col gap-2.5">
                     {slices.map((slice) => {
-                        const rate = occupancy(slice.beds);
+                        const rate = occupancy(slice.rooms);
 
                         return (
                             <li key={slice.key} className="flex items-center gap-3 text-sm">
@@ -112,9 +112,9 @@ export default function RoomTypeMix({ roomTypes, className }) {
                                         {rate === null ? '—' : t('dashboard.roomMix.occupied', { percent: formatPercent(rate) })}
                                     </span>
                                 </span>
-                                <span className="font-semibold tabular-nums">{formatNumber(slice.beds.total)}</span>
+                                <span className="font-semibold tabular-nums">{formatNumber(slice.rooms.total)}</span>
                                 <span className="w-11 text-end text-xs text-muted-foreground tabular-nums">
-                                    {formatPercent((slice.beds.total / total) * 100)}
+                                    {formatPercent((slice.rooms.total / total) * 100)}
                                 </span>
                             </li>
                         );

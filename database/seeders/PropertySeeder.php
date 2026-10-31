@@ -12,7 +12,7 @@ use Illuminate\Database\Seeder;
  * The leased property points at its landlord, which is created here with
  * its name and phone (LandlordSeeder later fills in the rest); the landlord
  * and lease columns stay empty on the owned property, where they do not
- * apply. The room and bed totals are set by RoomSeeder from the rooms.
+ * apply. The room and capacity totals are set by RoomSeeder from the rooms.
  * Requires CompanySeeder.
  */
 class PropertySeeder extends Seeder

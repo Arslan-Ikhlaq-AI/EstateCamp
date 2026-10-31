@@ -28,7 +28,7 @@ describe('the overview', function () {
                 ->where('period.from', '2026-10-01')
                 ->where('period.to', '2026-10-31')
                 ->where('previousPeriod', ['from' => '2026-09-01', 'to' => '2026-09-30'])
-                ->where('totals.client_payment', ['count' => 4, 'amount' => 27875])
+                ->where('totals.client_payment', ['count' => 4, 'amount' => 28175])
                 ->where('totals.maintenance', ['count' => 1, 'amount' => 180])
                 ->where('previousTotals.rental_payment', ['count' => 1, 'amount' => 1500])
                 ->where('previousTotals.maintenance', ['count' => 1, 'amount' => 2400])
@@ -43,7 +43,7 @@ describe('the overview', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->where('period.kind', 'month')
                 ->where('totals', [
-                    'client_payment' => ['count' => 6, 'amount' => 31780],
+                    'client_payment' => ['count' => 6, 'amount' => 32380],
                     'rental_payment' => ['count' => 1, 'amount' => 1500],
                     'extra_income' => ['count' => 0, 'amount' => 0],
                     'landlord_rent' => ['count' => 0, 'amount' => 0],
@@ -75,8 +75,8 @@ describe('the overview', function () {
         $this->actingAs($this->admin)
             ->get(route('payments.overview', ['period' => 'last_year']))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('outstanding.invoices', ['count' => 5, 'amount' => 39500])
-                ->where('outstanding.overdueInvoices', ['count' => 4, 'amount' => 37800])
+                ->where('outstanding.invoices', ['count' => 5, 'amount' => 39800])
+                ->where('outstanding.overdueInvoices', ['count' => 4, 'amount' => 38100])
                 ->where('outstanding.rentOwed', ['count' => 1, 'amount' => 1500])
                 ->where('outstanding.maintenanceBills', ['count' => 1, 'amount' => 650])
             );
@@ -121,11 +121,11 @@ describe('the payment lists', function () {
     test('narrow payments received, invoices and rent collections to a period', function () {
         $this->actingAs($this->admin)
             ->get(route('payments.index', ['period' => '2026-09']))
-            ->assertInertia(fn (Assert $page) => $page->where('payments.total', 7)->where('summary.received', ['amount' => 31780, 'count' => 6, 'inPeriod' => true]));
+            ->assertInertia(fn (Assert $page) => $page->where('payments.total', 7)->where('summary.received', ['amount' => 32380, 'count' => 6, 'inPeriod' => true]));
 
         $this->actingAs($this->admin)
             ->get(route('invoices.index', ['period' => '2026-09']))
-            ->assertInertia(fn (Assert $page) => $page->where('invoices.total', 7)->where('summary.invoiced', 46900));
+            ->assertInertia(fn (Assert $page) => $page->where('invoices.total', 7)->where('summary.invoiced', 47500));
 
         $this->actingAs($this->admin)
             ->get(route('rental-payments.index', ['period' => 'last_month']))

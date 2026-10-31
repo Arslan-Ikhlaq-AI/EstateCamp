@@ -24,12 +24,13 @@ import {
     WalletIcon,
 } from 'lucide-react';
 
+const RENTER_ICONS = { company: Building2Icon, individual: UserIcon };
 const STANDING_ICONS = { paid_up: CircleCheckIcon, due: ClockIcon, overdue: CircleAlertIcon };
 const STATUS_ICONS = { active: KeyRoundIcon, ended: CircleSlashIcon };
 
 /**
- * Short-term rentals: whole rooms rented to companies for a few months,
- * without a contract, with where each company's rent stands.
+ * Short-term rentals: whole rooms rented to companies or people for a few
+ * months, without a contract, with where each renter's rent stands.
  */
 export default function Index({ company, filters, facets, summary, rentals }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
@@ -65,17 +66,25 @@ export default function Index({ company, filters, facets, summary, rentals }) {
         {
             id: 'tenant',
             header: t('finance.rentals.columns.tenant'),
-            cell: (rental) =>
-                rental.tenant ? (
-                    <div className="flex max-w-56 flex-col">
-                        <Link href={route('clients.show', rental.tenant.id)} dir="auto" className="truncate font-medium underline-offset-4 hover:text-brand-ink hover:underline">
-                            {rental.tenant.name}
-                        </Link>
-                        {rental.tenant.phone && <span className="truncate text-xs text-muted-foreground tabular-nums">{rental.tenant.phone}</span>}
+            cell: (rental) => {
+                if (!rental.tenant) {
+                    return '—';
+                }
+
+                const RenterIcon = RENTER_ICONS[rental.tenant.type] ?? Building2Icon;
+
+                return (
+                    <div className="flex max-w-56 items-start gap-2">
+                        <RenterIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-label={t(`leasing.partyTypes.${rental.tenant.type}`)} />
+                        <div className="flex min-w-0 flex-col">
+                            <Link href={route('clients.show', rental.tenant.id)} dir="auto" className="truncate font-medium underline-offset-4 hover:text-brand-ink hover:underline">
+                                {rental.tenant.name}
+                            </Link>
+                            {rental.tenant.phone && <span className="truncate text-xs text-muted-foreground tabular-nums">{rental.tenant.phone}</span>}
+                        </div>
                     </div>
-                ) : (
-                    '—'
-                ),
+                );
+            },
         },
         {
             id: 'place',
@@ -144,11 +153,13 @@ export default function Index({ company, filters, facets, summary, rentals }) {
                         routeName="rentals.index"
                         filters={filters}
                         facets={{
+                            types: facets.types.map((option) => ({ ...option, label: t(`leasing.partyTypes.${option.value}`), icon: RENTER_ICONS[option.value] })),
                             standing: facets.standing.map((option) => ({ ...option, label: t(`finance.rentals.standing.${option.value}`), icon: STANDING_ICONS[option.value] })),
                             status: facets.status.map((option) => ({ ...option, label: t(`finance.rentals.status.${option.value}`), icon: STATUS_ICONS[option.value] })),
                             properties: facets.properties.map((option) => ({ ...option, icon: Building2Icon })),
                         }}
                         labels={{
+                            types: t('finance.rentals.filters.types'),
                             standing: t('finance.rentals.filters.standing'),
                             status: t('leasing.common.status'),
                             properties: t('finance.rentals.filters.properties'),

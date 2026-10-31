@@ -4,7 +4,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { BedDoubleIcon, Building2Icon, ChevronRightIcon, DoorOpenIcon, FilePlusIcon, HouseIcon, StoreIcon, UserIcon, UsersIcon } from 'lucide-react';
+import { Building2Icon, ChevronRightIcon, DoorOpenIcon, FilePlusIcon, HouseIcon, StoreIcon, UserIcon, UsersIcon } from 'lucide-react';
 
 /**
  * The first three clients keep their own colour; the rest fold into one
@@ -14,18 +14,18 @@ const SHARE_COLOURS = ['bg-cat-1', 'bg-cat-2', 'bg-cat-3'];
 const OTHER_COLOUR = 'bg-chart-3';
 
 /**
- * The property's beds as one bar split by client, with the free beds left
- * as track, and a legend naming each share.
+ * The property's rooms as one bar split by client, with the rooms nobody
+ * rents left as track, and a legend naming each share.
  */
-function BedShares({ clients, totalBeds }) {
+function RoomShares({ clients, totalRooms }) {
     const { t, formatNumber } = useTranslation();
-    const holding = clients.filter((client) => client.beds > 0);
-    const named = holding.slice(0, SHARE_COLOURS.length).map((client, index) => ({ key: client.id, label: client.name, beds: client.beds, colour: SHARE_COLOURS[index] }));
-    const otherBeds = holding.slice(SHARE_COLOURS.length).reduce((sum, client) => sum + client.beds, 0);
-    const shares = otherBeds > 0 ? [...named, { key: 'other', label: t('propertyShow.clients.otherClients'), beds: otherBeds, colour: OTHER_COLOUR }] : named;
-    const free = Math.max(totalBeds - holding.reduce((sum, client) => sum + client.beds, 0), 0);
+    const holding = clients.filter((client) => client.rooms > 0);
+    const named = holding.slice(0, SHARE_COLOURS.length).map((client, index) => ({ key: client.id, label: client.name, rooms: client.rooms, colour: SHARE_COLOURS[index] }));
+    const otherRooms = holding.slice(SHARE_COLOURS.length).reduce((sum, client) => sum + client.rooms, 0);
+    const shares = otherRooms > 0 ? [...named, { key: 'other', label: t('propertyShow.clients.otherClients'), rooms: otherRooms, colour: OTHER_COLOUR }] : named;
+    const free = Math.max(totalRooms - holding.reduce((sum, client) => sum + client.rooms, 0), 0);
 
-    if (totalBeds === 0 || shares.length === 0) {
+    if (totalRooms === 0 || shares.length === 0) {
         return null;
     }
 
@@ -33,11 +33,11 @@ function BedShares({ clients, totalBeds }) {
         <div className="flex flex-col gap-3">
             <div
                 role="img"
-                aria-label={shares.map((share) => `${share.label}: ${t('common.beds', { count: share.beds })}`).join(', ')}
+                aria-label={shares.map((share) => `${share.label}: ${t('common.rooms', { count: share.rooms })}`).join(', ')}
                 className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-muted"
             >
                 {shares.map((share) => (
-                    <span key={share.key} className={cn('h-full first:rounded-s-full', share.colour)} style={{ width: `${(share.beds / totalBeds) * 100}%` }} />
+                    <span key={share.key} className={cn('h-full first:rounded-s-full', share.colour)} style={{ width: `${(share.rooms / totalRooms) * 100}%` }} />
                 ))}
             </div>
             <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
@@ -45,7 +45,7 @@ function BedShares({ clients, totalBeds }) {
                     <li key={share.key} className="flex items-center gap-1.5">
                         <span aria-hidden="true" className={cn('size-2.5 rounded-full', share.colour)} />
                         <span dir="auto" className="font-medium">{share.label}</span>
-                        <span className="text-muted-foreground tabular-nums">{formatNumber(share.beds)}</span>
+                        <span className="text-muted-foreground tabular-nums">{formatNumber(share.rooms)}</span>
                     </li>
                 ))}
                 <li className="flex items-center gap-1.5">
@@ -76,7 +76,7 @@ function HoldingLink({ icon: Icon, label, href }) {
 }
 
 /**
- * Who rents what in the property: the beds split by client, then each
+ * Who rents what in the property: the rooms split by client, then each
  * client with their contracts, what they hold (each linking to the list
  * filtered to them) and their monthly value.
  */
@@ -107,7 +107,7 @@ export default function ClientShares({ property, clients, currency }) {
 
     return (
         <div className="flex flex-col gap-5">
-            <BedShares clients={clients} totalBeds={property.beds.total} />
+            <RoomShares clients={clients} totalRooms={property.roomOccupancy.total} />
 
             <ul className="flex flex-col divide-y rounded-xl ring-1 ring-foreground/[0.08]">
                 {clients.map((client) => (
@@ -136,9 +136,6 @@ export default function ClientShares({ property, clients, currency }) {
                                     {client.rooms > 0 && (
                                         <HoldingLink icon={DoorOpenIcon} label={t('propertyShow.clients.rooms', { count: client.rooms })} href={route('rooms.index', filter(client))} />
                                     )}
-                                    {client.beds > 0 && (
-                                        <HoldingLink icon={BedDoubleIcon} label={t('common.beds', { count: client.beds })} href={route('rooms.index', filter(client))} />
-                                    )}
                                     {client.shops > 0 && (
                                         <HoldingLink icon={StoreIcon} label={t('propertyShow.clients.shops', { count: client.shops })} href={route('shops.index', filter(client))} />
                                     )}
@@ -160,7 +157,7 @@ export default function ClientShares({ property, clients, currency }) {
                 ))}
             </ul>
             <p className="text-xs text-muted-foreground">
-                {t('propertyShow.clients.summary', { count: clients.length, beds: formatNumber(clients.reduce((sum, client) => sum + client.beds, 0)) })}
+                {t('propertyShow.clients.summary', { count: clients.length, rooms: formatNumber(clients.reduce((sum, client) => sum + client.rooms, 0)) })}
             </p>
         </div>
     );

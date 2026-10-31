@@ -173,7 +173,7 @@ class TenantContractController extends Controller
             'invoiced' => round((float) $contract->invoiced, 2),
             'lines' => $contract->lines->map(fn (ContractLine $line) => [
                 ...ContractController::lineDetails($line),
-                'capacity' => $line->bedCapacity(),
+                'capacity' => $line->capacity(),
                 'staying' => $line->staying_count,
                 'housesOccupants' => $line->housesOccupants(),
             ])->all(),
@@ -196,17 +196,17 @@ class TenantContractController extends Controller
     }
 
     /**
-     * How many rooms, beds, shops and apartments the lines rent. A room
-     * counts once, whether taken whole or a few beds at a time.
+     * How many rooms, shops and apartments the lines rent, and how many
+     * people the rooms sleep.
      *
      * @param  Collection<int, ContractLine>  $lines
-     * @return array{rooms: int, beds: int, shops: int, apartments: int}
+     * @return array{rooms: int, capacity: int, shops: int, apartments: int}
      */
     private function unitTotals(Collection $lines): array
     {
         return [
-            'rooms' => $lines->whereIn('unit_type', ['bed', 'room'])->pluck('room_id')->filter()->unique()->count(),
-            'beds' => (int) $lines->sum(fn (ContractLine $line) => $line->bedCapacity()),
+            'rooms' => $lines->where('unit_type', 'room')->pluck('room_id')->unique()->count(),
+            'capacity' => (int) $lines->sum(fn (ContractLine $line) => $line->capacity()),
             'shops' => $lines->where('unit_type', 'shop')->count(),
             'apartments' => $lines->where('unit_type', 'apartment')->count(),
         ];

@@ -10,21 +10,21 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
-    BedDoubleIcon,
-    BedSingleIcon,
     Building2Icon,
+    DoorOpenIcon,
     EyeIcon,
     LogInIcon,
     LogOutIcon,
     MarsIcon,
     PencilIcon,
+    UserCheckIcon,
     UserPlusIcon,
     UserRoundXIcon,
     UsersIcon,
     VenusIcon,
 } from 'lucide-react';
 
-const STATUS_ICONS = { staying: BedDoubleIcon, not_staying: UserRoundXIcon };
+const STATUS_ICONS = { staying: UserCheckIcon, not_staying: UserRoundXIcon };
 const GENDER_ICONS = { male: MarsIcon, female: VenusIcon };
 
 export default function Index({ company, filters, facets, summary, occupants }) {
@@ -84,7 +84,7 @@ export default function Index({ company, filters, facets, summary, occupants }) 
             cell: (occupant) =>
                 occupant.stay ? (
                     <div className="flex flex-col text-sm">
-                        <span>{t('leasing.common.roomBed', { room: occupant.stay.roomNumber, bed: occupant.stay.bedLabel })}</span>
+                        <span>{t('leasing.lines.roomName', { room: occupant.stay.roomNumber })}</span>
                         <span className="text-xs text-muted-foreground" dir="auto">
                             {occupant.stay.property.name} · {t('leasing.occupants.sinceDate', { date: formatDate(occupant.stay.checkInDate) })}
                         </span>
@@ -124,13 +124,13 @@ export default function Index({ company, filters, facets, summary, occupants }) 
             ) : (
                 <>
                     <section aria-label={t('leasing.occupants.stats.label')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-                        <StatCard icon={BedDoubleIcon} label={t('leasing.occupants.stats.staying')} value={formatNumber(summary.staying)} detail={t('leasing.occupants.stats.stayingDetail')} />
+                        <StatCard icon={UserCheckIcon} label={t('leasing.occupants.stats.staying')} value={formatNumber(summary.staying)} detail={t('leasing.occupants.stats.stayingDetail')} />
                         <StatCard
-                            icon={BedSingleIcon}
-                            tone={summary.freeBeds > 0 ? 'success' : 'primary'}
-                            label={t('leasing.occupants.stats.freeBeds')}
-                            value={formatNumber(summary.freeBeds)}
-                            detail={t('leasing.occupants.stats.freeBedsDetail')}
+                            icon={DoorOpenIcon}
+                            tone={summary.freePlaces > 0 ? 'success' : 'primary'}
+                            label={t('leasing.occupants.stats.freePlaces')}
+                            value={formatNumber(summary.freePlaces)}
+                            detail={t('leasing.occupants.stats.freePlacesDetail')}
                         />
                         <StatCard icon={LogInIcon} label={t('leasing.occupants.stats.checkedIn')} value={formatNumber(summary.checkedIn)} detail={t('leasing.occupants.stats.thisMonth')} />
                         <StatCard icon={LogOutIcon} label={t('leasing.occupants.stats.checkedOut')} value={formatNumber(summary.checkedOut)} detail={t('leasing.occupants.stats.thisMonth')} />

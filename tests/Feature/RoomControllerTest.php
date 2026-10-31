@@ -22,9 +22,8 @@ function validRoomInput(Property $property, array $overrides = []): array
         'room_type_id' => RoomType::where('slug', 'shared_room')->value('id'),
         'gender_policy' => 'male',
         'capacity' => 4,
-        'occupied_count' => 1,
         'area_sqm' => 24,
-        'rent_per_bed' => 650,
+        'monthly_rent' => 2600,
         'amenities' => ['air_conditioning', 'wifi'],
         'status' => 'active',
         ...$overrides,
@@ -52,6 +51,7 @@ describe('for the seeded demo company', function () {
 
         $this->superAdmin = User::where('email', 'omar.rahman@horizonfm.test')->sole();
         $this->alQuoz = Property::where('code', 'HFM-AQZ-01')->sole();
+        letDemoRooms();
     });
 
     test('lists rooms with their property, occupancy and portfolio summary', function () {
@@ -66,8 +66,9 @@ describe('for the seeded demo company', function () {
                 ->where('rooms.data.0.photoUrl', '/images/demo/room-dormitory.svg')
                 ->where('summary.rooms', 10)
                 ->where('summary.maintenance', 1)
-                ->where('summary.beds.occupancyRate', 87.1)
-                ->where('summary.rentRoll', 17450)
+                ->where('summary.roomOccupancy.occupancyRate', 44.4)
+                ->where('summary.roomOccupancy.available', 5)
+                ->where('summary.rentRoll', 11100)
             );
     });
 
@@ -80,8 +81,8 @@ describe('for the seeded demo company', function () {
         'type' => [['types' => ['dormitory']], 2],
         'status' => [['status' => ['under_maintenance']], 1],
         'gender' => [['gender' => ['female']], 2],
-        'available beds' => [['availability' => ['available']], 4],
-        'full' => [['availability' => ['full']], 5],
+        'vacant' => [['availability' => ['vacant']], 5],
+        'occupied' => [['availability' => ['occupied']], 4],
         'search by room number' => [['search' => '20'], 4],
         'search by property name' => [['search' => 'jebel'], 5],
     ]);
@@ -93,8 +94,8 @@ describe('for the seeded demo company', function () {
                 ->where('facets.properties.0.count', 5)
                 ->where('facets.properties.1.count', 5)
                 ->where('facets.availability', [
-                    ['value' => 'available', 'count' => 2],
-                    ['value' => 'full', 'count' => 3],
+                    ['value' => 'vacant', 'count' => 4],
+                    ['value' => 'occupied', 'count' => 1],
                 ])
             );
     });
@@ -103,7 +104,7 @@ describe('for the seeded demo company', function () {
         $this->actingAs($this->superAdmin)
             ->get(route('rooms.index', ['sort' => 'occupancy', 'direction' => 'asc']))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('rooms.data.0.occupied', 0)
+                ->where('rooms.data.0.occupied', false)
             );
     });
 
@@ -131,7 +132,8 @@ describe('for the seeded demo company', function () {
         $room = $this->alQuoz->rooms()->where('room_number', '301')->sole();
 
         expect($room->company_id)->toBe($this->alQuoz->company_id)
-            ->and($room->amenities)->toBe(['air_conditioning', 'wifi']);
+            ->and($room->amenities)->toBe(['air_conditioning', 'wifi'])
+            ->and((float) $room->monthly_rent)->toBe(2600.0);
         expect($room->attachments()->where('is_primary', true)->count())->toBe(1);
         expect($room->attachments()->count())->toBe(2);
         expect($this->alQuoz->refresh()->total_rooms)->toBe(6)
@@ -147,7 +149,7 @@ describe('for the seeded demo company', function () {
         expect($this->alQuoz->rooms()->count())->toBe(5);
     })->with([
         'number taken in the property' => [['room_number' => '101'], 'room_number'],
-        'no beds' => [['capacity' => 0], 'capacity'],
+        'sleeps nobody' => [['capacity' => 0], 'capacity'],
         'unknown amenity' => [['amenities' => ['pool']], 'amenities.0'],
     ]);
 
@@ -178,7 +180,6 @@ describe('for the seeded demo company', function () {
             ->put(route('rooms.update', $room), validRoomInput($this->alQuoz, [
                 'room_number' => '101',
                 'capacity' => 10,
-                'occupied_count' => 7,
                 'keep_photos' => [$interior->id],
             ]))
             ->assertRedirect(route('rooms.index'));
@@ -189,25 +190,15 @@ describe('for the seeded demo company', function () {
         expect($this->alQuoz->refresh()->total_capacity)->toBe(32);
     });
 
-    test('creates one bed per unit of capacity and ignores a typed occupied count', function () {
+    test('starts a new room vacant, whatever occupancy is typed', function () {
         $this->actingAs($this->superAdmin)
-            ->post(route('rooms.store'), validRoomInput($this->alQuoz, ['capacity' => 3, 'occupied_count' => 2]))
+            ->post(route('rooms.store'), validRoomInput($this->alQuoz, ['is_occupied' => true]))
             ->assertSessionHasNoErrors();
 
-        $room = $this->alQuoz->rooms()->where('room_number', '301')->sole();
-
-        expect($room->occupied_count)->toBe(0)
-            ->and($room->beds()->where('is_active', true)->pluck('label')->all())->toBe(['1', '2', '3']);
-
-        $this->actingAs($this->superAdmin)
-            ->put(route('rooms.update', $room), validRoomInput($this->alQuoz, ['capacity' => 2]))
-            ->assertSessionHasNoErrors();
-
-        expect($room->beds()->where('is_active', true)->count())->toBe(2)
-            ->and($room->beds()->count())->toBe(3);
+        expect($this->alQuoz->rooms()->where('room_number', '301')->sole()->is_occupied)->toBeFalse();
     });
 
-    test('refuses fewer beds than the people staying in the room', function () {
+    test('refuses a room smaller than the people staying in it', function () {
         $room = $this->alQuoz->rooms()->where('room_number', '101')->sole();
 
         $this->actingAs($this->superAdmin)

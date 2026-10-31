@@ -1,57 +1,11 @@
 import { Badge } from '@/components/ui/badge';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/hooks/use-translation';
-import { cn } from '@/lib/utils';
 import { WrenchIcon } from 'lucide-react';
 import { AMENITY_ICONS } from './roomOptions';
 
-const MAX_DOTS = 12;
-
 /**
- * One square per bed: occupied beds in the accent, free beds in a lighter
- * step, and beds out of service in grey when the room is not active. Large
- * rooms show the first beds and a count of the rest; the exact numbers are
- * in the label and tooltip so colour never carries them alone.
- */
-export function BedDots({ capacity, occupied, status, size = 'sm', className }) {
-    const { t, formatNumber } = useTranslation();
-    const isInService = status === 'active';
-    const shown = Math.min(capacity, MAX_DOTS);
-    const label = t('roomList.bedsLabel', { occupied, capacity });
-
-    return (
-        <Tooltip>
-            <TooltipTrigger
-                render={<div role="img" aria-label={label} className={cn('flex flex-wrap items-center gap-0.5', className)} />}
-            >
-                {Array.from({ length: shown }, (_, index) => (
-                    <span
-                        key={index}
-                        className={cn(
-                            'rounded-[3px] transition-transform hover:scale-125',
-                            size === 'lg' ? 'size-3.5' : 'size-2.5',
-                            index < occupied && 'bg-chart-1',
-                            index >= occupied && (isInService ? 'bg-chart-2' : 'bg-chart-3/60'),
-                        )}
-                    />
-                ))}
-                {capacity > MAX_DOTS && (
-                    <span className="ms-0.5 text-xs text-muted-foreground tabular-nums">
-                        +{formatNumber(capacity - MAX_DOTS)}
-                    </span>
-                )}
-            </TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
-    );
-}
-
-/**
- * Free beds, "Full", or nothing when the room is out of service.
+ * "Vacant" or "Occupied", or nothing when the room is out of service.
  */
 export function AvailabilityBadge({ room }) {
     const { t } = useTranslation();
@@ -60,11 +14,7 @@ export function AvailabilityBadge({ room }) {
         return null;
     }
 
-    return room.occupied >= room.capacity ? (
-        <Badge variant="secondary">{t('roomList.full')}</Badge>
-    ) : (
-        <Badge variant="success">{t('roomList.free', { count: room.capacity - room.occupied })}</Badge>
-    );
+    return room.occupied ? <Badge variant="secondary">{t('roomList.occupied')}</Badge> : <Badge variant="success">{t('roomList.vacant')}</Badge>;
 }
 
 export function RoomStatusBadge({ status }) {

@@ -56,15 +56,15 @@ describe('the company summary', function () {
                 ->where('period.name', 'this_month')
                 ->where('previousPeriod', ['from' => '2026-09-01', 'to' => '2026-09-30'])
                 ->where('prepared', ['date' => '2026-10-17', 'time' => '14:00', 'by' => $this->admin->name])
-                ->where('cash.client_payment', ['count' => 4, 'amount' => 27875])
+                ->where('cash.client_payment', ['count' => 4, 'amount' => 28175])
                 ->where('previousCash.rental_payment', ['count' => 1, 'amount' => 1500])
-                ->where('occupancy.beds.occupied', 31)
-                ->where('occupancy.beds.occupancyRate', 100)
+                ->where('occupancy.roomOccupancy.occupied', 9)
+                ->where('occupancy.roomOccupancy.occupancyRate', 100)
                 ->where('billing.receivables', [
-                    'invoices' => ['count' => 5, 'amount' => 39500],
-                    'overdue' => ['count' => 4, 'amount' => 37800],
+                    'invoices' => ['count' => 5, 'amount' => 39800],
+                    'overdue' => ['count' => 4, 'amount' => 38100],
                     'rent' => ['count' => 1, 'amount' => 1500],
-                    'total' => 41000,
+                    'total' => 41300,
                 ])
                 ->where('cheques.bounced', ['count' => 1, 'amount' => 14700])
                 ->where('maintenance.reported', 4)
@@ -107,15 +107,15 @@ describe('income and expenditure', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Income')
                 ->where('previousPeriod', ['from' => '2026-08-01', 'to' => '2026-08-31'])
-                ->where('statement.client_payment', ['count' => 6, 'amount' => 31780])
+                ->where('statement.client_payment', ['count' => 6, 'amount' => 32380])
                 ->where('statement.maintenance', ['count' => 1, 'amount' => 2400])
-                ->where('previousStatement.client_payment.amount', 83380)
+                ->where('previousStatement.client_payment.amount', 83980)
                 ->has('months', 12)
                 ->where('months.11.month', '2026-09')
-                ->where('months.11.in', 33280)
+                ->where('months.11.in', 33880)
                 ->where('months.11.categories.rental_payment', 1500)
                 ->where('payers.0', ['party' => 'Gulf Builders Contracting L.L.C.', 'count' => 1, 'amount' => 14700])
-                ->where('invoiced', ['count' => 7, 'subtotal' => 45900, 'vat' => 1000, 'total' => 46900])
+                ->where('invoiced', ['count' => 7, 'subtotal' => 46500, 'vat' => 1000, 'total' => 47500])
             );
     });
 
@@ -147,7 +147,7 @@ describe('receivables', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Receivables')
                 ->where('asOf', '2026-10-17')
-                ->where('totals.invoices', ['current' => 1700, 'days_1_30' => 22680, 'days_31_60' => 15120, 'days_61_90' => 0, 'over_90' => 0])
+                ->where('totals.invoices', ['current' => 1700, 'days_1_30' => 22980, 'days_31_60' => 15120, 'days_61_90' => 0, 'over_90' => 0])
                 ->where('totals.rent.days_1_30', 1500)
                 ->where('parties.0.name', 'FreshFold Laundry Services L.L.C.')
                 ->where('parties.0.buckets.days_31_60', 15120)
@@ -178,8 +178,8 @@ describe('occupancy', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Occupancy')
                 ->where('summary.staying', 27)
-                ->where('summary.beds', ['total' => 37, 'occupied' => 31, 'available' => 0, 'outOfService' => 6, 'occupancyRate' => 100])
-                ->where('properties.0.beds.occupancyRate', 100)
+                ->where('summary.roomOccupancy', ['total' => 10, 'occupied' => 9, 'available' => 0, 'outOfService' => 1, 'occupancyRate' => 100])
+                ->where('properties.0.roomOccupancy.occupancyRate', 100)
                 ->where('properties.0.potentialRent', 12000)
                 ->has('roomTypes', 3)
                 ->has('vacancies', 0)

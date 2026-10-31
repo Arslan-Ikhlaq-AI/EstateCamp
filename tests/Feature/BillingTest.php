@@ -36,9 +36,9 @@ describe('invoices', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Invoices/Index')
                 ->where('invoices.total', 50)
-                ->where('summary.outstanding', 39500)
+                ->where('summary.outstanding', 39800)
                 ->where('summary.overdue.count', 4)
-                ->where('summary.overdue.amount', 37800)
+                ->where('summary.overdue.amount', 38100)
             );
     });
 
@@ -65,13 +65,14 @@ describe('invoices', function () {
             ->and($invoice->due_date->toDateString())->toBe('2026-10-24');
     });
 
-    test('bills actual-use beds for the people who stayed', function () {
+    test('bills each rented room whole, however many people stayed', function () {
         $this->actingAs($this->superAdmin)->post(route('contracts.invoices.store', ($this->contract)('CTR-2026-0002')));
 
         $invoice = ($this->contract)('CTR-2026-0002')->invoices()->whereDate('period_start', '2026-11-01')->sole();
 
-        expect($invoice->items()->orderBy('id')->pluck('quantity')->map(fn ($quantity) => (int) $quantity)->all())->toBe([3, 4])
-            ->and((float) $invoice->total)->toBe(4200.0);
+        expect($invoice->items()->orderBy('id')->get(['quantity', 'unit_price'])->map(fn ($item) => [(int) $item->quantity, (float) $item->unit_price])->all())
+            ->toBe([[1, 2400.0], [1, 2400.0]])
+            ->and((float) $invoice->total)->toBe(4800.0);
     });
 
     test('charges a line that starts mid-period only for its share of the month', function () {

@@ -1,36 +1,34 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTranslation } from '@/hooks/use-translation';
-import { BedDoubleIcon, Building2Icon, DoorOpenIcon, HouseIcon, StoreIcon } from 'lucide-react';
+import { Building2Icon, DoorOpenIcon, HouseIcon, StoreIcon } from 'lucide-react';
 
-export const UNIT_ICONS = { bed: BedDoubleIcon, room: DoorOpenIcon, apartment: HouseIcon, shop: StoreIcon };
+const UNIT_ICONS = { room: DoorOpenIcon, apartment: HouseIcon, shop: StoreIcon };
 
 /**
- * What one line rents, in words: the unit (room, apartment or shop number,
- * or "beds anywhere"), how many beds it covers and the property it is in.
+ * What one line rents, in words: the unit (room, apartment or shop number),
+ * how many people a room sleeps and the property it is in.
  */
-export function useDescribeLine(properties) {
+function useDescribeLine(properties) {
     const { t } = useTranslation();
 
     return (line) => {
         const property = properties.find((item) => item.id === line.property_id);
         const room = property?.rooms.find((item) => item.id === line.room_id);
-        const beds = line.unit_type === 'room' ? (room?.capacity ?? 0) : line.unit_type === 'bed' ? Number(line.quantity) || 0 : 0;
+        const sleeps = line.unit_type === 'room' ? (room?.capacity ?? 0) : 0;
 
         const label = {
-            bed: room ? t('leasing.lines.roomName', { room: room.number }) : t('leasing.contracts.form.picker.anywhereShort'),
             room: room ? t('leasing.lines.roomName', { room: room.number }) : '',
             apartment: t('leasing.lines.apartment', { number: property?.apartments.find((item) => item.id === line.apartment_id)?.number }),
             shop: t('leasing.lines.shop', { number: property?.shops.find((item) => item.id === line.shop_id)?.number }),
         }[line.unit_type];
 
         const detail = {
-            bed: t('common.beds', { count: beds }),
-            room: `${t('leasing.unitTypes.room')} · ${t('common.beds', { count: beds })}`,
+            room: `${t('leasing.unitTypes.room')} · ${t('common.sleeps', { count: sleeps })}`,
             apartment: t('leasing.unitTypes.apartment'),
             shop: t('leasing.unitTypes.shop'),
         }[line.unit_type];
 
-        return { property, room, beds, label, detail };
+        return { property, room, sleeps, label, detail };
     };
 }
 
@@ -67,7 +65,7 @@ export default function RentedSummary({ lines, properties, clientName }) {
     const count = (type) => lines.filter((line) => line.unit_type === type).length;
     const totals = [
         count('room') > 0 && t('propertyShow.clients.rooms', { count: count('room') }),
-        t('common.beds', { count: described.reduce((sum, item) => sum + item.beds, 0) }),
+        count('room') > 0 && t('common.sleeps', { count: described.reduce((sum, item) => sum + item.sleeps, 0) }),
         count('apartment') > 0 && t('propertyShow.clients.apartments', { count: count('apartment') }),
         count('shop') > 0 && t('propertyShow.clients.shops', { count: count('shop') }),
     ].filter(Boolean);
@@ -87,7 +85,7 @@ export default function RentedSummary({ lines, properties, clientName }) {
                         {groupByProperty(lines).map((group) => {
                             const property = properties.find((item) => item.id === group.propertyId);
                             const items = group.indexes.map((index) => described[index]);
-                            const kinds = ['room', 'bed', 'apartment', 'shop']
+                            const kinds = ['room', 'apartment', 'shop']
                                 .map((type) => ({ type, items: items.filter((item) => item.line.unit_type === type).sort(byNumber) }))
                                 .filter((kind) => kind.items.length > 0);
 
@@ -106,7 +104,7 @@ export default function RentedSummary({ lines, properties, clientName }) {
                                                 <li key={type} className="flex items-start gap-2 text-[0.8125rem]">
                                                     <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                                                     <span className="min-w-0 flex-1">
-                                                        {units.map((item) => (type === 'bed' ? `${item.label} (${item.detail})` : item.label)).join(', ')}
+                                                        {units.map((item) => item.label).join(', ')}
                                                     </span>
                                                 </li>
                                             );

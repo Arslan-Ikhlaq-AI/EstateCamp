@@ -509,7 +509,7 @@ export function DuskScene() {
                 {[318, 376, 448, 506].map((x) => (
                     <Lantern key={x} x={x} base={770} glow="url(#dusk-light)" />
                 ))}
-                <CampMarker x={412} y={648} title="Basecamp North" meta="184 of 200 beds filled" />
+                <CampMarker x={412} y={648} title="Basecamp North" meta="46 of 50 rooms filled" />
             </Layer>
 
             <Layer depth={28}>

@@ -22,8 +22,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * A short-term rental: a company taking one or more whole rooms of a
- * property for a few months, straight from the company without a contract.
+ * A short-term rental: a company or a person taking one or more whole rooms
+ * of a property for a few months, straight from the company without a
+ * contract.
  * It works like a contract, with a start date, a term in months and a
  * monthly rent, but nobody is checked in and nothing is invoiced.
  *
@@ -68,10 +69,10 @@ class RoomRental extends Model
     public const REFUND_METHODS = ['cash', 'bank_transfer', 'cheque'];
 
     /**
-     * How the first month can be paid on the rental form. A cheque goes
-     * through the cheque register from the rental's page instead.
+     * How the first month can be paid on the rental form. A transfer is a
+     * receipt straight away; a cheque goes to the cheque register, in hand.
      */
-    public const FIRST_PAYMENT_METHODS = ['cash', 'bank_transfer', 'card'];
+    public const FIRST_PAYMENT_METHODS = ['bank_transfer', 'cheque'];
 
     /**
      * Days after a month's rent falls due before it counts as overdue.
@@ -504,10 +505,10 @@ class RoomRental extends Model
         }
 
         DB::transaction(function () use ($on, $refund, $refundMethod, $note) {
-            $this->occupancies()->whereNull('check_out_date')->with('bed.room')->get()->each(function (Occupancy $stay) use ($on) {
+            $this->occupancies()->whereNull('check_out_date')->with('room')->get()->each(function (Occupancy $stay) use ($on) {
                 $earliest = $stay->check_in_date->copy()->addDay();
                 $stay->update(['check_out_date' => $on->lt($earliest) ? $earliest : $on]);
-                $stay->bed?->room?->recalculateOccupancy();
+                $stay->room?->recalculateOccupancy();
             });
 
             $this->forceFill([
@@ -523,8 +524,8 @@ class RoomRental extends Model
     }
 
     /**
-     * Recount the beds taken in the rental's rooms: it holds them whole
-     * from its start date while it runs, whether or not anyone checks in.
+     * Recount whether the rental's rooms are occupied: it holds them from
+     * its start date while it runs, whether or not anyone checks in.
      */
     public function recountRooms(): void
     {
@@ -553,8 +554,7 @@ class RoomRental extends Model
 
     /**
      * Rooms a short-term rental cannot take: those a running or draft
-     * contract rents (whole, or beds in them), and those another live
-     * rental holds.
+     * contract rents, and those another live rental holds.
      *
      * @return list<int>
      */
@@ -582,7 +582,7 @@ class RoomRental extends Model
         return $company->rooms()
             ->where('status', 'active')
             ->whereKeyNot(self::unavailableRoomIds($company->id))
-            ->whereDoesntHave('beds.occupancies', fn (Builder $stays) => $stays->whereNull('check_out_date'))
+            ->whereDoesntHave('occupancies', fn (Builder $stays) => $stays->whereNull('check_out_date'))
             ->with('property:id,name,code')
             ->get()
             ->sortBy(fn (Room $room) => [$room->property->name, $room->room_number])
@@ -619,7 +619,7 @@ class RoomRental extends Model
     }
 
     /**
-     * The company that rents and pays.
+     * The company or person that rents and pays.
      *
      * @return BelongsTo<Client, $this>
      */
@@ -647,7 +647,7 @@ class RoomRental extends Model
     }
 
     /**
-     * People checked into beds under an older, per-bed rental.
+     * People checked into the rooms under an older rental.
      *
      * @return HasMany<Occupancy, $this>
      */

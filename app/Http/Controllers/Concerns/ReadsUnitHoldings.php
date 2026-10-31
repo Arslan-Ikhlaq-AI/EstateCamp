@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Concerns;
 use App\Models\Apartment;
 use App\Models\Contract;
 use App\Models\ContractLine;
-use App\Models\Occupancy;
 use App\Models\Property;
 use App\Models\Room;
 use App\Models\RoomRental;
@@ -20,7 +19,7 @@ use Illuminate\Support\Collection;
  * client under contract, a company on a short-term rental without a
  * contract, or nobody) and each holder's bill for the period, as the room
  * allocation and the property's payments pages show them. Units are taken
- * whole; beds are not counted.
+ * whole.
  */
 trait ReadsUnitHoldings
 {
@@ -208,9 +207,8 @@ trait ReadsUnitHoldings
 
     /**
      * Each room with whoever holds it in the period: contract lines for the
-     * room (whole, or beds in it), contracts whose property-wide beds had
-     * people staying in it, and short-term rentals holding it. A rental's
-     * monthly rent is shared equally between its rooms.
+     * room and short-term rentals holding it. A rental's monthly rent is
+     * shared equally between its rooms.
      *
      * @param  Collection<int, ContractLine>  $lines
      * @return list<array<string, mixed>>
@@ -218,28 +216,9 @@ trait ReadsUnitHoldings
     private function roomRows(Property $property, Collection $lines, CarbonImmutable $from, CarbonImmutable $to): array
     {
         $holdings = $lines
-            ->whereIn('unit_type', ['bed', 'room'])
-            ->whereNotNull('room_id')
-            ->map(fn (ContractLine $line) => [$line->room_id, $this->contractHolding($line, $line->quantity)])
+            ->where('unit_type', 'room')
+            ->map(fn (ContractLine $line) => [$line->room_id, $this->contractHolding($line)])
             ->values();
-
-        $propertyWideLines = $lines->where('unit_type', 'bed')->whereNull('room_id')->keyBy('id');
-
-        if ($propertyWideLines->isNotEmpty()) {
-            Occupancy::query()
-                ->whereIn('contract_line_id', $propertyWideLines->keys())
-                ->whereDate('check_in_date', '<=', $to)
-                ->where(fn (Builder $stays) => $stays->whereNull('check_out_date')->orWhereDate('check_out_date', '>', $from))
-                ->join('beds', 'beds.id', '=', 'occupancies.bed_id')
-                ->groupBy('beds.room_id', 'occupancies.contract_line_id')
-                ->selectRaw('beds.room_id, occupancies.contract_line_id, count(*) as people')
-                ->toBase()
-                ->get()
-                ->each(fn (object $stay) => $holdings->push([
-                    $stay->room_id,
-                    $this->contractHolding($propertyWideLines->get($stay->contract_line_id), (int) $stay->people),
-                ]));
-        }
 
         RoomRental::query()
             ->where('property_id', $property->id)
@@ -267,7 +246,7 @@ trait ReadsUnitHoldings
             $room,
             $room->room_number,
             $byRoom->get($room->id, collect())->pluck(1),
-            $room->rent_per_bed === null ? null : round((float) $room->rent_per_bed * $room->capacity, 2),
+            $room->monthly_rent === null ? null : (float) $room->monthly_rent,
             $to,
             [
                 'type' => $room->roomType ? ['name' => $room->roomType->name, 'slug' => $room->roomType->slug] : null,
@@ -289,7 +268,7 @@ trait ReadsUnitHoldings
         return $this->sortedRows($property->shops()->get()->map(fn (Shop $shop) => $this->row(
             $shop,
             $shop->shop_number,
-            $byShop->get($shop->id, collect())->map(fn (ContractLine $line) => $this->contractHolding($line, $line->quantity)),
+            $byShop->get($shop->id, collect())->map(fn (ContractLine $line) => $this->contractHolding($line)),
             $shop->monthly_rent === null ? null : (float) $shop->monthly_rent,
             $to,
             ['type' => $shop->shop_type],
@@ -309,7 +288,7 @@ trait ReadsUnitHoldings
         return $this->sortedRows($property->apartments()->get()->map(fn (Apartment $apartment) => $this->row(
             $apartment,
             $apartment->apartment_number,
-            $byApartment->get($apartment->id, collect())->map(fn (ContractLine $line) => $this->contractHolding($line, $line->quantity)),
+            $byApartment->get($apartment->id, collect())->map(fn (ContractLine $line) => $this->contractHolding($line)),
             $apartment->monthly_rent === null ? null : (float) $apartment->monthly_rent,
             $to,
             ['bedrooms' => $apartment->bedrooms, 'bathrooms' => $apartment->bathrooms],
@@ -317,12 +296,11 @@ trait ReadsUnitHoldings
     }
 
     /**
-     * A contract line's hold on a unit, at its rate for `$quantity` of what
-     * it rents, until its last day.
+     * A contract line's hold on a unit, at its rate, until its last day.
      *
      * @return array{category: string, client: array{id: int, name: string}, reference: array{kind: string, id: int, number: string, status: string}, startsOn: string, endsOn: string, monthly: float}
      */
-    private function contractHolding(ContractLine $line, int $quantity): array
+    private function contractHolding(ContractLine $line): array
     {
         $contract = $line->contract;
 
@@ -332,7 +310,7 @@ trait ReadsUnitHoldings
             'reference' => ['kind' => 'contract', 'id' => $contract->id, 'number' => $contract->contract_number, 'status' => $contract->status],
             'startsOn' => $line->start_date->toDateString(),
             'endsOn' => $this->lastDay($line)->toDateString(),
-            'monthly' => round((float) $line->monthly_rate * $quantity, 2),
+            'monthly' => round((float) $line->monthly_rate, 2),
         ];
     }
 

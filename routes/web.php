@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\AnalyzeController;
 use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\ChequeController;
 use App\Http\Controllers\ChequeStatusController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExtraIncomeController;
 use App\Http\Controllers\HeadLeaseController;
 use App\Http\Controllers\IncomeReportController;
+use App\Http\Controllers\IndividualController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LandlordController;
 use App\Http\Controllers\MaintenanceBillController;
@@ -109,6 +111,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // The rest of the app, for everyone but staff whose sign-in covers only the staff pages.
     Route::middleware('can:use-app')->group(function () {
+        // How each property earns over a period, charted.
+        Route::get('analyze', AnalyzeController::class)->name('analyze');
+
         Route::resource('properties', PropertyController::class)->except(['destroy'])->whereNumber('property');
         Route::get('properties/{property}/allocation', [RoomAllocationController::class, 'show'])->whereNumber('property')->name('properties.allocation');
         Route::post('properties/{property}/billing', [PropertyBillingController::class, 'store'])->whereNumber('property')->name('properties.billing.store');
@@ -136,6 +141,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Landlord instalments became issued cheques; the old address opens them in the cheque register.
         Route::redirect('landlord-payments', '/cheques?direction[]=issued')->name('landlord-payments.index');
         Route::resource('clients', ClientController::class)->except(['destroy']);
+        // Individuals: the people who rent rooms themselves, as a list of their own beside the companies.
+        Route::get('individuals', [IndividualController::class, 'index'])->name('individuals.index');
         Route::resource('contracts', ContractController::class)->except(['destroy']);
         Route::post('contracts/{contract}/activate', [ContractController::class, 'activate'])->name('contracts.activate');
         Route::post('contracts/{contract}/terminate', [ContractController::class, 'terminate'])->name('contracts.terminate');
@@ -153,7 +160,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('payments/overview', PaymentOverviewController::class)->name('payments.overview');
         Route::resource('payments', PaymentController::class)->only(['index', 'create', 'store', 'show', 'update'])->whereNumber('payment');
 
-        // Individual rentals: beds and rooms rented to individuals without a contract, and their receipts.
+        // Short-term rentals: whole rooms rented without a contract, and their receipts.
         Route::resource('rentals', RoomRentalController::class)->except(['destroy'])->parameters(['rentals' => 'roomRental'])->whereNumber('roomRental');
         Route::post('rentals/{roomRental}/end', [RoomRentalController::class, 'end'])->whereNumber('roomRental')->name('rentals.end');
         Route::post('rentals/{roomRental}/payments', [RentalPaymentController::class, 'store'])->whereNumber('roomRental')->name('rentals.payments.store');

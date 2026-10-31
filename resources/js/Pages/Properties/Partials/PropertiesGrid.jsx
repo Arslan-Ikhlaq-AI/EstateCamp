@@ -1,4 +1,4 @@
-import BedBar from '@/Components/BedBar';
+import RoomBar from '@/Components/RoomBar';
 import PropertyCover from '@/Components/PropertyCover';
 import RadialGauge from '@/Components/RadialGauge';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, DoorOpenIcon, FileSignatureIcon, LayoutPanelLeftIcon, MapPinIcon, WalletIcon } from 'lucide-react';
+import { BanknoteIcon, DoorClosedIcon, DoorOpenIcon, FileSignatureIcon, LayoutPanelLeftIcon, MapPinIcon, WalletIcon } from 'lucide-react';
 import { ComplianceBadge, LeaseNote, OwnershipBadge, StatusBadge } from './PropertyBadges';
 import PropertyActions from './PropertyActions';
 import UnitOccupancyCounts from './UnitOccupancy';
@@ -33,8 +33,8 @@ function Stat({ icon: Icon, label, value, tone }) {
 
 function PropertyGridCard({ property, currency }) {
     const { t, tOr, formatNumber, formatPercent, formatCurrency } = useTranslation();
-    const { beds } = property;
-    const rate = beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate);
+    const occupancy = property.roomOccupancy;
+    const rate = occupancy.occupancyRate === null ? '—' : formatPercent(occupancy.occupancyRate);
 
     return (
         <article className="group/property flex flex-col overflow-hidden rounded-2xl bg-card shadow-(--card-shadow) ring-1 ring-foreground/[0.07] transition-[box-shadow,translate] duration-200 hover:-translate-y-1 hover:shadow-(--overlay-shadow) hover:ring-brand-cyan/30 motion-reduce:hover:translate-y-0">
@@ -69,7 +69,7 @@ function PropertyGridCard({ property, currency }) {
 
             <div className="flex flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center gap-4">
-                    <RadialGauge value={beds.occupancyRate} size={76} thickness={8} label={`${t('properties.columns.occupancy')}: ${rate}`}>
+                    <RadialGauge value={occupancy.occupancyRate} size={76} thickness={8} label={`${t('properties.columns.occupancy')}: ${rate}`}>
                         <span className="text-sm font-bold tracking-tight">{rate}</span>
                     </RadialGauge>
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -77,16 +77,16 @@ function PropertyGridCard({ property, currency }) {
                             <span className="text-[0.8125rem] font-medium text-muted-foreground">{t('properties.columns.occupancy')}</span>
                             <StatusBadge status={property.status} />
                         </div>
-                        <BedBar beds={beds} />
+                        <RoomBar rooms={occupancy} />
                         <span className="text-xs text-muted-foreground tabular-nums">
-                            {t('properties.occupancy.beds', { occupied: beds.occupied, total: beds.total })}
+                            {t('properties.occupancy.rooms', { occupied: occupancy.occupied, total: occupancy.total })}
                         </span>
                     </div>
                 </div>
 
                 <dl className="grid grid-cols-3 gap-2">
                     <Stat icon={DoorOpenIcon} tone="brand" label={t('properties.card.rooms')} value={formatNumber(property.rooms)} />
-                    <Stat icon={BedDoubleIcon} tone="green" label={t('properties.card.beds')} value={formatNumber(beds.total)} />
+                    <Stat icon={DoorClosedIcon} tone="green" label={t('properties.card.vacant')} value={formatNumber(occupancy.available)} />
                     <Stat icon={BanknoteIcon} tone="gold" label={t('properties.card.rentRoll')} value={formatCurrency(property.rentRoll, currency)} />
                 </dl>
 
@@ -139,7 +139,7 @@ function PropertyGridCard({ property, currency }) {
 
 /**
  * The property list as picture cards, each with an occupancy ring, its
- * rooms, beds and rent roll, and its ownership and compliance.
+ * rooms, vacant rooms and rent roll, and its ownership and compliance.
  */
 export default function PropertiesGrid({ properties, currency }) {
     return (

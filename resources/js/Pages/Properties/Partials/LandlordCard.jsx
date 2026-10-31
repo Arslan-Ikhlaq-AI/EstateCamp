@@ -137,9 +137,9 @@ export default function LandlordCard({ landlord }) {
                                             </span>
                                         </div>
                                         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                                            {property.beds.total > 0
-                                                ? t('properties.occupancy.beds', { occupied: property.beds.occupied, total: property.beds.total })
-                                                : t('properties.occupancy.noBeds')}
+                                            {property.roomOccupancy.total > 0
+                                                ? t('properties.occupancy.rooms', { occupied: property.roomOccupancy.occupied, total: property.roomOccupancy.total })
+                                                : t('properties.occupancy.noRooms')}
                                         </span>
                                         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground rtl:rotate-180" />
                                     </Link>

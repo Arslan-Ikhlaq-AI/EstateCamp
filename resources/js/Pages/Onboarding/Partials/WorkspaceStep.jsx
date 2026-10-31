@@ -22,7 +22,7 @@ import { useMemo } from 'react';
 import { FieldSection, IconCombobox } from './OnboardingFields';
 
 const BUSINESS_DETAILS = {
-    staff_accommodation: { icon: TentIcon, description: 'Labour camps, staff housing and bed spaces.' },
+    staff_accommodation: { icon: TentIcon, description: 'Labour camps, staff housing and shared rooms.' },
     property_management: { icon: Building2Icon, description: 'Residential and commercial buildings for owners.' },
     facilities_management: { icon: WrenchIcon, description: 'Maintenance, AMCs and building services.' },
     real_estate: { icon: KeyRoundIcon, description: 'Leasing, brokerage and tenant contracts.' },

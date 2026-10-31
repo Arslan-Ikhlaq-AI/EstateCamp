@@ -23,7 +23,7 @@ beforeEach(function () {
 
     $this->property = Property::factory()->create();
     $this->user = User::factory()->create(['company_id' => $this->property->company_id]);
-    $this->room = fn (string $number) => Room::factory()->create(['property_id' => $this->property->id, 'room_number' => $number, 'capacity' => 4, 'occupied_count' => 0, 'rent_per_bed' => 500]);
+    $this->room = fn (string $number) => Room::factory()->create(['property_id' => $this->property->id, 'room_number' => $number, 'capacity' => 4, 'monthly_rent' => 2000]);
     $this->client = fn (string $name) => Client::factory()->create(['company_id' => $this->property->company_id, 'name' => $name]);
     $this->job = fn (string $finishedOn, array $attributes) => MaintenanceJob::factory()->completed()->create([
         'property_id' => $this->property->id,
@@ -37,7 +37,7 @@ beforeEach(function () {
 
 test('lists contract cheques apart from short-term ones, with earlier ones still to deal with, and what each part comes to', function () {
     $contract = Contract::factory()->active()->create(['client_id' => ($this->client)('Al Hajar Contracting')->id, 'start_date' => '2026-08-01', 'end_date' => '2027-07-31']);
-    ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => ($this->room)('R-1')->id, 'quantity' => 1, 'monthly_rate' => 2000]);
+    ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => ($this->room)('R-1')->id, 'monthly_rate' => 2000]);
     // Cleared in August, so done with.
     Cheque::factory()->forAgreement($contract)->create(['sequence' => 1, 'cheque_date' => '2026-08-01', 'amount' => 2000, 'status' => 'cleared', 'cleared_on' => '2026-08-02']);
     // In hand since September and not deposited yet, so brought into October.
@@ -313,7 +313,7 @@ test('records what a short-term rental paid as cash, a transfer or a cheque, and
 test('a contract cannot be paid by cheque from the payments page, and a cheque needs its details', function () {
     $rental = RoomRental::factory()->forRooms(($this->room)('R-9'))->create(['client_id' => ($this->client)('Gulf Crew Services')->id, 'start_date' => '2026-10-01', 'monthly_rent' => 3000]);
     $contract = Contract::factory()->active()->create(['client_id' => ($this->client)('Al Hajar Contracting')->id, 'start_date' => '2026-08-01', 'end_date' => '2027-07-31']);
-    ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => ($this->room)('R-10')->id, 'quantity' => 1, 'monthly_rate' => 2000]);
+    ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => ($this->room)('R-10')->id, 'monthly_rate' => 2000]);
 
     $this->actingAs($this->user)
         ->post(route('properties.billing.store', $this->property), ['account' => 'contract', 'account_id' => $contract->id, 'through' => '2026-10-31', 'amount' => 500, 'method' => 'cheque', 'cheque_number' => '1', 'bank_name' => 'Mashreq', 'cheque_date' => '2026-10-17'])
@@ -385,7 +385,7 @@ test('splits bills paid out into bank and cash, keeping the camp boss\'s cash sp
 
 test('sums up the camp boss\'s cash to hand over and the income, expenses and profit of the period', function () {
     $contract = Contract::factory()->active()->create(['client_id' => ($this->client)('Al Hajar Contracting')->id, 'start_date' => '2026-08-01', 'end_date' => '2027-07-31']);
-    ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => ($this->room)('R-1')->id, 'quantity' => 1, 'monthly_rate' => 5000]);
+    ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => ($this->room)('R-1')->id, 'monthly_rate' => 5000]);
     Cheque::factory()->forAgreement($contract)->create(['cheque_date' => '2026-10-01', 'amount' => 5000, 'status' => 'cleared', 'cleared_on' => '2026-10-03']);
     $rental = RoomRental::factory()->forRooms(($this->room)('R-2'))->create(['client_id' => ($this->client)('Gulf Crew Services')->id, 'start_date' => '2026-09-01', 'monthly_rent' => 3000, 'security_deposit' => 0]);
     $pay = fn (string $paidOn, float $amount, string $method) => $rental->recordPayment(['paid_on' => $paidOn, 'amount' => $amount, 'purpose' => 'rent', 'method' => $method]);

@@ -99,7 +99,7 @@ class Contract extends Model
 
         return round($this->lines
             ->filter(fn (ContractLine $line) => $line->covers($day))
-            ->sum(fn (ContractLine $line) => (float) $line->monthly_rate * $line->quantity), 2);
+            ->sum(fn (ContractLine $line) => (float) $line->monthly_rate), 2);
     }
 
     /**
@@ -120,8 +120,7 @@ class Contract extends Model
 
     /**
      * What the period's invoice should come to: each line running in it,
-     * pro-rated by month at its rate, with its VAT. Bed lines billed on
-     * actual use are estimated at their contracted beds.
+     * pro-rated by month at its rate, with its VAT.
      */
     public function plannedChequeAmount(CarbonImmutable $from, CarbonImmutable $to): float
     {
@@ -135,7 +134,7 @@ class Contract extends Model
                 continue;
             }
 
-            $amount = round((float) $line->monthly_rate * $lineFrom->floatDiffInMonths($lineTo->addDay()), 2) * $line->quantity;
+            $amount = round((float) $line->monthly_rate * $lineFrom->floatDiffInMonths($lineTo->addDay()), 2);
             $total += $amount + round($amount * (float) $line->vat_rate / 100, 2);
         }
 
@@ -318,21 +317,14 @@ class Contract extends Model
                     continue;
                 }
 
-                $quantity = $line->billedQuantity($from, $to);
-
-                if ($quantity === 0) {
-                    continue;
-                }
-
-                $unitPrice = round((float) $line->monthly_rate * $from->floatDiffInMonths($to->addDay()), 2);
-                $amount = round($unitPrice * $quantity, 2);
+                $amount = round((float) $line->monthly_rate * $from->floatDiffInMonths($to->addDay()), 2);
 
                 $items[] = [
                     'contract_line_id' => $line->id,
                     'item_type' => 'rent',
                     'description' => $line->describe().' · '.$from->format('j M Y').' – '.$to->format('j M Y'),
-                    'quantity' => $quantity,
-                    'unit_price' => $unitPrice,
+                    'quantity' => 1,
+                    'unit_price' => $amount,
                     'vat_rate' => $line->vat_rate,
                     'amount' => $amount,
                     'vat_amount' => round($amount * (float) $line->vat_rate / 100, 2),
@@ -568,7 +560,7 @@ class Contract extends Model
      * for it today: occupied while a running line covers today, reserved for a
      * draft or a line that starts later, vacant once the contract is over and
      * no other live contract holds it. Units under maintenance or inactive are
-     * left alone. Its rooms recount the beds taken in them.
+     * left alone. Its rooms recount whether they are occupied.
      */
     public function syncUnitStatuses(): void
     {
@@ -609,12 +601,11 @@ class Contract extends Model
         Occupancy::query()
             ->whereIn('contract_line_id', $this->lines()->select('id'))
             ->whereNull('check_out_date')
-            ->with('bed')
             ->get()
             ->each(function (Occupancy $stay) use ($on, &$roomIds) {
                 $earliest = $stay->check_in_date->copy()->addDay();
                 $stay->update(['check_out_date' => $on->lt($earliest) ? $earliest : $on]);
-                $roomIds[] = $stay->bed->room_id;
+                $roomIds[] = $stay->room_id;
             });
 
         Room::query()->whereKey(array_unique($roomIds))->get()->each->recalculateOccupancy();

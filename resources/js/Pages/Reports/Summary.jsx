@@ -5,7 +5,7 @@ import ReportLayout, { Figures, ReportSection, ShareBar } from '@/Components/Rep
 import StatCard from '@/Components/StatCard';
 import { useTranslation } from '@/hooks/use-translation';
 import { Link } from '@inertiajs/react';
-import { ArrowDownLeftIcon, ArrowUpRightIcon, BedDoubleIcon, PresentationIcon, ScaleIcon } from 'lucide-react';
+import { ArrowDownLeftIcon, ArrowUpRightIcon, DoorOpenIcon, PresentationIcon, ScaleIcon } from 'lucide-react';
 
 const IN = ['client_payment', 'rental_payment', 'extra_income'];
 const OUT = ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund', 'other_payment'];
@@ -32,7 +32,7 @@ export default function Summary({ company, prepared, period, previousPeriod, can
     const moneyIn = sum(cash, IN);
     const moneyOut = sum(cash, outCategories);
     const net = moneyIn - moneyOut;
-    const beds = occupancy.beds;
+    const rooms = occupancy.roomOccupancy;
     const receivables = billing.receivables;
 
     const sections = [
@@ -70,8 +70,8 @@ export default function Summary({ company, prepared, period, previousPeriod, can
             key: 'occupancy',
             items: [
                 { label: t('reports.summary.figures.properties'), value: formatNumber(occupancy.properties), detail: t('common.rooms', { count: occupancy.rooms }) },
-                { label: t('reports.summary.figures.beds'), value: formatNumber(beds.total), detail: t('reports.summary.figures.bedsDetail', { available: beds.available, outOfService: beds.outOfService }) },
-                { label: t('reports.summary.figures.occupied'), value: formatNumber(beds.occupied), detail: beds.occupancyRate === null ? null : t('reports.summary.figures.occupiedDetail', { rate: formatPercent(beds.occupancyRate) }) },
+                { label: t('reports.summary.figures.occupied'), value: formatNumber(rooms.occupied), detail: rooms.occupancyRate === null ? null : t('reports.summary.figures.occupiedDetail', { rate: formatPercent(rooms.occupancyRate) }) },
+                { label: t('reports.summary.figures.vacant'), value: formatNumber(rooms.available), detail: t('reports.summary.figures.vacantDetail', { count: rooms.outOfService }) },
                 { label: t('reports.summary.figures.rentRoll'), value: money(occupancy.rentRoll), detail: t('reports.summary.figures.rentRollDetail', { amount: money(occupancy.potentialRent) }) },
                 { label: t('reports.summary.figures.vacancyLoss'), value: money(occupancy.potentialRent - occupancy.rentRoll), detail: t('reports.summary.figures.vacancyLossDetail') },
                 { label: t('reports.summary.figures.checkIns'), value: formatNumber(occupancy.checkIns), detail: t('reports.common.inPeriod') },
@@ -156,19 +156,18 @@ export default function Summary({ company, prepared, period, previousPeriod, can
             ),
         },
         { id: 'rooms', header: t('reports.common.columns.rooms'), align: 'end', cell: (row) => <span className="tabular-nums">{formatNumber(row.rooms)}</span> },
-        { id: 'beds', header: t('reports.common.columns.beds'), align: 'end', cell: (row) => <span className="tabular-nums">{formatNumber(row.beds.total)}</span> },
-        { id: 'occupied', header: t('reports.common.columns.occupied'), align: 'end', cell: (row) => <span className="tabular-nums">{formatNumber(row.beds.occupied)}</span> },
+        { id: 'occupied', header: t('reports.common.columns.occupied'), align: 'end', cell: (row) => <span className="tabular-nums">{formatNumber(row.roomOccupancy.occupied)}</span> },
         {
             id: 'rate',
             header: t('reports.common.columns.occupancy'),
             className: 'w-40',
             cell: (row) =>
-                row.beds.occupancyRate === null ? (
+                row.roomOccupancy.occupancyRate === null ? (
                     <span className="text-muted-foreground">—</span>
                 ) : (
                     <div className="flex items-center gap-2">
-                        <ShareBar value={row.beds.occupancyRate} max={100} />
-                        <span className="w-12 text-end text-xs font-medium tabular-nums">{formatPercent(row.beds.occupancyRate)}</span>
+                        <ShareBar value={row.roomOccupancy.occupancyRate} max={100} />
+                        <span className="w-12 text-end text-xs font-medium tabular-nums">{formatPercent(row.roomOccupancy.occupancyRate)}</span>
                     </div>
                 ),
         },
@@ -199,14 +198,13 @@ export default function Summary({ company, prepared, period, previousPeriod, can
                 t('reports.common.columns.property'),
                 t('reports.common.columns.code'),
                 t('reports.common.columns.rooms'),
-                t('reports.common.columns.beds'),
                 t('reports.common.columns.occupied'),
                 t('reports.common.columns.occupancyPercent'),
                 t('reports.common.columns.rentRoll'),
                 t('reports.common.columns.openJobs'),
                 t('reports.common.columns.maintenancePaid'),
             ],
-            rows: () => properties.map((row) => [row.name, row.code, row.rooms, row.beds.total, row.beds.occupied, row.beds.occupancyRate, row.rentRoll, row.openJobs, row.maintenanceSpend]),
+            rows: () => properties.map((row) => [row.name, row.code, row.rooms, row.roomOccupancy.occupied, row.roomOccupancy.occupancyRate, row.rentRoll, row.openJobs, row.maintenanceSpend]),
         },
     ];
 
@@ -246,11 +244,11 @@ export default function Summary({ company, prepared, period, previousPeriod, can
                     detail={net < 0 ? t('reports.summary.stats.netNegative') : t('reports.summary.stats.netPositive')}
                 />
                 <StatCard
-                    icon={BedDoubleIcon}
+                    icon={DoorOpenIcon}
                     label={t('reports.summary.stats.occupancy')}
-                    value={beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
-                    meter={beds.occupancyRate ?? 0}
-                    detail={t('reports.summary.stats.occupancyDetail', { occupied: beds.occupied, total: beds.occupied + beds.available })}
+                    value={rooms.occupancyRate === null ? '—' : formatPercent(rooms.occupancyRate)}
+                    meter={rooms.occupancyRate ?? 0}
+                    detail={t('reports.summary.stats.occupancyDetail', { occupied: rooms.occupied, total: rooms.occupied + rooms.available })}
                 />
             </section>
 
@@ -278,9 +276,8 @@ export default function Summary({ company, prepared, period, previousPeriod, can
                                 values={{
                                     property: t('reports.common.total'),
                                     rooms: formatNumber(totalOf((row) => row.rooms)),
-                                    beds: formatNumber(totalOf((row) => row.beds.total)),
-                                    occupied: formatNumber(beds.occupied),
-                                    rate: beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate),
+                                    occupied: formatNumber(rooms.occupied),
+                                    rate: rooms.occupancyRate === null ? '—' : formatPercent(rooms.occupancyRate),
                                     rentRoll: formatMoney(occupancy.rentRoll, company.currency),
                                     openJobs: formatNumber(maintenance.open),
                                     maintenanceSpend: formatMoney(totalOf((row) => row.maintenanceSpend), company.currency),

@@ -68,9 +68,9 @@ function ReceiptActions({ payment, onVoid }) {
 }
 
 /**
- * One short-term rental: where the company's rent stands, each month of
+ * One short-term rental: where the renter's rent stands, each month of
  * the term and what was paid towards it, its receipts and cheques, and
- * recording a payment or moving the company out.
+ * recording a payment or moving the renter out.
  */
 export default function Show({ rental, statement, payments, cheques, pendingCheques, banks, chequeStatuses, methods, refundMethods, currency }) {
     const { t, formatMoney, formatDate, formatCurrency } = useTranslation();
@@ -292,7 +292,16 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
                                         </Link>
                                     ),
                                 },
-                                { label: t('finance.rentals.form.contact'), value: rental.client.contact_person_name },
+                                { label: t('leasing.clients.columns.type'), value: t(`leasing.partyTypes.${rental.client.client_type}`) },
+                                ...(rental.client.client_type === 'individual'
+                                    ? [
+                                          {
+                                              label: t('finance.rentals.show.identity'),
+                                              value: rental.client.id_number ? `${t(`leasing.idTypes.${rental.client.id_type}`)} · ${rental.client.id_number}` : null,
+                                          },
+                                          { label: t('finance.rentals.form.person.nationality'), value: rental.client.nationality },
+                                      ]
+                                    : [{ label: t('finance.rentals.form.contact'), value: rental.client.contact_person_name }]),
                                 { label: t('finance.rentals.form.phone'), value: rental.client.phone },
                                 { label: t('finance.rentals.form.email'), value: rental.client.email },
                             ]}

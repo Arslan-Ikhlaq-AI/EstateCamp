@@ -64,7 +64,7 @@ class ClientSeeder extends Seeder
 
         return [
             $company(self::GULF_BUILDERS, 'Ravi Shankar', 'hr@gulfbuilders.test', '+971 4 330 1200', 'CN-2214587', '100223344500003', 'Warehouse 14, Al Quoz Industrial Area 4, Dubai', 'Construction contractor. Houses site crews in the Al Quoz dormitories and its project manager in a supervisor flat.'),
-            $company(self::AL_NOOR, 'Sana Iqbal', 'admin@alnoorfm.test', '+971 4 285 9910', 'CN-3398120', '100334455600003', 'Office 305, Al Qusais Plaza, Al Qusais, Dubai', 'Facilities contractor. Pays only for the supervisor beds actually used each month.'),
+            $company(self::AL_NOOR, 'Sana Iqbal', 'admin@alnoorfm.test', '+971 4 285 9910', 'CN-3398120', '100334455600003', 'Office 305, Al Qusais Plaza, Al Qusais, Dubai', 'Facilities contractor. Rents two supervisor rooms in Al Quoz.'),
             $company(self::DESERT_LINE, 'Peter Dsouza', 'people@desertline.test', '+971 4 887 4300', 'JAFZA-145523', '100445566700003', 'Plot S30412, Jebel Ali Free Zone South, Dubai', 'Logistics company. Rents whole rooms and an apartment for office staff; quarterly post-dated cheques.'),
             $company(self::MINI_MART, 'Abdul Rahim', 'abdul@aqminimart.test', '+971 55 230 4411', 'CN-4410982', '100556677800003', 'Shop G-01, Al Quoz Worker Village, Dubai', 'Runs the village mini market. Commercial lease, so VAT applies.'),
             $company(self::FRESHFOLD, 'Joseph Mathew', 'ops@freshfold.test', '+971 52 118 9032', 'CN-4519730', '100667788900003', 'Shop G-02, Al Quoz Worker Village, Dubai', 'Laundry operator. Its September cheque bounced; a replacement is being chased.'),

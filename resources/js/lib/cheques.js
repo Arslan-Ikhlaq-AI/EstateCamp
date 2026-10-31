@@ -143,7 +143,7 @@ export function planContractCheques(data) {
                     continue;
                 }
 
-                const amount = round2((Number(line.monthly_rate) || 0) * monthsBetween(from, addDays(to, 1))) * (Number(line.quantity) || 0);
+                const amount = round2((Number(line.monthly_rate) || 0) * monthsBetween(from, addDays(to, 1)));
                 total += amount + round2((amount * (Number(line.vat_rate) || 0)) / 100);
             }
 

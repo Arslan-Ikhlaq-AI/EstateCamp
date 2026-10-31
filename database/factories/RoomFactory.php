@@ -19,8 +19,6 @@ class RoomFactory extends Factory
      */
     public function definition(): array
     {
-        $capacity = fake()->numberBetween(1, 8);
-
         return [
             'property_id' => Property::factory(),
             // Rooms must share their property's company (enforced by a composite foreign key).
@@ -29,17 +27,8 @@ class RoomFactory extends Factory
             'floor_number' => fake()->numberBetween(0, 5),
             // Room types are reference rows inserted by their migration.
             'room_type_id' => fn () => RoomType::query()->inRandomOrder()->value('id'),
-            'capacity' => $capacity,
-            'occupied_count' => fake()->numberBetween(0, $capacity),
+            'capacity' => fake()->numberBetween(1, 8),
             'status' => 'active',
         ];
-    }
-
-    /**
-     * Give every created room one bed per unit of capacity, as the room form does.
-     */
-    public function configure(): static
-    {
-        return $this->afterCreating(fn (Room $room) => $room->syncBeds());
     }
 }

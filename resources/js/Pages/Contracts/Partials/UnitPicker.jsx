@@ -28,12 +28,11 @@ function lineFor(lines, kind, unit) {
 
 /**
  * The property's units of one kind this contract can take, in number
- * order: those nobody else holds and that are in service, and those
- * already on the contract. Rooms are let whole, so a room another
- * contract or a short-term rental holds any of is left out.
+ * order: those nobody else holds (another contract or a short-term
+ * rental) and that are in service, and those already on the contract.
  */
 function choosable(property, kind, lines) {
-    const isFree = (unit) => (kind === 'rooms' ? unit.status === 'active' && unit.contracted === 0 : !unit.held && !OUT_OF_SERVICE.includes(unit.status));
+    const isFree = (unit) => !unit.held && (kind === 'rooms' ? unit.status === 'active' : !OUT_OF_SERVICE.includes(unit.status));
 
     return property[kind].filter((unit) => lineFor(lines, kind, unit) || isFree(unit)).sort(byNumber);
 }
@@ -70,7 +69,7 @@ function UnitChoice({ kind, unit, line, onToggle, currency }) {
         apartments: t('leasing.lines.apartment', { number: unit.number }),
         shops: t('leasing.lines.shop', { number: unit.number }),
     }[kind];
-    const rent = unit.rate === null ? null : kind === 'rooms' ? unit.rate * unit.capacity : unit.rate;
+    const rent = unit.rate ?? null;
 
     return (
         <button
@@ -99,7 +98,7 @@ function UnitChoice({ kind, unit, line, onToggle, currency }) {
                 <span className="text-xs text-muted-foreground tabular-nums">
                     {kind === 'rooms' && (
                         <>
-                            <span className="block sm:inline">{t('common.beds', { count: unit.capacity })}</span>
+                            <span className="block sm:inline">{t('common.sleeps', { count: unit.capacity })}</span>
                             <span className="hidden sm:inline"> · </span>
                         </>
                     )}

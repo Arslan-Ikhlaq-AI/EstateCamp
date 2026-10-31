@@ -13,7 +13,6 @@ use App\Models\Room;
 use App\Models\RoomRental;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Database\Seeders\BedSeeder;
 use Database\Seeders\PortfolioSeeder;
 use Database\Seeders\PropertySeeder;
 use Illuminate\Support\Facades\Storage;
@@ -21,13 +20,13 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->travelTo(now()->setDate(2026, 10, 17)->setTime(10, 0));
-    $this->seed([PortfolioSeeder::class, BedSeeder::class]);
+    $this->seed(PortfolioSeeder::class);
     Storage::fake(Cheque::IMAGE_DISK);
 
     $this->admin = User::where('email', 'omar.rahman@horizonfm.test')->sole();
     $this->company = Company::findOrFail($this->admin->company_id);
     $this->room = fn (string $property, string $number) => $this->company->properties()->where('code', $property)->sole()->rooms()->where('room_number', $number)->sole();
-    // A single room and a twin room at Jebel Ali, and a four-bed room at Al Quoz.
+    // A single room and a twin room at Jebel Ali, and a room for four at Al Quoz.
     $this->privateRoom = ($this->room)(PropertySeeder::JEBEL_ALI, '102');
     $this->twinRoom = ($this->room)(PropertySeeder::JEBEL_ALI, '103');
     $this->dormRoom = ($this->room)(PropertySeeder::AL_QUOZ, '103');
@@ -42,6 +41,7 @@ function rentalInput(array $overrides = []): array
 {
     return [
         'client_mode' => 'new',
+        'client_type' => 'company',
         'new_client' => ['name' => 'BrightPath Events L.L.C.', 'phone' => '+971 55 120 3344'],
         'property_id' => test()->privateRoom->property_id,
         'room_ids' => [test()->privateRoom->id, test()->twinRoom->id],
@@ -86,7 +86,7 @@ describe('renting rooms short-term', function () {
             ->and($rental->end_date->toDateString())->toBe('2026-12-31')
             ->and($rental->termMonths())->toBe(3)
             ->and(Occupancy::count())->toBe(0)
-            ->and($this->privateRoom->refresh()->occupied_count)->toBe(1);
+            ->and($this->privateRoom->refresh()->is_occupied)->toBeTrue();
     });
 
     test('records the first month and the deposit as paid now, with the new company’s other details', function () {
@@ -119,25 +119,76 @@ describe('renting rooms short-term', function () {
             ->assertSessionHasErrors('payment_method');
     });
 
-    test('rents to a company already on file, but not to a person', function () {
+    test('takes cheques for the first month and the deposit into the cheque register, but not a card', function () {
+        $byCheque = ['first_payment' => 'now', 'payment_method' => 'cheque', 'cheque_number' => '204417', 'deposit_cheque_number' => '204418', 'bank_name' => 'Emirates NBD', 'cheque_date' => '2026-10-17'];
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['first_payment' => 'now', 'payment_method' => 'card']))
+            ->assertSessionHasErrors('payment_method');
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput([...$byCheque, 'deposit_cheque_number' => '204417', 'bank_name' => null]))
+            ->assertSessionHasErrors(['deposit_cheque_number', 'bank_name']);
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput($byCheque))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', fn (string $message) => str_ends_with($message, 'The cheques for the first month’s rent and the deposit are in the cheque register.'));
+
+        $rental = RoomRental::sole();
+
+        expect(RentalPayment::count())->toBe(0)
+            ->and($rental->rentStanding()['paid'])->toBe(0.0)
+            ->and($rental->cheques()->orderBy('purpose')->get()->map(fn (Cheque $cheque) => [$cheque->purpose, $cheque->cheque_number, $cheque->bank_name, $cheque->account_holder, (float) $cheque->amount, $cheque->cheque_date->toDateString()])->all())
+            ->toBe([
+                ['rent', '204417', 'Emirates NBD', 'BrightPath Events L.L.C.', 3700.0, '2026-10-17'],
+                ['security_deposit', '204418', 'Emirates NBD', 'BrightPath Events L.L.C.', 3700.0, '2026-10-17'],
+            ]);
+    });
+
+    test('rents to a company or a person already on file', function () {
         $company = Client::factory()->create(['company_id' => $this->company->id]);
-        $person = Client::factory()->individual()->create(['company_id' => $this->company->id, 'name' => 'Grace Wanjiru']);
+        $person = Client::factory()->individual()->create(['company_id' => $this->company->id]);
 
         $this->actingAs($this->admin)
-            ->post(route('rentals.store'), rentalInput(['client_mode' => 'existing', 'client_id' => $person->id]))
-            ->assertSessionHasErrors(['client_id' => 'Grace Wanjiru is a person. Short-term rentals are for companies.']);
-
-        $this->actingAs($this->admin)
-            ->post(route('rentals.store'), rentalInput(['client_mode' => 'existing', 'client_id' => $company->id]))
+            ->post(route('rentals.store'), rentalInput(['client_mode' => 'existing', 'client_id' => $company->id, 'room_ids' => [$this->privateRoom->id]]))
             ->assertSessionHasNoErrors();
 
-        expect(RoomRental::sole()->client_id)->toBe($company->id)
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['client_mode' => 'existing', 'client_type' => 'individual', 'client_id' => $person->id, 'room_ids' => [$this->twinRoom->id]]))
+            ->assertSessionHasNoErrors();
+
+        expect(RoomRental::orderBy('id')->pluck('client_id')->all())->toBe([$company->id, $person->id])
             ->and(Client::count())->toBe(2);
+    });
+
+    test('rents rooms to a new person by their name, phone and ID, keeping company details off them', function () {
+        $person = ['name' => 'Grace Wanjiru', 'phone' => '+971 50 771 2045', 'id_type' => 'emirates_id', 'id_number' => '784-1990-1234567-1', 'nationality' => 'Kenyan'];
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['client_type' => 'individual', 'new_client' => [...$person, 'id_number' => '']]))
+            ->assertSessionHasErrors(['new_client.id_number' => 'The ID number field is required.']);
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['client_type' => 'individual', 'new_client' => [...$person, 'trade_license_number' => 'CN-5521870', 'contact_person_name' => 'Someone']]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('rentals.show', RoomRental::sole()));
+
+        $client = RoomRental::sole()->client;
+
+        expect($client->client_type)->toBe('individual')
+            ->and($client->only(['name', 'phone', 'id_type', 'id_number', 'nationality', 'trade_license_number', 'contact_person_name', 'status']))
+            ->toBe([...$person, 'trade_license_number' => null, 'contact_person_name' => null, 'status' => 'active'])
+            ->and(RoomRental::sole()->rooms()->count())->toBe(2);
+
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['client_type' => 'individual', 'new_client' => $person, 'room_ids' => [$this->dormRoom->id], 'property_id' => $this->dormRoom->property_id]))
+            ->assertSessionHasErrors(['new_client.id_number' => 'A client with this ID number is already on file. Choose them as an existing person.']);
     });
 
     test('refuses rooms a contract or another rental holds, and rooms in another property', function () {
         $contract = Contract::factory()->active()->create(['client_id' => Client::factory()->create(['company_id' => $this->company->id])->id]);
-        ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->privateRoom->property_id, 'room_id' => $this->privateRoom->id, 'unit_type' => 'room', 'quantity' => 1]);
+        ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->privateRoom->property_id, 'room_id' => $this->privateRoom->id, 'unit_type' => 'room']);
 
         $this->actingAs($this->admin)
             ->post(route('rentals.store'), rentalInput())
@@ -157,11 +208,7 @@ describe('renting rooms short-term', function () {
     test('keeps rooms held short-term out of contracts', function () {
         $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01']);
         $client = Client::factory()->create(['company_id' => $this->company->id]);
-        $contract = Contract::factory()->active()->create(['client_id' => $client->id, 'start_date' => '2026-01-01', 'end_date' => '2026-12-31']);
-        $line = ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->dormRoom->property_id]);
         $dates = ['start_date' => '2026-11-01', 'end_date' => '2027-10-31'];
-
-        expect($line->availableBeds()->pluck('room_id')->unique()->all())->not->toContain($this->dormRoom->id);
 
         $this->actingAs($this->admin)
             ->post(route('contracts.store'), [
@@ -193,6 +240,22 @@ describe('renting rooms short-term', function () {
                 })
                 ->where('maxMonths', RoomRental::MAX_TERM_MONTHS)
             );
+    });
+
+    test('opens the form on a person on file, or on a new person', function () {
+        $person = Client::factory()->individual()->create(['company_id' => $this->company->id]);
+
+        $this->actingAs($this->admin)
+            ->get(route('rentals.create', ['client' => $person->id]))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('defaults.client_type', 'individual')
+                ->where('defaults.client_id', $person->id)
+                ->where('clients.0.type', 'individual')
+            );
+
+        $this->actingAs($this->admin)
+            ->get(route('rentals.create', ['type' => 'individual']))
+            ->assertInertia(fn (Assert $page) => $page->where('defaults.client_type', 'individual')->where('defaults.client_id', null));
     });
 });
 
@@ -317,7 +380,7 @@ describe('a running rental', function () {
             ->and((float) $rental->deposit_refunded)->toBe(600.0)
             ->and($rental->depositStanding()['held'])->toBe(300.0)
             ->and(RoomRental::heldRoomIds($this->company->id))->toBe([])
-            ->and($this->dormRoom->refresh()->occupied_count)->toBe(0);
+            ->and($this->dormRoom->refresh()->is_occupied)->toBeFalse();
     });
 
     test('hands back no more deposit than was paid', function () {
@@ -330,12 +393,12 @@ describe('a running rental', function () {
         expect($rental->fresh()->status)->toBe('active');
     });
 
-    test('ends an older per-bed rental when its tenant is checked out from their occupant page', function () {
+    test('ends an older rental when its tenant is checked out from their occupant page', function () {
         $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-09-01']);
         $stay = (new Occupancy(['check_in_date' => '2026-09-01']))->forceFill([
             'company_id' => $this->company->id,
             'occupant_id' => Occupant::factory()->create(['client_id' => $rental->client_id])->id,
-            'bed_id' => $this->dormRoom->beds()->orderBy('id')->value('id'),
+            'room_id' => $this->dormRoom->id,
             'room_rental_id' => $rental->id,
         ]);
         $stay->save();
@@ -394,6 +457,20 @@ describe('a running rental', function () {
             );
 
         expect($paidUp->rentStanding()['standing'])->toBe('paid_up');
+    });
+
+    test('narrows the list to rentals of companies or of individuals', function () {
+        rentedRooms($this->privateRoom, ['start_date' => '2026-10-01']);
+        $byPerson = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'client_id' => Client::factory()->individual()->create(['company_id' => $this->company->id])->id]);
+
+        $this->actingAs($this->admin)
+            ->get(route('rentals.index', ['types' => ['individual']]))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('rentals.total', 1)
+                ->where('rentals.data.0.number', $byPerson->rental_number)
+                ->where('rentals.data.0.tenant.type', 'individual')
+                ->where('facets.types', [['value' => 'company', 'count' => 1], ['value' => 'individual', 'count' => 1]])
+            );
     });
 
     test('shows a company’s rentals on their client page', function () {

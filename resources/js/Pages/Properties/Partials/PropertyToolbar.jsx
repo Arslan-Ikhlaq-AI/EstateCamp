@@ -6,7 +6,7 @@ import { TABLE_COLUMNS } from './PropertiesTable';
 
 export const SEARCH_INPUT_ID = 'property-search';
 
-const SORT_OPTIONS = ['name', 'occupancy', 'beds', 'rooms', 'rent_roll', 'lease_end', 'created'];
+const SORT_OPTIONS = ['name', 'occupancy', 'rooms', 'rent_roll', 'lease_end', 'created'];
 
 /**
  * Search, filters, sorting and layout controls above the property list.

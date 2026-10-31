@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { FieldGroup } from '@/components/ui/field';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useTranslation } from '@/hooks/use-translation';
+import { defaultRoomTypeId } from '@/Pages/Rooms/Partials/roomOptions';
 import { Link } from '@inertiajs/react';
 import { DoorOpenIcon, HouseIcon, PlusIcon, StoreIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
@@ -56,7 +57,7 @@ function newBatch(kind, batches, summary, options) {
     const first_number = nextFirstNumber(kind, batches, summary);
 
     if (kind === 'rooms') {
-        return { count: '1', first_number, room_type_id: options.roomTypes[0]?.id ?? null, capacity: '4', rent_per_bed: '', area_sqm: '', floor_number: '', gender_policy: null };
+        return { count: '1', first_number, room_type_id: defaultRoomTypeId(options.roomTypes), capacity: '4', monthly_rent: '', area_sqm: '', floor_number: '', gender_policy: null };
     }
 
     if (kind === 'shops') {
@@ -87,8 +88,8 @@ function BatchFields({ kind, batch, index, onChange, errors, options, currency, 
                         label={t('propertyForm.units.roomType')}
                         items={options.roomTypes.map((type) => ({ value: type.id, label: tOr(`roomTypes.${type.slug}`, type.name) }))}
                     />
-                    <TextField {...bind('capacity')} type="number" inputMode="numeric" min={1} max={100} label={t('propertyForm.units.beds')} required />
-                    <MoneyField {...bind('rent_per_bed')} currency={currency} label={t('propertyForm.units.rentPerBed')} optional />
+                    <TextField {...bind('capacity')} type="number" inputMode="numeric" min={1} max={100} label={t('propertyForm.units.capacity')} required />
+                    <MoneyField {...bind('monthly_rent')} currency={currency} label={t('propertyForm.units.monthlyRent')} optional />
                     <SelectField
                         {...bind('gender_policy')}
                         label={t('propertyForm.units.gender')}
@@ -135,7 +136,7 @@ function BatchFields({ kind, batch, index, onChange, errors, options, currency, 
 
 /**
  * Rooms, shops and apartments to create with the property, in batches of
- * alike units (such as five 4-bed rooms and three 6-bed rooms), each batch
+ * alike units (such as five rooms for 4 and three rooms for 6), each batch
  * numbered up from its first number. `summary` lists what the property
  * already has when editing. `remaining` is how many more units fit, or null
  * when the property has no number of units; at zero no batch can be added.
@@ -223,7 +224,7 @@ export default function UnitBatches({ units, onChange, errors, options, currency
                                                 <span className="text-[0.8125rem] text-muted-foreground">
                                                     {t('propertyForm.units.preview', { count: numbers.length, first: numbers[0], last: numbers[numbers.length - 1] })}
                                                     {kind === 'rooms' && Number(batch.capacity) > 0 && (
-                                                        <> · {t('common.beds', { count: numbers.length * Number(batch.capacity) })}</>
+                                                        <> · {t('common.sleeps', { count: numbers.length * Number(batch.capacity) })}</>
                                                     )}
                                                 </span>
                                             )}

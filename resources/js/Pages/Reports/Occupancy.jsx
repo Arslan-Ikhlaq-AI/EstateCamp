@@ -6,40 +6,51 @@ import StatCard from '@/Components/StatCard';
 import { useCalendarFormat } from '@/Components/StaffBadges';
 import { useTranslation } from '@/hooks/use-translation';
 import { Link } from '@inertiajs/react';
-import { BedDoubleIcon, BedSingleIcon, CoinsIcon, UsersRoundIcon } from 'lucide-react';
+import { BedDoubleIcon, CoinsIcon, DoorClosedIcon, PercentIcon, UsersRoundIcon } from 'lucide-react';
 
 /**
  * The occupancy columns shared by the property and room type tables:
- * rooms, beds, how many are taken, free and out of service, the rate, and
- * the rent taken beds bring in against a full house.
+ * rooms, how many are occupied, vacant and out of service, the rate, and
+ * the rent occupied rooms bring in against a full house.
  */
-function useBedColumns(currency) {
+function useRoomColumns(currency) {
     const { t, formatNumber, formatPercent, formatMoney } = useTranslation();
     const count = (value) => <span className="tabular-nums">{formatNumber(value)}</span>;
 
     return [
         { id: 'rooms', header: t('reports.common.columns.rooms'), align: 'end', cell: (row) => count(row.rooms), total: (rows) => formatNumber(rows.reduce((total, row) => total + row.rooms, 0)) },
-        { id: 'beds', header: t('reports.common.columns.beds'), align: 'end', cell: (row) => count(row.beds.total), total: (rows) => formatNumber(rows.reduce((total, row) => total + row.beds.total, 0)) },
-        { id: 'occupied', header: t('reports.common.columns.occupied'), align: 'end', cell: (row) => count(row.beds.occupied), total: (rows) => formatNumber(rows.reduce((total, row) => total + row.beds.occupied, 0)) },
-        { id: 'free', header: t('reports.occupancy.columns.free'), align: 'end', cell: (row) => count(row.beds.available), total: (rows) => formatNumber(rows.reduce((total, row) => total + row.beds.available, 0)) },
+        {
+            id: 'occupied',
+            header: t('reports.common.columns.occupied'),
+            align: 'end',
+            cell: (row) => count(row.roomOccupancy.occupied),
+            total: (rows) => formatNumber(rows.reduce((total, row) => total + row.roomOccupancy.occupied, 0)),
+        },
+        {
+            id: 'vacant',
+            header: t('reports.occupancy.columns.vacant'),
+            align: 'end',
+            cell: (row) => count(row.roomOccupancy.available),
+            total: (rows) => formatNumber(rows.reduce((total, row) => total + row.roomOccupancy.available, 0)),
+        },
         {
             id: 'outOfService',
             header: t('reports.occupancy.columns.outOfService'),
             align: 'end',
-            cell: (row) => count(row.beds.outOfService),
-            total: (rows) => formatNumber(rows.reduce((total, row) => total + row.beds.outOfService, 0)),
+            cell: (row) => count(row.roomOccupancy.outOfService),
+            total: (rows) => formatNumber(rows.reduce((total, row) => total + row.roomOccupancy.outOfService, 0)),
         },
         {
             id: 'rate',
             header: t('reports.common.columns.occupancy'),
             className: 'w-40',
             cell: (row) =>
-                row.beds.occupancyRate === null ? (
+                row.roomOccupancy.occupancyRate === null ? (
                     <span className="text-muted-foreground">—</span>
                 ) : (
                     <div className="flex items-center gap-2">
-                        <ShareBar value={row.beds.occupancyRate} max={100} />
-                        <span className="w-12 text-end text-xs font-medium tabular-nums">{formatPercent(row.beds.occupancyRate)}</span>
+                        <ShareBar value={row.roomOccupancy.occupancyRate} max={100} />
+                        <span className="w-12 text-end text-xs font-medium tabular-nums">{formatPercent(row.roomOccupancy.occupancyRate)}</span>
                     </div>
                 ),
         },
@@ -63,12 +74,12 @@ function useBedColumns(currency) {
 /**
  * The occupancy report: how full each property and kind of room is, who
  * is staying, who moved in and out over the period, a year of people
- * staying, and the rooms with beds free.
+ * staying, and the rooms standing vacant.
  */
 export default function Occupancy({ company, prepared, period, summary, properties, roomTypes, clients, nationalities, gender, trend, vacancies }) {
     const { t, formatCurrency, formatMoney, formatNumber, formatPercent } = useTranslation();
     const { formatMonth } = useCalendarFormat();
-    const bedColumns = useBedColumns(company?.currency);
+    const roomColumns = useRoomColumns(company?.currency);
     const title = t('reports.occupancy.title');
 
     if (company === null) {
@@ -76,11 +87,11 @@ export default function Occupancy({ company, prepared, period, summary, properti
     }
 
     const currency = company.currency;
-    const beds = summary.beds;
+    const occupancy = summary.roomOccupancy;
     const rateText = (rate) => (rate === null ? '—' : formatPercent(rate));
     const totalsFor = (columns, rows, label) => ({
         ...Object.fromEntries(columns.filter((column) => column.total).map((column) => [column.id, column.total(rows)])),
-        rate: rateText(beds.occupancyRate),
+        rate: rateText(occupancy.occupancyRate),
         [columns[0].id]: label,
     });
 
@@ -97,9 +108,9 @@ export default function Occupancy({ company, prepared, period, summary, properti
                 </Link>
             ),
         },
-        ...bedColumns,
+        ...roomColumns,
     ];
-    const typeColumns = [{ id: 'type', header: t('reports.occupancy.columns.roomType'), cell: (row) => <span className="font-medium">{row.name}</span> }, ...bedColumns.filter((column) => column.id !== 'vacancyLoss')];
+    const typeColumns = [{ id: 'type', header: t('reports.occupancy.columns.roomType'), cell: (row) => <span className="font-medium">{row.name}</span> }, ...roomColumns.filter((column) => column.id !== 'vacancyLoss')];
 
     const staying = gender.male + gender.female;
     const clientColumns = [
@@ -137,24 +148,12 @@ export default function Occupancy({ company, prepared, period, summary, properti
         },
         { id: 'type', header: t('reports.occupancy.columns.roomType'), cell: (row) => row.type },
         { id: 'gender', header: t('reports.occupancy.vacancies.columns.gender'), cell: (row) => (row.genderPolicy ? t(`gender.${row.genderPolicy}`) : '—') },
-        {
-            id: 'beds',
-            header: t('reports.occupancy.vacancies.columns.taken'),
-            align: 'end',
-            cell: (row) => <span className="tabular-nums">{t('reports.occupancy.vacancies.taken', { occupied: row.occupied, capacity: row.capacity })}</span>,
-        },
-        { id: 'free', header: t('reports.occupancy.columns.free'), align: 'end', cell: (row) => <span className="font-semibold tabular-nums">{formatNumber(row.free)}</span> },
+        { id: 'sleeps', header: t('reports.occupancy.vacancies.columns.sleeps'), align: 'end', cell: (row) => <span className="tabular-nums">{formatNumber(row.capacity)}</span> },
         {
             id: 'rent',
             header: t('reports.occupancy.vacancies.columns.rent'),
             align: 'end',
-            cell: (row) => <span className="tabular-nums">{row.rentPerBed === null ? '—' : formatMoney(row.rentPerBed, currency)}</span>,
-        },
-        {
-            id: 'income',
-            header: t('reports.occupancy.vacancies.columns.income'),
-            align: 'end',
-            cell: (row) => <span className="tabular-nums">{row.rentPerBed === null ? '—' : formatMoney(row.rentPerBed * row.free, currency)}</span>,
+            cell: (row) => <span className="font-semibold tabular-nums">{row.monthlyRent === null ? '—' : formatMoney(row.monthlyRent, currency)}</span>,
         },
     ];
     const nationalityPeak = Math.max(...nationalities.map((row) => row.count), 1);
@@ -169,16 +168,25 @@ export default function Occupancy({ company, prepared, period, summary, properti
                 t('reports.common.columns.property'),
                 t('reports.common.columns.code'),
                 t('reports.common.columns.rooms'),
-                t('reports.common.columns.beds'),
                 t('reports.common.columns.occupied'),
-                t('reports.occupancy.columns.free'),
+                t('reports.occupancy.columns.vacant'),
                 t('reports.occupancy.columns.outOfService'),
                 t('reports.common.columns.occupancyPercent'),
                 t('reports.common.columns.rentRoll'),
                 t('reports.occupancy.columns.potentialRent'),
             ],
             rows: () =>
-                properties.map((row) => [row.name, row.code, row.rooms, row.beds.total, row.beds.occupied, row.beds.available, row.beds.outOfService, row.beds.occupancyRate, row.rentRoll, row.potentialRent]),
+                properties.map((row) => [
+                    row.name,
+                    row.code,
+                    row.rooms,
+                    row.roomOccupancy.occupied,
+                    row.roomOccupancy.available,
+                    row.roomOccupancy.outOfService,
+                    row.roomOccupancy.occupancyRate,
+                    row.rentRoll,
+                    row.potentialRent,
+                ]),
         },
         {
             key: 'clients',
@@ -190,18 +198,16 @@ export default function Occupancy({ company, prepared, period, summary, properti
         {
             key: 'vacancies',
             label: t('reports.occupancy.exports.vacancies'),
-            name: 'rooms-with-free-beds',
+            name: 'vacant-rooms',
             header: [
                 t('reports.common.columns.property'),
                 t('reports.occupancy.vacancies.columns.room'),
                 t('reports.occupancy.columns.roomType'),
                 t('reports.occupancy.vacancies.columns.gender'),
-                t('reports.common.columns.beds'),
-                t('reports.common.columns.occupied'),
-                t('reports.occupancy.columns.free'),
+                t('reports.occupancy.vacancies.columns.sleeps'),
                 t('reports.occupancy.vacancies.columns.rent'),
             ],
-            rows: () => vacancies.map((row) => [row.property, row.number, row.type, row.genderPolicy ? t(`gender.${row.genderPolicy}`) : '', row.capacity, row.occupied, row.free, row.rentPerBed]),
+            rows: () => vacancies.map((row) => [row.property, row.number, row.type, row.genderPolicy ? t(`gender.${row.genderPolicy}`) : '', row.capacity, row.monthlyRent]),
         },
         {
             key: 'trend',
@@ -225,11 +231,11 @@ export default function Occupancy({ company, prepared, period, summary, properti
         >
             <section aria-label={t('reports.summary.headline')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 print:grid-cols-4">
                 <StatCard
-                    icon={BedDoubleIcon}
+                    icon={PercentIcon}
                     label={t('reports.occupancy.stats.rate')}
-                    value={rateText(beds.occupancyRate)}
-                    meter={beds.occupancyRate ?? 0}
-                    detail={t('reports.occupancy.stats.rateDetail', { occupied: beds.occupied, total: beds.occupied + beds.available })}
+                    value={rateText(occupancy.occupancyRate)}
+                    meter={occupancy.occupancyRate ?? 0}
+                    detail={t('reports.occupancy.stats.rateDetail', { occupied: occupancy.occupied, total: occupancy.occupied + occupancy.available })}
                 />
                 <StatCard
                     icon={UsersRoundIcon}
@@ -238,11 +244,11 @@ export default function Occupancy({ company, prepared, period, summary, properti
                     detail={t('reports.occupancy.stats.stayingDetail', { male: gender.male, female: gender.female })}
                 />
                 <StatCard
-                    icon={BedSingleIcon}
-                    tone={beds.available > 0 ? 'gold' : 'success'}
-                    label={t('reports.occupancy.stats.free')}
-                    value={formatNumber(beds.available)}
-                    detail={t('reports.occupancy.stats.freeDetail', { count: beds.outOfService })}
+                    icon={DoorClosedIcon}
+                    tone={occupancy.available > 0 ? 'gold' : 'success'}
+                    label={t('reports.occupancy.stats.vacant')}
+                    value={formatNumber(occupancy.available)}
+                    detail={t('reports.occupancy.stats.vacantDetail', { count: occupancy.outOfService })}
                 />
                 <StatCard
                     icon={CoinsIcon}
@@ -340,9 +346,9 @@ export default function Occupancy({ company, prepared, period, summary, properti
                                     columns={vacancyColumns}
                                     values={{
                                         room: t('reports.common.total'),
-                                        free: formatNumber(vacancies.reduce((total, row) => total + row.free, 0)),
-                                        income: formatMoney(
-                                            vacancies.reduce((total, row) => total + (row.rentPerBed ?? 0) * row.free, 0),
+                                        sleeps: formatNumber(vacancies.reduce((total, row) => total + row.capacity, 0)),
+                                        rent: formatMoney(
+                                            vacancies.reduce((total, row) => total + (row.monthlyRent ?? 0), 0),
                                             currency,
                                         ),
                                     }}

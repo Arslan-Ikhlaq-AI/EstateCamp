@@ -37,6 +37,7 @@ test('every leasing page opens for a member of the company', function (Closure $
     'client' => [fn () => route('clients.show', Client::first()), 'Clients/Show'],
     'add client' => [fn () => route('clients.create'), 'Clients/Form'],
     'edit client' => [fn () => route('clients.edit', Client::first()), 'Clients/Form'],
+    'individuals' => [fn () => route('individuals.index'), 'Individuals/Index'],
     'contracts' => [fn () => route('contracts.index'), 'Contracts/Index'],
     'contract' => [fn () => route('contracts.show', Contract::first()), 'Contracts/Show'],
     'new contract' => [fn () => route('contracts.create'), 'Contracts/Form'],
@@ -55,7 +56,7 @@ test('every leasing page opens for a member of the company', function (Closure $
 
 test('guests are sent to the login page', function (string $routeName) {
     $this->get(route($routeName))->assertRedirect(route('login'));
-})->with(['landlords.index', 'head-leases.index', 'cheques.index', 'clients.index', 'contracts.index', 'occupants.index', 'invoices.index', 'payments.index']);
+})->with(['landlords.index', 'head-leases.index', 'cheques.index', 'clients.index', 'individuals.index', 'contracts.index', 'occupants.index', 'invoices.index', 'payments.index']);
 
 test('users without a company see empty lists and cannot add records', function (string $index, string $create, string $component) {
     $user = User::factory()->create();
@@ -70,6 +71,7 @@ test('users without a company see empty lists and cannot add records', function 
     'landlords' => ['landlords.index', 'landlords.create', 'Landlords/Index'],
     'head leases' => ['head-leases.index', 'head-leases.create', 'HeadLeases/Index'],
     'clients' => ['clients.index', 'clients.create', 'Clients/Index'],
+    'individuals' => ['individuals.index', 'clients.create', 'Individuals/Index'],
     'contracts' => ['contracts.index', 'contracts.create', 'Contracts/Index'],
     'occupants' => ['occupants.index', 'occupancies.create', 'Occupants/Index'],
     'payments' => ['payments.index', 'payments.create', 'Payments/Index'],

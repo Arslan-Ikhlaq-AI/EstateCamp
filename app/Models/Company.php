@@ -274,7 +274,7 @@ class Company extends Model
     }
 
     /**
-     * Beds and rooms rented to individuals without a contract.
+     * Rooms rented short-term, without a contract.
      *
      * @return HasMany<RoomRental, $this>
      */

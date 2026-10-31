@@ -9,7 +9,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
-import { BedDoubleIcon, BedSingleIcon, LogInIcon, LogOutIcon, PencilIcon } from 'lucide-react';
+import { DoorClosedIcon, LogInIcon, LogOutIcon, PencilIcon, UserCheckIcon } from 'lucide-react';
 import { useState } from 'react';
 import CheckOutDialog from './Partials/CheckOutDialog';
 
@@ -29,7 +29,7 @@ export default function Show({ occupant, stays }) {
                 title={occupant.name}
                 badge={
                     current ? (
-                        <ToneBadge tone="success" icon={BedDoubleIcon}>
+                        <ToneBadge tone="success" icon={UserCheckIcon}>
                             {t('leasing.occupants.status.staying')}
                         </ToneBadge>
                     ) : (
@@ -74,7 +74,7 @@ export default function Show({ occupant, stays }) {
                             <DetailList
                                 rows={[
                                     { label: t('leasing.common.property'), value: <span dir="auto">{current.property.name}</span> },
-                                    { label: t('leasing.occupants.columns.bed'), value: t('leasing.common.roomBed', { room: current.roomNumber, bed: current.bedLabel }) },
+                                    { label: t('leasing.occupants.columns.room'), value: t('leasing.lines.roomName', { room: current.roomNumber }) },
                                     { label: t('leasing.occupants.columns.since'), value: formatDate(current.checkInDate) },
                                     { label: t('leasing.occupants.show.nights'), value: formatNumber(current.nights) },
                                     current.contract
@@ -100,7 +100,7 @@ export default function Show({ occupant, stays }) {
                             <Empty className="py-6">
                                 <EmptyHeader>
                                     <EmptyMedia variant="icon">
-                                        <BedSingleIcon />
+                                        <DoorClosedIcon />
                                     </EmptyMedia>
                                     <EmptyTitle>{t('leasing.occupants.show.noStayTitle')}</EmptyTitle>
                                     <EmptyDescription>{t('leasing.occupants.show.noStayDescription')}</EmptyDescription>
@@ -123,11 +123,11 @@ export default function Show({ occupant, stays }) {
                                 rows={history}
                                 columns={[
                                     {
-                                        id: 'bed',
-                                        header: t('leasing.occupants.columns.bed'),
+                                        id: 'room',
+                                        header: t('leasing.occupants.columns.room'),
                                         cell: (stay) => (
                                             <div className="flex flex-col text-sm">
-                                                <span>{t('leasing.common.roomBed', { room: stay.roomNumber, bed: stay.bedLabel })}</span>
+                                                <span>{t('leasing.lines.roomName', { room: stay.roomNumber })}</span>
                                                 <span className="text-xs text-muted-foreground" dir="auto">{stay.property.name}</span>
                                             </div>
                                         ),

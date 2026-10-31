@@ -5,8 +5,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import { useForm } from '@inertiajs/react';
 
 /**
- * Check an occupant out of their bed. `stay` needs `id`, `occupantName`,
- * `roomNumber`, `bedLabel` and `checkInDate`.
+ * Check an occupant out of their room. `stay` needs `id`, `occupantName`,
+ * `roomNumber` and `checkInDate`.
  */
 export default function CheckOutDialog({ stay, open, onOpenChange }) {
     const { t, formatDate } = useTranslation();
@@ -19,7 +19,6 @@ export default function CheckOutDialog({ stay, open, onOpenChange }) {
             title={t('leasing.occupants.checkOut.title', { name: stay.occupantName })}
             description={t('leasing.occupants.checkOut.description', {
                 room: stay.roomNumber,
-                bed: stay.bedLabel,
                 date: formatDate(stay.checkInDate),
             })}
             submitLabel={t('leasing.occupants.checkOut.submit')}

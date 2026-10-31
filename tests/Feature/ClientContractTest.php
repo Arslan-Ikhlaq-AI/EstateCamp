@@ -59,7 +59,7 @@ function existingContractInput(Contract $contract): array
         ...$contract->only(['client_id', 'billing_cycle', 'payment_terms_days', 'security_deposit']),
         'start_date' => $contract->start_date->toDateString(),
         'end_date' => $contract->end_date->toDateString(),
-        'monthly_rent' => $lines->sum(fn (ContractLine $line) => (float) $line->monthly_rate * $line->quantity),
+        'monthly_rent' => $lines->sum(fn (ContractLine $line) => (float) $line->monthly_rate),
         'lines' => $lines->map(fn (ContractLine $line) => [
             'id' => $line->id,
             ...$line->only(['unit_type', 'property_id', 'room_id', 'apartment_id', 'shop_id']),
@@ -79,8 +79,8 @@ describe('clients', function () {
                 ->where('clients.total', 12)
                 ->where('summary.companies', 8)
                 ->where('summary.staying', 27)
-                ->where('summary.receivable', 39500)
-                ->where('summary.overdue', 37800)
+                ->where('summary.receivable', 39800)
+                ->where('summary.overdue', 38100)
             );
     });
 
@@ -140,7 +140,7 @@ describe('clients', function () {
 });
 
 describe('contracts', function () {
-    test('lists contracts with their value and the beds they hold', function () {
+    test('lists contracts with their value and the rooms they hold', function () {
         $this->actingAs($this->superAdmin)
             ->get(route('contracts.index'))
             ->assertOk()
@@ -150,7 +150,8 @@ describe('contracts', function () {
                 ->where('summary.active', 9)
                 ->where('summary.drafts', 2)
                 ->where('summary.monthlyValue', 55700)
-                ->where('summary.contractedBeds', 30)
+                ->where('summary.contractedRooms', 8)
+                ->where('summary.contractedCapacity', 30)
                 ->where('summary.staying', 27)
             );
     });
@@ -179,7 +180,7 @@ describe('contracts', function () {
             ->assertSessionHasErrors('lines.0.apartment_id');
     });
 
-    test('rents whole rooms only, and never a room another contract has beds in', function (string $type, string $roomNumber, string $field) {
+    test('rents whole rooms only, and never a room another contract holds', function (string $type, string $roomNumber, string $field) {
         $room = $this->alQuoz->rooms()->where('room_number', $roomNumber)->sole();
 
         $this->actingAs($this->superAdmin)
@@ -189,8 +190,8 @@ describe('contracts', function () {
             ])
             ->assertSessionHasErrors($field);
     })->with([
-        'beds in a free room' => ['bed', '202', 'lines.0.unit_type'],
-        'a room another contract has beds in' => ['room', '101', 'lines.0.room_id'],
+        'beds instead of a room' => ['bed', '202', 'lines.0.unit_type'],
+        'a room another contract holds' => ['room', '101', 'lines.0.room_id'],
     ]);
 
     test('shares one monthly rent between the units in proportion to their list prices', function () {
@@ -210,9 +211,8 @@ describe('contracts', function () {
 
         $lines = Contract::where('contract_number', 'CTR-2026-0012')->sole()->lines()->orderBy('id')->get();
 
-        // The apartment lists at 5,200 and the six-bed room at 3,300.
-        expect($lines->map(fn (ContractLine $line) => (float) $line->monthly_rate)->all())->toBe([4894.12, 3105.88])
-            ->and($lines->pluck('quantity')->all())->toBe([1, 1]);
+        // The apartment lists at 5,200 and the room for six at 3,300.
+        expect($lines->map(fn (ContractLine $line) => (float) $line->monthly_rate)->all())->toBe([4894.12, 3105.88]);
     });
 
     test('refuses a unit from a different property than the line', function () {
@@ -226,9 +226,7 @@ describe('contracts', function () {
                     'property_id' => $this->alQuoz->id,
                     'room_id' => $jebelAliRoom->id,
                     'monthly_rate' => 1000,
-                    'billing_basis' => 'contracted',
                     'vat_rate' => 0,
-                    'quantity' => 1,
                     'start_date' => '2026-11-01',
                     'end_date' => '2027-10-31',
                 ]],
@@ -262,7 +260,7 @@ describe('contracts', function () {
             ->assertSessionHasNoErrors();
 
         expect($room->peopleStaying())->toBe(0)
-            ->and($room->refresh()->occupied_count)->toBe($room->capacity);
+            ->and($room->refresh()->is_occupied)->toBeTrue();
     });
 
     test('saving a renewal puts it in force', function () {
@@ -301,7 +299,7 @@ describe('contracts', function () {
 
         expect($contract->refresh()->status)->toBe('terminated')
             ->and($contract->occupancies()->whereNull('check_out_date')->count())->toBe(0)
-            ->and($this->jebelAli->rooms()->where('room_number', '103')->value('occupied_count'))->toBe(0)
+            ->and($this->jebelAli->rooms()->where('room_number', '103')->value('is_occupied'))->toBeFalse()
             ->and($this->jebelAli->apartments()->where('apartment_number', 'B-401')->value('status'))->toBe('vacant');
     });
 
@@ -361,11 +359,27 @@ describe('contracts', function () {
 test('adds a contract for a client created on the contract form, with its documents', function () {
     Storage::fake('public');
     $apartment = $this->alQuoz->apartments()->where('apartment_number', 'C-102')->sole();
+    $newClient = [
+        'client_type' => 'company',
+        'name' => 'Falcon Logistics L.L.C.',
+        'phone' => '+971 55 120 3344',
+        'trade_license_number' => 'TL-889922',
+        'tax_registration_number' => '100778899000003',
+        'address' => 'Warehouse 14, Al Quoz Industrial 3, Dubai',
+        'id_type' => 'emirates_id',
+    ];
 
     $this->actingAs($this->superAdmin)
         ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $apartment, [
             'client_mode' => 'new',
-            'new_client' => ['client_type' => 'company', 'name' => 'Falcon Logistics L.L.C.', 'trade_license_number' => 'TL-889922', 'id_type' => 'emirates_id'],
+            'new_client' => [...$newClient, 'tax_registration_number' => '1007788'],
+        ]))
+        ->assertSessionHasErrors('new_client.tax_registration_number');
+
+    $this->actingAs($this->superAdmin)
+        ->post(route('contracts.store'), apartmentContractInput($this->alNoor, $apartment, [
+            'client_mode' => 'new',
+            'new_client' => $newClient,
             'documents' => [['document_type' => 'trade_license', 'file' => UploadedFile::fake()->create('licence.pdf', 100, 'application/pdf')]],
         ]))
         ->assertSessionHasNoErrors();
@@ -374,6 +388,7 @@ test('adds a contract for a client created on the contract form, with its docume
     $document = $contract->documents()->sole();
 
     expect($contract->client->name)->toBe('Falcon Logistics L.L.C.')
+        ->and($contract->client->only(['phone', 'tax_registration_number', 'address']))->toBe(['phone' => '+971 55 120 3344', 'tax_registration_number' => '100778899000003', 'address' => 'Warehouse 14, Al Quoz Industrial 3, Dubai'])
         ->and($contract->client->id_type)->toBeNull()
         ->and($contract->client->company_id)->toBe($this->superAdmin->company_id)
         ->and($contract->client->status)->toBe('active')
@@ -402,11 +417,10 @@ test('shows which clients rent which units of a property', function () {
             ->has('clients', 5)
             ->where('clients.0.name', ClientSeeder::GULF_BUILDERS)
             ->where('clients.0.rooms', 2)
-            ->where('clients.0.beds', 16)
             ->where('clients.0.apartments', 1)
             ->where('clients.0.monthly', 14700)
             ->where('clients.1.name', ClientSeeder::AL_NOOR)
-            ->where('clients.1.beds', 8)
+            ->where('clients.1.rooms', 2)
             ->where('clients.2.name', ClientSeeder::MINI_MART)
             ->where('clients.2.shops', 1)
         );
@@ -418,7 +432,6 @@ test('lists the contracts renting a property with only what they rent there', fu
         'property_id' => $this->jebelAli->id,
         'unit_type' => 'shop',
         'shop_id' => $this->jebelAli->shops()->where('shop_number', 'G-02')->value('id'),
-        'quantity' => 1,
         'monthly_rate' => 6100,
     ]);
 
@@ -430,7 +443,7 @@ test('lists the contracts renting a property with only what they rent there', fu
             ->where('contracts.0.number', 'CTR-2026-0008')
             ->where('contracts.3.number', 'CTR-2026-0001')
             ->where('contracts.3.client.name', ClientSeeder::GULF_BUILDERS)
-            ->where('contracts.3.units', ['beds' => 16, 'rooms' => 0, 'apartments' => 1, 'shops' => 0])
+            ->where('contracts.3.units', ['rooms' => 2, 'apartments' => 1, 'shops' => 0])
             ->where('contracts.3.monthlyValue', 14700)
             ->where('contracts.4.number', 'CTR-2026-0011')
             ->where('contracts.4.status', 'draft')
@@ -441,7 +454,7 @@ test('lists the contracts renting a property with only what they rent there', fu
         ->assertInertia(fn (Assert $page) => $page
             ->has('contracts', 7)
             ->where('contracts.5.number', 'CTR-2026-0001')
-            ->where('contracts.5.units', ['beds' => 0, 'rooms' => 0, 'apartments' => 0, 'shops' => 1])
+            ->where('contracts.5.units', ['rooms' => 0, 'apartments' => 0, 'shops' => 1])
             ->where('contracts.5.monthlyValue', 6100)
         );
 });

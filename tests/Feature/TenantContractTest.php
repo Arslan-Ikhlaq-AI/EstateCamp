@@ -19,11 +19,10 @@ beforeEach(function () {
         'client_id' => Client::factory()->create(['company_id' => $this->property->company_id, 'name' => $clientName])->id,
         ...$attributes,
     ]);
-    $this->room = fn (string $number) => Room::factory()->create(['property_id' => $this->property->id, 'room_number' => $number, 'capacity' => 4, 'occupied_count' => 0]);
+    $this->room = fn (string $number) => Room::factory()->create(['property_id' => $this->property->id, 'room_number' => $number, 'capacity' => 4]);
     $this->line = fn (Contract $contract, array $attributes) => ContractLine::factory()->create([
         'contract_id' => $contract->id,
         'property_id' => $this->property->id,
-        'quantity' => 1,
         ...$attributes,
     ]);
 });
@@ -31,9 +30,9 @@ beforeEach(function () {
 test('shows each client with their contracts here, the rooms they hold, documents and every cheque by status', function () {
     $contract = ($this->contract)('Al Hajar Contracting', ['security_deposit' => 5000]);
     ($this->line)($contract, ['unit_type' => 'room', 'room_id' => ($this->room)('101')->id, 'monthly_rate' => 3000]);
-    ($this->line)($contract, ['unit_type' => 'bed', 'room_id' => ($this->room)('102')->id, 'quantity' => 2, 'monthly_rate' => 500]);
-    // The same contract also rents beds in another property, which this page leaves out.
-    ContractLine::factory()->create(['contract_id' => $contract->id, 'quantity' => 3, 'monthly_rate' => 400]);
+    ($this->line)($contract, ['unit_type' => 'room', 'room_id' => ($this->room)('102')->id, 'monthly_rate' => 1000]);
+    // The same contract also rents a room in another property, which this page leaves out.
+    ContractLine::factory()->create(['contract_id' => $contract->id, 'monthly_rate' => 1200]);
     ContractDocument::factory()->create(['contract_id' => $contract->id, 'title' => 'Signed tenancy']);
     Cheque::factory()->forAgreement($contract)->create(['sequence' => 1, 'cheque_date' => '2026-08-01', 'amount' => 4000, 'status' => 'cleared', 'cleared_on' => '2026-08-02']);
     // In hand and past its date, so overdue for deposit.
@@ -55,7 +54,7 @@ test('shows each client with their contracts here, the rooms they hold, document
             ->has('clients', 2)
             ->where('clients.0.name', 'Al Hajar Contracting')
             ->where('clients.0.liveContracts', 1)
-            ->where('clients.0.units', ['rooms' => 2, 'beds' => 6, 'shops' => 0, 'apartments' => 0])
+            ->where('clients.0.units', ['rooms' => 2, 'capacity' => 8, 'shops' => 0, 'apartments' => 0])
             ->where('clients.0.monthly', 4000)
             ->where('clients.0.contracts.0.number', $contract->contract_number)
             ->where('clients.0.contracts.0.otherProperties', 1)
@@ -74,7 +73,7 @@ test('shows each client with their contracts here, the rooms they hold, document
             ->where('clients.1.contracts.0.status', 'ended')
             ->where('summary.clients', 1)
             ->where('summary.contracts', ['draft' => 0, 'active' => 1, 'ended' => 1, 'terminated' => 0])
-            ->where('summary.units', ['rooms' => 2, 'beds' => 6, 'shops' => 0, 'apartments' => 0])
+            ->where('summary.units', ['rooms' => 2, 'capacity' => 8, 'shops' => 0, 'apartments' => 0])
             ->where('summary.monthly', 4000)
             ->where('summary.deposits', 5000)
             ->where('summary.cheques.stages.cleared', ['count' => 1, 'amount' => 4000])

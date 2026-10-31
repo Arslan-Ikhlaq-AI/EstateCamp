@@ -11,7 +11,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { BellRingIcon, Building2Icon, LogInIcon, PercentIcon, ReceiptIcon } from 'lucide-react';
 import AttentionCard from './Dashboard/Partials/AttentionCard';
-import BedCapacity from './Dashboard/Partials/BedCapacity';
+import RoomStatus from './Dashboard/Partials/RoomStatus';
 import ChequesOverview from './Dashboard/Partials/ChequesOverview';
 import CollectionsChart from './Dashboard/Partials/CollectionsChart';
 import DocumentsCard from './Dashboard/Partials/DocumentsCard';
@@ -44,7 +44,7 @@ function Greeting({ company, summary }) {
     const { auth, notifications = [] } = usePage().props;
     const now = new Date();
     const firstName = auth.user.name.split(/\s+/)[0];
-    const { beds } = summary;
+    const occupancy = summary.roomOccupancy;
 
     // The first name is set apart in gold; a placeholder marks where it goes in each language.
     const [before, after] = t(greetingKey(now.getHours()), { name: '\u0000' }).split('\u0000');
@@ -82,10 +82,10 @@ function Greeting({ company, summary }) {
                                 rooms: t('common.rooms', { count: summary.rooms }),
                             })}
                         </li>
-                        {beds.occupancyRate !== null && (
+                        {occupancy.occupancyRate !== null && (
                             <li className="flex h-8 items-center gap-2 rounded-full bg-white/10 px-3.5 text-[0.875rem] text-white/85 inset-ring inset-ring-white/10">
                                 <PercentIcon className="size-4 text-brand-cyan" />
-                                {t('dashboard.kpi.occupancy')} {formatPercent(beds.occupancyRate)}
+                                {t('dashboard.kpi.occupancy')} {formatPercent(occupancy.occupancyRate)}
                             </li>
                         )}
                         {notifications.length > 0 && (
@@ -155,7 +155,7 @@ export default function Dashboard({ company, summary, finance, cheques, visitAle
 
                             <div className="grid gap-6 lg:grid-cols-2">
                                 <OccupancyTrend trend={occupancyTrend} />
-                                <BedCapacity beds={summary.beds} />
+                                <RoomStatus rooms={summary.roomOccupancy} />
                             </div>
 
                             <div className="grid gap-6 lg:grid-cols-2">

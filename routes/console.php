@@ -34,6 +34,6 @@ Artisan::command('leasing:refresh', function () {
     Room::query()->each(fn (Room $room) => $room->recalculateOccupancy());
 
     $this->info("{$ended} contract(s) ended and {$expired} head lease(s) expired.");
-})->purpose('End contracts and expire head leases whose term has passed, then refresh apartment and shop statuses and the beds taken in rooms');
+})->purpose('End contracts and expire head leases whose term has passed, then refresh apartment, shop and room occupancy');
 
 Schedule::command('leasing:refresh')->dailyAt('00:15');

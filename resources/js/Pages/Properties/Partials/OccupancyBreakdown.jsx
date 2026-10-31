@@ -2,24 +2,15 @@ import DonutChart, { DonutLegend } from '@/Components/DonutChart';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/hooks/use-translation';
 import { Link } from '@inertiajs/react';
-import { ArrowRightIcon, BedDoubleIcon, DoorOpenIcon, HouseIcon, StoreIcon } from 'lucide-react';
+import { ArrowRightIcon, DoorOpenIcon, HouseIcon, StoreIcon } from 'lucide-react';
 
 /**
- * Rooms read like a traffic light, as on the property list: full green,
- * partly filled gold, empty red.
+ * Rooms in the colours of the shop and apartment statuses below: occupied
+ * green, vacant red, out of service grey.
  */
 const ROOM_SEGMENTS = [
-    { key: 'full', color: 'var(--success)' },
-    { key: 'partial', color: 'var(--gold)' },
-    { key: 'empty', color: 'var(--destructive)' },
-];
-
-/**
- * Beds keep the colours of the bed bars on the dashboard.
- */
-const BED_SEGMENTS = [
-    { key: 'occupied', color: 'var(--chart-1)' },
-    { key: 'available', color: 'var(--chart-2)' },
+    { key: 'occupied', color: 'var(--success)' },
+    { key: 'available', color: 'var(--destructive)' },
     { key: 'outOfService', color: 'var(--chart-3)' },
 ];
 
@@ -85,35 +76,27 @@ function UnitPanel({ icon: Icon, title, total, segments, href, linkLabel }) {
 }
 
 /**
- * Every room, bed, shop and apartment in the property, each kind counted
- * explicitly: rooms full, partial and empty; beds occupied, free and out of
- * service; shops and apartments by status. Each panel links to its list,
- * filtered to the property.
+ * Every room, shop and apartment in the property, each kind counted
+ * explicitly: rooms occupied, vacant and out of service; shops and
+ * apartments by status. Each panel links to its list, filtered to the
+ * property.
  */
 export default function OccupancyBreakdown({ property }) {
     const { t } = useTranslation();
-    const { rooms, shops, apartments } = property.occupancy;
-    const { beds } = property;
+    const { shops, apartments } = property.occupancy;
+    const rooms = property.roomOccupancy;
     const filter = { properties: [property.code] };
     const unitSegments = (units, statusKey) =>
         UNIT_STATUS_SEGMENTS.map((segment) => ({ ...segment, label: t(`${statusKey}.${segment.key}`), value: units[segment.key] }));
 
     return (
         <div className="@container">
-            <div className="grid gap-4 @3xl:grid-cols-2">
+            <div className="grid gap-4 @3xl:grid-cols-2 @7xl:grid-cols-3">
                 <UnitPanel
                     icon={DoorOpenIcon}
                     title={t('propertyShow.occupancy.rooms.title')}
                     total={rooms.total}
-                    segments={ROOM_SEGMENTS.map((segment) => ({ ...segment, label: t(`propertyShow.occupancy.rooms.${segment.key}`), value: rooms[segment.key] }))}
-                    href={route('rooms.index', filter)}
-                    linkLabel={t('propertyShow.occupancy.rooms.view')}
-                />
-                <UnitPanel
-                    icon={BedDoubleIcon}
-                    title={t('propertyShow.occupancy.beds.title')}
-                    total={beds.total}
-                    segments={BED_SEGMENTS.map((segment) => ({ ...segment, label: t(`dashboard.beds.${segment.key}`), value: beds[segment.key] }))}
+                    segments={ROOM_SEGMENTS.map((segment) => ({ ...segment, label: t(`dashboard.roomStates.${segment.key}`), value: rooms[segment.key] }))}
                     href={route('rooms.index', filter)}
                     linkLabel={t('propertyShow.occupancy.rooms.view')}
                 />

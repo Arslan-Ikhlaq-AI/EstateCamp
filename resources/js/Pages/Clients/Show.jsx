@@ -14,7 +14,7 @@ import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
-import { BanknoteIcon, BedDoubleIcon, Building2Icon, FileSignatureIcon, KeyRoundIcon, PencilIcon, ReceiptIcon, UserPlusIcon } from 'lucide-react';
+import { BanknoteIcon, Building2Icon, FileSignatureIcon, KeyRoundIcon, PencilIcon, ReceiptIcon, UserCheckIcon, UserPlusIcon } from 'lucide-react';
 import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 
 function EmptyLine({ children }) {
@@ -35,7 +35,11 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
             <Head title={client.name} />
 
             <PageHeader
-                breadcrumbs={[{ label: t('nav.tenants') }, { label: t('leasing.clients.title'), href: route('clients.index') }, { label: client.name }]}
+                breadcrumbs={[
+                    { label: t('nav.tenants') },
+                    isCompany ? { label: t('leasing.clients.title'), href: route('clients.index') } : { label: t('leasing.individuals.title'), href: route('individuals.index') },
+                    { label: client.name },
+                ]}
                 title={client.name}
                 badge={
                     <>
@@ -58,12 +62,10 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
                             <ReceiptIcon data-icon="inline-start" />
                             {t('leasing.payments.add')}
                         </Button>
-                        {isCompany && (
-                            <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { client: client.id })} />}>
-                                <KeyRoundIcon data-icon="inline-start" />
-                                {t('finance.rentals.add')}
-                            </Button>
-                        )}
+                        <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { client: client.id })} />}>
+                            <KeyRoundIcon data-icon="inline-start" />
+                            {t('finance.rentals.add')}
+                        </Button>
                         <Button nativeButton={false} render={<Link href={route('contracts.create', { client: client.id })} />}>
                             <FileSignatureIcon data-icon="inline-start" />
                             {t('leasing.contracts.add')}
@@ -91,7 +93,7 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
                     detail={holdingSummary(totals) || t('leasing.holdings.empty')}
                 />
                 <StatCard
-                    icon={BedDoubleIcon}
+                    icon={UserCheckIcon}
                     tone="success"
                     label={t('leasing.clients.stats.staying')}
                     value={formatNumber(stays.length)}
@@ -189,11 +191,11 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
                                         ),
                                     },
                                     {
-                                        id: 'bed',
-                                        header: t('leasing.occupants.columns.bed'),
+                                        id: 'room',
+                                        header: t('leasing.occupants.columns.room'),
                                         cell: (stay) => (
                                             <div className="flex flex-col text-sm">
-                                                <span>{t('leasing.common.roomBed', { room: stay.roomNumber, bed: stay.bedLabel })}</span>
+                                                <span>{t('leasing.lines.roomName', { room: stay.roomNumber })}</span>
                                                 <span className="text-xs text-muted-foreground" dir="auto">{stay.property.name}</span>
                                             </div>
                                         ),

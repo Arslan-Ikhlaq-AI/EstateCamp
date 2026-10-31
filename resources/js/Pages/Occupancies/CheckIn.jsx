@@ -4,97 +4,88 @@ import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { FieldGroup } from '@/components/ui/field';
 import { todayIso } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
-import { cn } from '@/lib/utils';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { BedSingleIcon, FileSignatureIcon, MarsIcon, UserPlusIcon, VenusIcon } from 'lucide-react';
+import { CircleAlertIcon, DoorOpenIcon, FileSignatureIcon, MarsIcon, UserPlusIcon, VenusIcon } from 'lucide-react';
 import { useEffect } from 'react';
+import { useRoomPlacement } from '../Rooms/Partials/RoomBits';
 
 const GENDER_ICONS = { male: MarsIcon, female: VenusIcon };
 
 /**
- * Free beds grouped by room; a bed in a room for the other gender is shown but cannot be picked.
+ * The room the chosen contract line rents: where it is, who it is for and
+ * how many of the people it sleeps are staying, with why nobody can check
+ * in when it is full, out of service or for the other gender.
  */
-function BedPicker({ beds, value, onChange, occupantGender, error }) {
-    const { t } = useTranslation();
-    const rooms = Object.values(
-        beds.reduce((groups, bed) => {
-            groups[bed.roomNumber] ??= { roomNumber: bed.roomNumber, genderPolicy: bed.genderPolicy, beds: [] };
-            groups[bed.roomNumber].beds.push(bed);
-
-            return groups;
-        }, {}),
-    );
-    const fits = (bed) => !occupantGender || !['male', 'female'].includes(bed.genderPolicy) || bed.genderPolicy === occupantGender;
+function RoomCard({ line, occupantGender }) {
+    const { t, formatNumber } = useTranslation();
+    const placement = useRoomPlacement();
+    const GenderIcon = GENDER_ICONS[line.genderPolicy];
+    const placesLeft = Math.max(0, line.capacity - line.staying);
+    const isForOtherGender = Boolean(occupantGender) && ['male', 'female'].includes(line.genderPolicy) && line.genderPolicy !== occupantGender;
+    const problem = !line.isInService
+        ? t('leasing.checkIn.room.outOfService')
+        : placesLeft === 0
+          ? t('leasing.checkIn.room.full')
+          : isForOtherGender
+            ? t(`leasing.checkIn.room.onlyFor.${line.genderPolicy}`)
+            : null;
 
     return (
-        <Field data-invalid={error ? true : undefined}>
-            <FieldLabel id="bed-label">{t('leasing.checkIn.fields.bed')}</FieldLabel>
-            <div className="flex flex-col gap-4">
-                {rooms.map((room) => {
-                    const GenderIcon = GENDER_ICONS[room.genderPolicy];
-
-                    return (
-                        <div key={room.roomNumber} className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2 text-sm font-medium">
-                                {t('leasing.lines.roomName', { room: room.roomNumber })}
-                                {room.genderPolicy && (
-                                    <Badge variant="secondary">
-                                        {GenderIcon && <GenderIcon data-icon="inline-start" />}
-                                        {t(`gender.${room.genderPolicy}`)}
-                                    </Badge>
-                                )}
-                            </div>
-                            <ToggleGroup
-                                aria-labelledby="bed-label"
-                                variant="outline"
-                                value={value ? [String(value)] : []}
-                                onValueChange={([next]) => next && onChange(Number(next))}
-                                className="flex-wrap"
-                            >
-                                {room.beds.map((bed) => (
-                                    <ToggleGroupItem
-                                        key={bed.id}
-                                        value={String(bed.id)}
-                                        disabled={!fits(bed)}
-                                        className={cn('aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:text-primary')}
-                                    >
-                                        <BedSingleIcon data-icon="inline-start" />
-                                        {t('leasing.checkIn.bed', { bed: bed.label })}
-                                    </ToggleGroupItem>
-                                ))}
-                            </ToggleGroup>
-                        </div>
-                    );
-                })}
+        <div className="flex flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
+            <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-cyan/10 text-brand-ink">
+                    <DoorOpenIcon className="size-5" />
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">{t('leasing.lines.roomName', { room: line.roomNumber })}</span>
+                        {line.genderPolicy && (
+                            <Badge variant="secondary">
+                                {GenderIcon && <GenderIcon data-icon="inline-start" />}
+                                {t(`gender.${line.genderPolicy}`)}
+                            </Badge>
+                        )}
+                    </div>
+                    {placement(line) && <span className="text-sm text-muted-foreground">{placement(line)}</span>}
+                </div>
+                <div className="flex flex-col items-end text-end">
+                    <span className="text-lg font-semibold tabular-nums">
+                        {formatNumber(line.staying)} / {formatNumber(line.capacity)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{t('leasing.checkIn.room.placesLeft', { count: placesLeft })}</span>
+                </div>
             </div>
-            <FieldError>{error}</FieldError>
-        </Field>
+            {problem && (
+                <p className="flex items-center gap-2 text-sm text-destructive">
+                    <CircleAlertIcon className="size-4 shrink-0" />
+                    {problem}
+                </p>
+            )}
+        </div>
     );
 }
 
-export default function CheckIn({ lines, selectedLineId, selectedOccupantId, beds, occupants, clientId }) {
+export default function CheckIn({ lines, selectedLineId, selectedOccupantId, occupants, clientId }) {
     const { t } = useTranslation();
     const form = useForm({
         contract_line_id: selectedLineId,
         occupant_id: selectedOccupantId,
-        bed_id: null,
         check_in_date: todayIso(),
         notes: '',
     });
     const { data, setData, errors, processing } = form;
     const occupant = occupants.find((person) => person.id === data.occupant_id);
+    const selectedLine = lines.find((line) => line.id === selectedLineId);
     const title = t('leasing.checkIn.title');
 
-    // A different line brings a different set of beds and people.
+    // A different line brings a different room and set of people.
     useEffect(() => {
         setData((values) => ({
             ...values,
             contract_line_id: selectedLineId,
-            bed_id: null,
             occupant_id: occupants.some((person) => person.id === values.occupant_id) ? values.occupant_id : null,
         }));
     }, [selectedLineId]);
@@ -102,7 +93,7 @@ export default function CheckIn({ lines, selectedLineId, selectedOccupantId, bed
     const chooseLine = (lineId) =>
         router.reload({
             data: { contract_line: lineId, occupant: data.occupant_id ?? undefined },
-            only: ['selectedLineId', 'beds', 'occupants', 'clientId'],
+            only: ['selectedLineId', 'occupants', 'clientId'],
         });
 
     return (
@@ -150,7 +141,7 @@ export default function CheckIn({ lines, selectedLineId, selectedOccupantId, bed
                             />
                         </FormSection>
 
-                        {selectedLineId && (
+                        {selectedLine && (
                             <>
                                 <FormSection title={t('leasing.checkIn.person.title')} description={t('leasing.checkIn.person.description')}>
                                     {occupants.length === 0 ? (
@@ -182,18 +173,8 @@ export default function CheckIn({ lines, selectedLineId, selectedOccupantId, bed
                                     )}
                                 </FormSection>
 
-                                <FormSection title={t('leasing.checkIn.bedSection.title')} description={t('leasing.checkIn.bedSection.description')}>
-                                    {beds.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">{t('leasing.checkIn.noBeds')}</p>
-                                    ) : (
-                                        <BedPicker
-                                            beds={beds}
-                                            value={data.bed_id}
-                                            onChange={(value) => setData('bed_id', value)}
-                                            occupantGender={occupant?.gender}
-                                            error={errors.bed_id}
-                                        />
-                                    )}
+                                <FormSection title={t('leasing.checkIn.room.title')} description={t('leasing.checkIn.room.description')}>
+                                    <RoomCard line={selectedLine} occupantGender={occupant?.gender} />
                                 </FormSection>
 
                                 <FormSection title={t('leasing.checkIn.when.title')} description={t('leasing.checkIn.when.description')}>

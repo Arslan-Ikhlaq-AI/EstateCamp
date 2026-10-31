@@ -23,7 +23,7 @@ class RoomController extends Controller
 {
     use FiltersByClient;
 
-    public const AVAILABILITY = ['available', 'full'];
+    public const AVAILABILITY = ['vacant', 'occupied'];
 
     public const SORTS = ['room', 'occupancy', 'capacity', 'rent', 'floor', 'created'];
 
@@ -88,7 +88,6 @@ class RoomController extends Controller
             $room = new Room($this->roomAttributes($request));
             $room->forceFill(['property_id' => $property->id, 'company_id' => $property->company_id])->save();
 
-            $room->syncBeds();
             $this->syncPhotos($room, $request);
             $property->recalculateTotals();
 
@@ -112,7 +111,7 @@ class RoomController extends Controller
                 'id' => $room->id,
                 ...$room->only([
                     'property_id', 'room_number', 'block', 'floor_number', 'room_type_id', 'gender_policy',
-                    'capacity', 'occupied_count', 'area_sqm', 'rent_per_bed', 'status', 'notes',
+                    'capacity', 'is_occupied', 'area_sqm', 'monthly_rent', 'status', 'notes',
                 ]),
                 'amenities' => $room->amenities ?? [],
                 'photos' => $room->attachments->map(fn (RoomAttachment $photo) => [
@@ -137,7 +136,6 @@ class RoomController extends Controller
             $room->fill($this->roomAttributes($request));
             $room->forceFill(['property_id' => $property->id])->save();
 
-            $room->syncBeds();
             $room->recalculateOccupancy();
             $this->syncPhotos($room, $request);
             $property->recalculateTotals();
@@ -276,22 +274,22 @@ class RoomController extends Controller
                 ->whereIn('gender_policy', $filters['gender']))
             ->when($except !== 'availability' && $filters['availability'] !== [], fn (Builder $query) => $query
                 ->where(function (Builder $query) use ($filters) {
-                    if (in_array('available', $filters['availability'], true)) {
+                    if (in_array('vacant', $filters['availability'], true)) {
                         $query->orWhere(fn (Builder $query) => $this->whereAvailable($query));
                     }
 
-                    if (in_array('full', $filters['availability'], true)) {
-                        $query->orWhereColumn('occupied_count', '>=', 'capacity');
+                    if (in_array('occupied', $filters['availability'], true)) {
+                        $query->orWhere('is_occupied', true);
                     }
                 }));
     }
 
     /**
-     * Active rooms with at least one free bed.
+     * Active rooms nobody holds.
      */
     private function whereAvailable(Builder|HasMany $query): Builder|HasMany
     {
-        return $query->where('status', 'active')->whereColumn('occupied_count', '<', 'capacity');
+        return $query->where('status', 'active')->where('is_occupied', false);
     }
 
     /**
@@ -303,9 +301,9 @@ class RoomController extends Controller
         $direction = $filters['direction'];
 
         match ($filters['sort']) {
-            'occupancy' => $query->orderByRaw("occupied_count * 1.0 / capacity {$direction}"),
+            'occupancy' => $query->orderBy('is_occupied', $direction),
             'capacity' => $query->orderBy('capacity', $direction),
-            'rent' => $query->orderBy('rent_per_bed', $direction),
+            'rent' => $query->orderBy('monthly_rent', $direction),
             'floor' => $query->orderBy('floor_number', $direction),
             'created' => $query->orderBy('created_at', $direction),
             default => $query
@@ -358,8 +356,8 @@ class RoomController extends Controller
             'status' => array_map(fn (string $status) => ['value' => $status, 'count' => $statusCounts->get($status, 0)], Room::STATUSES),
             'gender' => array_map(fn (string $gender) => ['value' => $gender, 'count' => $genderCounts->get($gender, 0)], Room::GENDER_POLICIES),
             'availability' => [
-                ['value' => 'available', 'count' => $this->whereAvailable($availabilityQuery())->count()],
-                ['value' => 'full', 'count' => $availabilityQuery()->whereColumn('occupied_count', '>=', 'capacity')->count()],
+                ['value' => 'vacant', 'count' => $this->whereAvailable($availabilityQuery())->count()],
+                ['value' => 'occupied', 'count' => $availabilityQuery()->where('is_occupied', true)->count()],
             ],
         ];
     }
@@ -376,10 +374,9 @@ class RoomController extends Controller
             ->selectRaw('count(*) as rooms')
             ->selectRaw("sum(case when status = 'active' then 1 else 0 end) as active")
             ->selectRaw("sum(case when status = 'under_maintenance' then 1 else 0 end) as maintenance")
-            ->selectRaw('coalesce(sum(capacity), 0) as beds_total')
-            ->selectRaw('coalesce(sum(occupied_count), 0) as beds_occupied')
-            ->selectRaw("coalesce(sum(case when status = 'active' then capacity - occupied_count else 0 end), 0) as beds_available")
-            ->selectRaw('coalesce(sum(occupied_count * rent_per_bed), 0) as rent_roll')
+            ->selectRaw('coalesce(sum(case when is_occupied then 1 else 0 end), 0) as occupied')
+            ->selectRaw("coalesce(sum(case when status = 'active' and not is_occupied then 1 else 0 end), 0) as available")
+            ->selectRaw('coalesce(sum(case when is_occupied then monthly_rent else 0 end), 0) as rent_roll')
             ->toBase()
             ->first();
 
@@ -387,7 +384,7 @@ class RoomController extends Controller
             'rooms' => (int) $totals->rooms,
             'active' => (int) $totals->active,
             'maintenance' => (int) $totals->maintenance,
-            'beds' => Room::bedBreakdown((int) $totals->beds_total, (int) $totals->beds_occupied, (int) $totals->beds_available),
+            'roomOccupancy' => Room::occupancyBreakdown((int) $totals->rooms, (int) $totals->occupied, (int) $totals->available),
             'rentRoll' => (float) $totals->rent_roll,
         ];
     }
@@ -409,10 +406,10 @@ class RoomController extends Controller
             'typeSlug' => $room->roomType->slug,
             'genderPolicy' => $room->gender_policy,
             'capacity' => $room->capacity,
-            'occupied' => $room->occupied_count,
-            'available' => $room->status === 'active' ? $room->capacity - $room->occupied_count : 0,
+            'occupied' => $room->is_occupied,
+            'available' => $room->status === 'active' && ! $room->is_occupied,
             'areaSqm' => $room->area_sqm === null ? null : (float) $room->area_sqm,
-            'rentPerBed' => $room->rent_per_bed === null ? null : (float) $room->rent_per_bed,
+            'monthlyRent' => $room->monthly_rent === null ? null : (float) $room->monthly_rent,
             'amenities' => $room->amenities ?? [],
             'status' => $room->status,
             'photoUrl' => $photo?->thumbnail_url ?? $photo?->file_url,

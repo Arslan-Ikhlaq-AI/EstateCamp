@@ -14,7 +14,7 @@ import {
  */
 export default function KpiCards({ summary, finance, currency }) {
     const { t, formatPercent, formatCurrency } = useTranslation();
-    const { beds } = summary;
+    const occupancy = summary.roomOccupancy;
     const money = (value) => formatCurrency(value, currency);
     const rentShare = summary.potentialRent > 0 ? (summary.rentRoll / summary.potentialRent) * 100 : 0;
     const collectedShare = finance.invoicedThisMonth > 0 ? Math.min((finance.collectedThisMonth / finance.invoicedThisMonth) * 100, 100) : undefined;
@@ -25,9 +25,9 @@ export default function KpiCards({ summary, finance, currency }) {
                 href={route('rooms.index')}
                 icon={PercentIcon}
                 label={t('dashboard.kpi.occupancy')}
-                value={beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
-                meter={beds.occupancyRate ?? 0}
-                detail={t('dashboard.kpi.occupancyDetail', { occupied: beds.occupied, total: beds.occupied + beds.available })}
+                value={occupancy.occupancyRate === null ? '—' : formatPercent(occupancy.occupancyRate)}
+                meter={occupancy.occupancyRate ?? 0}
+                detail={t('dashboard.kpi.occupancyDetail', { occupied: occupancy.occupied, total: occupancy.occupied + occupancy.available })}
             />
             <StatCard
                 href={route('properties.index')}

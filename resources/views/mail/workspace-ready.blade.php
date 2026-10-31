@@ -3,7 +3,7 @@
 @php
     $country = class_exists(Locale::class) ? Locale::getDisplayRegion('-'.$company->country_code, 'en') : $company->country_code;
     $steps = [
-        ['Add your properties and rooms', 'Set up each building with its floors, rooms, beds, apartments and shops.'],
+        ['Add your properties and rooms', 'Set up each building with its floors, rooms, apartments and shops.'],
         ['Bring in clients and contracts', 'Record who rents from you, schedule their cheques and send invoices.'],
         ['Run the day to day', 'Track maintenance, contractor visits, staff attendance and payroll in one place.'],
     ];

@@ -240,6 +240,8 @@
     --chart-5: #1cb5e0;
     /* Context series beside chart-1 (same hue, validated as an ordinal pair). */
     --chart-context: #6cb8e2;
+    /* Losses against chart-1's gains: the red pole of the diverging pair. */
+    --chart-loss: #d03b3b;
     /* Money by where it comes from or goes, validated together for colour-blind readers (light surface). */
     --cash-in: #0e7fb8;
     --cash-out: #eda100;
@@ -305,6 +307,7 @@
     --chart-4: #5cc2ec;
     --chart-5: #1cb5e0;
     --chart-context: #25557f;
+    --chart-loss: #e66767;
     --cash-in: #2897cb;
     --cash-out: #c98500;
     --cash-clients: #3987e5;

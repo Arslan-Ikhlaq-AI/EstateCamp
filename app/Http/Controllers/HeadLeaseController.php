@@ -184,7 +184,7 @@ class HeadLeaseController extends Controller
                 'rooms' => $property->rooms_count,
                 'shops' => $property->shops_count,
                 'apartments' => $property->apartments_count,
-                'beds' => Room::bedBreakdown((int) $property->beds_total, (int) $property->beds_occupied, (int) $property->beds_available),
+                'roomOccupancy' => Room::occupancyBreakdown((int) $property->rooms_count, (int) $property->occupied_rooms_count, (int) $property->available_rooms_count),
             ],
             'documents' => $property->documents->map(fn (PropertyDocument $document) => [
                 'id' => $document->id,

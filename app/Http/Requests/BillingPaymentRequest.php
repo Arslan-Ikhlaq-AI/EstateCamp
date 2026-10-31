@@ -11,7 +11,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * Money collected on a property's billing tab or payments page: what a
- * contract's client or a short-term rental's company paid today towards
+ * contract's client or a short-term rental's renter paid today towards
  * its bill up to the end of the period on screen (`through`). A
  * short-term rental can also hand over a cheque, which goes into the
  * cheque register with its number, bank and date and counts once it is

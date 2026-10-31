@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * A person who stays in a bed. `client` is who pays for them: their
+ * A person who stays in a room. `client` is who pays for them: their
  * employer, or the occupant themselves when the client is an individual.
  */
 #[Fillable([

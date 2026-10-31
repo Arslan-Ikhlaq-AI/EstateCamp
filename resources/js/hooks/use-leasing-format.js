@@ -40,14 +40,10 @@ export function useLeasingFormat() {
     const { t, formatDate } = useTranslation();
 
     /**
-     * "8 beds in room 101", "Whole room 103", "Apartment B-401" or "Shop G-01".
+     * "Whole room 103", "Apartment B-401" or "Shop G-01".
      */
     const lineLabel = (line) => {
         switch (line.unitType) {
-            case 'bed':
-                return line.roomNumber
-                    ? t('leasing.lines.bedsInRoom', { count: line.quantity, room: line.roomNumber })
-                    : t('leasing.lines.beds', { count: line.quantity });
             case 'room':
                 return t('leasing.lines.room', { room: line.roomNumber });
             case 'apartment':
@@ -62,11 +58,10 @@ export function useLeasingFormat() {
     const period = (start, end) => `${formatDate(start)} – ${formatDate(end)}`;
 
     /**
-     * "16 beds · 1 apartment" for a contract's `units` counts.
+     * "2 rooms · 1 apartment" for a contract's `units` counts.
      */
     const unitsSummary = (units) =>
         [
-            units.beds > 0 && t('leasing.units.beds', { count: units.beds }),
             units.rooms > 0 && t('leasing.units.rooms', { count: units.rooms }),
             units.apartments > 0 && t('leasing.units.apartments', { count: units.apartments }),
             units.shops > 0 && t('leasing.units.shops', { count: units.shops }),

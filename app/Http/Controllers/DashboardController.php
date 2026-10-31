@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Concerns\MeasuresBeds;
+use App\Http\Controllers\Concerns\MeasuresRooms;
 use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\Contract;
@@ -24,7 +24,7 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    use MeasuresBeds;
+    use MeasuresRooms;
 
     /**
      * Documents expiring within this many days count as "expiring soon".
@@ -101,7 +101,7 @@ class DashboardController extends Controller
                 'properties' => $properties->count(),
                 'rooms' => $rooms->count(),
                 'roomsUnderMaintenance' => $rooms->where('status', 'under_maintenance')->count(),
-                'beds' => $this->beds($rooms),
+                'roomOccupancy' => $this->roomOccupancy($rooms),
                 'rentRoll' => $this->rentRoll($rooms),
                 'potentialRent' => $this->potentialRent($rooms),
                 'documents' => [
@@ -120,9 +120,9 @@ class DashboardController extends Controller
                     'slug' => $typeRooms->first()->roomType->slug,
                     'name' => $typeRooms->first()->roomType->name,
                     'rooms' => $typeRooms->count(),
-                    'beds' => $this->beds($typeRooms),
+                    'roomOccupancy' => $this->roomOccupancy($typeRooms),
                 ])
-                ->sortByDesc('beds.total')
+                ->sortByDesc('rooms')
                 ->values(),
             'finance' => $this->finance($company),
             'cheques' => $this->cheques($company),
@@ -307,14 +307,13 @@ class DashboardController extends Controller
      * invoices issued, check-ins, check-outs and contracts signed. Events
      * dated in the future (such as a booked check-in) wait until their day.
      *
-     * @return list<array{id: string, type: string, date: string, subject: string, reference: string|null, room: string|null, bed: string|null, amount: float|null, status: string|null, url: string}>
+     * @return list<array{id: string, type: string, date: string, subject: string, reference: string|null, room: string|null, amount: float|null, status: string|null, url: string}>
      */
     private function recentActivity(Company $company): array
     {
         $event = fn (array $values) => [
             'reference' => null,
             'room' => null,
-            'bed' => null,
             'amount' => null,
             'status' => null,
             ...$values,
@@ -357,7 +356,7 @@ class DashboardController extends Controller
             ]));
 
         $stays = fn (string $column, string $type) => $company->occupancies()
-            ->with(['occupant:id,full_name', 'bed:id,room_id,label', 'bed.room:id,room_number'])
+            ->with(['occupant:id,full_name', 'room:id,room_number'])
             ->whereNotNull($column)
             ->whereDate($column, '<=', today())
             ->latest($column)
@@ -369,8 +368,7 @@ class DashboardController extends Controller
                 'type' => $type,
                 'date' => $occupancy->{$column}->toDateString(),
                 'subject' => $occupancy->occupant->full_name,
-                'room' => $occupancy->bed->room->room_number,
-                'bed' => $occupancy->bed->label,
+                'room' => $occupancy->room->room_number,
                 'url' => route('occupants.show', $occupancy->occupant_id),
             ]));
 
@@ -453,7 +451,7 @@ class DashboardController extends Controller
             'ownership' => $property->ownership_type,
             'leaseEndsOn' => $property->lease_end_date?->toDateString(),
             'rooms' => $rooms->count(),
-            'beds' => $this->beds($rooms),
+            'roomOccupancy' => $this->roomOccupancy($rooms),
             'rentRoll' => $this->rentRoll($rooms),
         ];
     }
@@ -476,8 +474,8 @@ class DashboardController extends Controller
             'typeSlug' => $room->roomType->slug,
             'genderPolicy' => $room->gender_policy,
             'capacity' => $room->capacity,
-            'occupied' => $room->occupied_count,
-            'rentPerBed' => $room->rent_per_bed === null ? null : (float) $room->rent_per_bed,
+            'occupied' => $room->is_occupied,
+            'monthlyRent' => $room->monthly_rent === null ? null : (float) $room->monthly_rent,
             'status' => $room->status,
             'photoUrl' => $photo?->thumbnail_url ?? $photo?->file_url,
         ];

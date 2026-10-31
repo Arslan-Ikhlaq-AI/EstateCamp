@@ -13,11 +13,11 @@ import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
 import {
     BanknoteIcon,
-    BedDoubleIcon,
     Building2Icon,
     CalendarClockIcon,
     CircleCheckIcon,
     CirclePauseIcon,
+    DoorOpenIcon,
     EyeIcon,
     FileClockIcon,
     FileSignatureIcon,
@@ -130,11 +130,11 @@ export default function Index({ company, filters, facets, summary, contracts }) 
                             detail={t('leasing.contracts.stats.monthlyDetail')}
                         />
                         <StatCard
-                            icon={BedDoubleIcon}
-                            label={t('leasing.contracts.stats.beds')}
-                            value={formatNumber(summary.contractedBeds)}
-                            meter={summary.contractedBeds > 0 ? Math.min(100, (summary.staying / summary.contractedBeds) * 100) : 0}
-                            detail={t('leasing.contracts.stats.bedsDetail', { count: summary.staying })}
+                            icon={DoorOpenIcon}
+                            label={t('leasing.contracts.stats.rooms')}
+                            value={formatNumber(summary.contractedRooms)}
+                            meter={summary.contractedCapacity > 0 ? Math.min(100, (summary.staying / summary.contractedCapacity) * 100) : 0}
+                            detail={t('leasing.contracts.stats.roomsDetail', { count: summary.staying, capacity: summary.contractedCapacity })}
                         />
                         <StatCard
                             icon={CalendarClockIcon}

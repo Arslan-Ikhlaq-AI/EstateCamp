@@ -13,7 +13,6 @@ import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
     BanknoteIcon,
-    BedDoubleIcon,
     CalendarClockIcon,
     CircleCheckIcon,
     DoorOpenIcon,
@@ -21,6 +20,7 @@ import {
     FilePlusIcon,
     HouseIcon,
     PencilIcon,
+    PercentIcon,
     RefreshCwIcon,
     WalletCardsIcon,
     StoreIcon,
@@ -173,14 +173,17 @@ export default function Show({ lease, property, documents, stats, cheques, banks
                                         icon={DoorOpenIcon}
                                         label={t('nav.rooms')}
                                         value={formatNumber(property.rooms)}
-                                        detail={t('common.beds', { count: property.beds.total })}
+                                        detail={t('leasing.headLeases.show.roomsVacant', { count: property.roomOccupancy.available })}
                                         href={route('rooms.index', filter)}
                                     />
                                     <UnitTile
-                                        icon={BedDoubleIcon}
+                                        icon={PercentIcon}
                                         label={t('properties.stats.occupancy')}
-                                        value={property.beds.occupancyRate === null ? '—' : formatPercent(property.beds.occupancyRate)}
-                                        detail={t('leasing.headLeases.show.bedsOccupied', { occupied: property.beds.occupied, total: property.beds.occupied + property.beds.available })}
+                                        value={property.roomOccupancy.occupancyRate === null ? '—' : formatPercent(property.roomOccupancy.occupancyRate)}
+                                        detail={t('leasing.headLeases.show.roomsOccupied', {
+                                            occupied: property.roomOccupancy.occupied,
+                                            total: property.roomOccupancy.occupied + property.roomOccupancy.available,
+                                        })}
                                         href={route('rooms.index', filter)}
                                     />
                                     <UnitTile icon={StoreIcon} label={t('nav.shops')} value={formatNumber(property.shops)} href={route('shops.index', filter)} />

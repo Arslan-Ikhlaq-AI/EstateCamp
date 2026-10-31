@@ -30,7 +30,7 @@ export default function PropertyPreview({ data, coverUrl, propertyTypes, landlor
     const type = propertyTypes.find((item) => String(item.id) === String(data.property_type_id));
     const place = [data.area, data.city, data.country_code].filter(Boolean).join(', ');
     const count = (kind) => data.units[kind].reduce((sum, batch) => sum + unitNumbers(batch.first_number, batch.count).length, 0);
-    const beds = data.units.rooms.reduce((sum, batch) => sum + unitNumbers(batch.first_number, batch.count).length * (Number(batch.capacity) || 0), 0);
+    const sleeps = data.units.rooms.reduce((sum, batch) => sum + unitNumbers(batch.first_number, batch.count).length * (Number(batch.capacity) || 0), 0);
     const units = [
         { key: 'rooms', icon: DoorOpenIcon, count: count('rooms') },
         { key: 'shops', icon: StoreIcon, count: count('shops') },
@@ -116,8 +116,8 @@ export default function PropertyPreview({ data, coverUrl, propertyTypes, landlor
                                     {formatNumber(unit.count)} {t(`propertyForm.units.kinds.${unit.key}`)}
                                 </Badge>
                             ))}
-                            {beds > 0 && (
-                                <Badge className="h-6 bg-gold/20 text-gold-ink inset-ring inset-ring-gold/30">{t('common.beds', { count: beds })}</Badge>
+                            {sleeps > 0 && (
+                                <Badge className="h-6 bg-gold/20 text-gold-ink inset-ring inset-ring-gold/30">{t('common.sleeps', { count: sleeps })}</Badge>
                             )}
                         </div>
                     )}

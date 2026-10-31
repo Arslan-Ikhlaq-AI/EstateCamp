@@ -11,11 +11,11 @@ import { chequePayload, emptyChequeEntry, initialChequeEntries, planContractCheq
 import { Head, Link, useForm } from '@inertiajs/react';
 import { DetailList } from '@/Components/DetailCards';
 import { ContractStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
-import { CircleAlertIcon, FilePlusIcon, Trash2Icon } from 'lucide-react';
+import { CircleAlertIcon, FilePlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import DocumentFields from '../Properties/Partials/DocumentFields';
 import ClientPicker, { emptyClient } from './Partials/ClientPicker';
-import RentedSummary, { UNIT_ICONS, useDescribeLine } from './Partials/RentedSummary';
+import RentedSummary from './Partials/RentedSummary';
 import { shareRent, standardTotal } from './Partials/rent';
 import UnitPicker from './Partials/UnitPicker';
 
@@ -147,8 +147,8 @@ function ContractOverview({ contract, currency }) {
  */
 function Summary({ data, lines, currency }) {
     const { t, formatMoney } = useTranslation();
-    const monthly = lines.reduce((sum, line) => sum + (Number(line.monthly_rate) || 0) * (Number(line.quantity) || 0), 0);
-    const vat = lines.reduce((sum, line) => sum + ((Number(line.monthly_rate) || 0) * (Number(line.quantity) || 0) * (Number(line.vat_rate) || 0)) / 100, 0);
+    const monthly = lines.reduce((sum, line) => sum + (Number(line.monthly_rate) || 0), 0);
+    const vat = lines.reduce((sum, line) => sum + ((Number(line.monthly_rate) || 0) * (Number(line.vat_rate) || 0)) / 100, 0);
     const months = CYCLE_MONTHS[data.billing_cycle] ?? 1;
 
     const rows = [
@@ -192,9 +192,6 @@ export default function Form({ contract, clientId, currency, clients, clientType
     const standard = standardTotal(data.lines, properties);
     const cycleMonths = CYCLE_MONTHS[data.billing_cycle] ?? 1;
     const monthlyRent = Number(data.monthly_rent) || 0;
-    const describe = useDescribeLine(properties);
-    // Older lines of beds anywhere in a property name no unit to tap in the picker.
-    const otherLines = data.lines.filter((line) => line.unit_type === 'bed' && !line.room_id);
     const linesError = errors.lines ?? errors.status ?? Object.entries(errors).find(([key]) => key.startsWith('lines.'))?.[1];
     const patchCheque = (key, patch) =>
         setData((current) => ({ ...current, cheques: { ...current.cheques, [key]: { ...(current.cheques[key] ?? emptyChequeEntry()), ...patch } } }));
@@ -304,39 +301,6 @@ export default function Form({ contract, clientId, currency, clients, clientType
                 <FormSection title={t('leasing.contracts.form.picker.title')} description={t('leasing.contracts.form.picker.description')}>
                     <div className="flex flex-col gap-4">
                         <UnitPicker properties={properties} lines={data.lines} onChange={changeLines} currency={currency} />
-                        {otherLines.length > 0 && (
-                            <div className="flex flex-col gap-2">
-                                <p className="text-sm font-medium">{t('leasing.contracts.form.picker.others')}</p>
-                                {otherLines.map((line) => {
-                                    const { property, label, detail } = describe(line);
-                                    const Icon = UNIT_ICONS[line.unit_type];
-
-                                    return (
-                                        <div key={line.id} className="flex items-center gap-3 rounded-xl p-3 ring-1 ring-foreground/10">
-                                            <Icon className="size-4 shrink-0 text-muted-foreground" />
-                                            <span className="min-w-0 flex-1 truncate text-sm">
-                                                <span className="font-medium">{label}</span>
-                                                <span className="text-muted-foreground" dir="auto">
-                                                    {' '}
-                                                    · {detail} · {property?.name}
-                                                </span>
-                                            </span>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={line.hasStays}
-                                                onClick={() => changeLines(data.lines.filter((entry) => entry !== line))}
-                                                className="text-muted-foreground hover:text-destructive"
-                                            >
-                                                <Trash2Icon data-icon="inline-start" />
-                                                {t('leasing.contracts.form.picker.remove')}
-                                            </Button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
                     </div>
                 </FormSection>
 

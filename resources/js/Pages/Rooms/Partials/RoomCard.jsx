@@ -4,7 +4,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Building2Icon, DoorOpenIcon } from 'lucide-react';
 import { useState } from 'react';
-import { AmenityIcons, AvailabilityBadge, BedDots, RoomStatusBadge, useRoomPlacement } from './RoomBits';
+import { AmenityIcons, AvailabilityBadge, RoomStatusBadge, useRoomPlacement } from './RoomBits';
 import { GENDER_ICONS } from './roomOptions';
 
 function RoomPhoto({ src }) {
@@ -86,20 +86,15 @@ export default function RoomCard({ room, currency, actions, className }) {
                     <RoomStatusBadge status={room.status} />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                        <span className="text-muted-foreground tabular-nums">
-                            {t('roomList.beds', { occupied: room.occupied, capacity: room.capacity })}
-                        </span>
-                        <AvailabilityBadge room={room} />
-                    </div>
-                    <BedDots capacity={room.capacity} occupied={room.occupied} status={room.status} size="lg" />
+                <div className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-muted-foreground tabular-nums">{t('common.sleeps', { count: room.capacity })}</span>
+                    <AvailabilityBadge room={room} />
                 </div>
 
                 <dl className="grid grid-cols-3 gap-3">
                     <Stat
                         label={t('roomList.columns.rent')}
-                        value={room.rentPerBed === null ? '—' : formatCurrency(room.rentPerBed, currency)}
+                        value={room.monthlyRent === null ? '—' : formatCurrency(room.monthlyRent, currency)}
                     />
                     <Stat label={t('roomForm.fields.area')} value={room.areaSqm ? `${formatNumber(room.areaSqm)} m²` : '—'} />
                     <Stat

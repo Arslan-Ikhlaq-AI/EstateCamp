@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Room;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 /**
  * Two pictures for every demo room: a cover illustration matching its room
@@ -59,7 +58,7 @@ class RoomAttachmentSeeder extends Seeder
                 [
                     'slug' => 'interior',
                     'path' => self::INTERIOR,
-                    'caption' => "Room {$room->room_number} interior, {$room->capacity} ".Str::plural('bed', $room->capacity),
+                    'caption' => "Room {$room->room_number} interior, sleeps {$room->capacity}",
                 ],
             ];
 

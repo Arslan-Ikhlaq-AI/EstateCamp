@@ -140,7 +140,7 @@ class ContractController extends Controller
             'documents' => fn (HasMany $documents) => $documents->orderBy('id'),
         ]);
         $stays = $contract->occupancies()
-            ->with(['occupant:id,full_name,gender,employee_number', 'bed.room:id,room_number,property_id', 'bed.room.property:id,name'])
+            ->with(['occupant:id,full_name,gender,employee_number', 'room:id,room_number,property_id', 'room.property:id,name'])
             ->orderByRaw('case when check_out_date is null then 0 else 1 end')
             ->orderByDesc('check_in_date')
             ->get();
@@ -173,7 +173,7 @@ class ContractController extends Controller
             'lines' => $contract->lines->map(fn (ContractLine $line) => [
                 ...self::lineDetails($line),
                 'staying' => $current->where('contract_line_id', $line->id)->count(),
-                'capacity' => $line->bedCapacity(),
+                'capacity' => $line->capacity(),
                 'housesOccupants' => $line->housesOccupants(),
             ]),
             'stays' => $stays->map(fn (Occupancy $stay) => [
@@ -184,9 +184,8 @@ class ContractController extends Controller
                     'gender' => $stay->occupant->gender,
                     'employeeNumber' => $stay->occupant->employee_number,
                 ],
-                'propertyName' => $stay->bed->room->property->name,
-                'roomNumber' => $stay->bed->room->room_number,
-                'bedLabel' => $stay->bed->label,
+                'propertyName' => $stay->room->property->name,
+                'roomNumber' => $stay->room->room_number,
                 'checkInDate' => $stay->check_in_date->toDateString(),
                 'checkOutDate' => $stay->check_out_date?->toDateString(),
             ]),
@@ -245,10 +244,10 @@ class ContractController extends Controller
                 'start_date' => $contract->start_date->toDateString(),
                 'end_date' => $contract->end_date->toDateString(),
                 'signed_on' => $contract->signed_on?->toDateString(),
-                'monthly_rent' => round($contract->lines->sum(fn (ContractLine $line) => (float) $line->monthly_rate * $line->quantity), 2),
+                'monthly_rent' => round($contract->lines->sum(fn (ContractLine $line) => (float) $line->monthly_rate), 2),
                 'lines' => $contract->lines->map(fn (ContractLine $line) => [
                     'id' => $line->id,
-                    ...$line->only(['unit_type', 'property_id', 'room_id', 'apartment_id', 'shop_id', 'quantity', 'monthly_rate', 'billing_basis', 'vat_rate', 'description']),
+                    ...$line->only(['unit_type', 'property_id', 'room_id', 'apartment_id', 'shop_id', 'monthly_rate', 'vat_rate', 'description']),
                     'start_date' => $line->start_date->toDateString(),
                     'end_date' => $line->end_date->toDateString(),
                     'hasStays' => $line->occupancies_count > 0,
@@ -363,7 +362,6 @@ class ContractController extends Controller
             'billingCycle' => $contract->billing_cycle,
             'monthlyValue' => $contract->monthlyValue(),
             'units' => [
-                'beds' => (int) $lines->where('unit_type', 'bed')->sum('quantity'),
                 'rooms' => $lines->where('unit_type', 'room')->count(),
                 'apartments' => $lines->where('unit_type', 'apartment')->count(),
                 'shops' => $lines->where('unit_type', 'shop')->count(),
@@ -391,10 +389,7 @@ class ContractController extends Controller
             'apartmentId' => $line->apartment_id,
             'shopNumber' => $line->shop?->shop_number,
             'shopId' => $line->shop_id,
-            'quantity' => $line->quantity,
             'monthlyRate' => (float) $line->monthly_rate,
-            'monthlyAmount' => round((float) $line->monthly_rate * $line->quantity, 2),
-            'billingBasis' => $line->billing_basis,
             'vatRate' => (float) $line->vat_rate,
             'startDate' => $line->start_date->toDateString(),
             'endDate' => $line->end_date->toDateString(),
@@ -405,9 +400,9 @@ class ContractController extends Controller
     /**
      * Create, update and remove lines to match the submitted units, sharing
      * the monthly rent between them. A new line rents its unit whole, with
-     * VAT on a shop; a line already on the contract keeps how many beds it
-     * rents, how it is billed and its VAT. A line that people have stayed
-     * under cannot be removed. Rooms the lines held before recount their beds.
+     * VAT on a shop; a line already on the contract keeps its VAT. A line
+     * that people have stayed under cannot be removed. Rooms the lines held
+     * before recount whether they are occupied.
      *
      * @param  list<array<string, mixed>>  $lines
      *
@@ -421,8 +416,6 @@ class ContractController extends Controller
 
         foreach ($lines as $attributes) {
             $line = $existing->get($attributes['id'] ?? null) ?? new ContractLine([
-                'quantity' => 1,
-                'billing_basis' => 'contracted',
                 'vat_rate' => $attributes['unit_type'] === 'shop' ? ContractLine::SHOP_VAT_RATE : 0,
             ]);
             $line->fill(Arr::only($attributes, ['unit_type', 'property_id', 'room_id', 'apartment_id', 'shop_id', 'start_date', 'end_date']));
@@ -521,8 +514,8 @@ class ContractController extends Controller
 
     /**
      * Clients, and each property's rentable units with their list prices and
-     * how much of each other live contracts and short-term rentals already
-     * hold, for the form.
+     * whether other live contracts or short-term rentals already hold them,
+     * for the form.
      *
      * @return array<string, mixed>
      */
@@ -533,9 +526,8 @@ class ContractController extends Controller
             ->whereDate('end_date', '>=', today())
             ->whereHas('contract', fn (Builder $contracts) => $contracts->whereIn('status', ['draft', 'active']))
             ->when($contract, fn (Builder $query) => $query->whereNot('contract_id', $contract->id))
-            ->get(['unit_type', 'room_id', 'apartment_id', 'shop_id', 'quantity']);
-        $heldBeds = $held->where('unit_type', 'bed')->whereNotNull('room_id')->groupBy('room_id')->map->sum('quantity');
-        $heldRooms = $held->where('unit_type', 'room')->pluck('room_id')->concat(RoomRental::heldRoomIds($company->id))->flip();
+            ->get(['unit_type', 'room_id', 'apartment_id', 'shop_id']);
+        $heldRooms = $held->whereNotNull('room_id')->pluck('room_id')->concat(RoomRental::heldRoomIds($company->id))->flip();
         $heldApartments = $held->whereNotNull('apartment_id')->pluck('apartment_id')->flip();
         $heldShops = $held->whereNotNull('shop_id')->pluck('shop_id')->flip();
 
@@ -544,7 +536,7 @@ class ContractController extends Controller
             'idTypes' => Client::ID_TYPES,
             'documentTypes' => ContractDocument::TYPES,
             'currency' => $company->default_currency,
-            'clients' => $company->clients()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'client_type']),
+            'clients' => $company->clients()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'client_type', 'phone']),
             'properties' => $company->properties()
                 ->with([
                     'rooms' => fn (HasMany $rooms) => $rooms->orderBy('room_number'),
@@ -562,12 +554,11 @@ class ContractController extends Controller
                         'id' => $room->id,
                         'number' => $room->room_number,
                         'capacity' => $room->capacity,
-                        'occupied' => $room->occupied_count,
-                        'rate' => $room->rent_per_bed === null ? null : (float) $room->rent_per_bed,
+                        'rate' => $room->monthly_rent === null ? null : (float) $room->monthly_rent,
                         'genderPolicy' => $room->gender_policy,
                         'status' => $room->status,
                         'type' => $room->roomType?->only(['name', 'slug']),
-                        'contracted' => $heldRooms->has($room->id) ? $room->capacity : min($room->capacity, (int) $heldBeds->get($room->id, 0)),
+                        'held' => $heldRooms->has($room->id),
                     ]),
                     'apartments' => $property->apartments->map(fn (Apartment $apartment) => [
                         'id' => $apartment->id,
@@ -620,10 +611,14 @@ class ContractController extends Controller
             'active' => $active->count(),
             'drafts' => $company->contracts()->where('status', 'draft')->count(),
             'monthlyValue' => round($active->sum(fn (Contract $contract) => $contract->monthlyValue()), 2),
-            'contractedBeds' => (int) $active->sum(fn (Contract $contract) => $contract->lines
+            'contractedRooms' => (int) $active->sum(fn (Contract $contract) => $contract->lines
+                ->filter(fn (ContractLine $line) => $line->unit_type === 'room' && $line->covers(today()))
+                ->count()),
+            // How many people those rooms sleep, to set the people staying against.
+            'contractedCapacity' => (int) $active->sum(fn (Contract $contract) => $contract->lines
                 ->filter(fn (ContractLine $line) => $line->covers(today()))
-                ->sum(fn (ContractLine $line) => $line->bedCapacity())),
-            // People staying under contracts, as a share of the contracted beds; tenants renting without one are left out.
+                ->sum(fn (ContractLine $line) => $line->capacity())),
+            // People staying under contracts; tenants renting without one are left out.
             'staying' => $company->occupancies()->whereNotNull('contract_line_id')->whereNull('check_out_date')->count(),
             'expiringSoon' => $active->filter(fn (Contract $contract) => $contract->end_date->lte(today()->addDays(60)))->count(),
         ];

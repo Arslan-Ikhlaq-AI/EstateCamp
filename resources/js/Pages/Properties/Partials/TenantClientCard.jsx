@@ -10,7 +10,6 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
 import {
-    BedDoubleIcon,
     Building2Icon,
     CalendarClockIcon,
     ChevronDownIcon,
@@ -32,7 +31,7 @@ import {
 import DocumentsOnFile from '../../HeadLeases/Partials/DocumentsOnFile';
 import { CHEQUE_STAGES, stageLabel } from './TenantContractsSummary';
 
-const UNIT_ICONS = { bed: BedDoubleIcon, room: DoorOpenIcon, apartment: HouseIcon, shop: StoreIcon };
+const UNIT_ICONS = { room: DoorOpenIcon, apartment: HouseIcon, shop: StoreIcon };
 
 /**
  * A running contract this close to its end is flagged, as on the contract page.
@@ -148,8 +147,8 @@ function StageCounts({ summary }) {
 }
 
 /**
- * Each room, bed, apartment and shop a contract rents in this property:
- * the beds in a whole room, who is staying, its own dates when they differ
+ * Each room, apartment and shop a contract rents in this property: how
+ * many a room sleeps and who is staying, its own dates when they differ
  * from the contract's, and its rent a month.
  */
 function UnitsHere({ contract, currency }) {
@@ -162,7 +161,7 @@ function UnitsHere({ contract, currency }) {
                 {contract.lines.map((line) => {
                     const Icon = UNIT_ICONS[line.unitType];
                     const detail = [
-                        line.unitType === 'room' && t('common.beds', { count: line.capacity }),
+                        line.unitType === 'room' && t('common.sleeps', { count: line.capacity }),
                         line.housesOccupants && t('leasing.holdings.staying', { count: line.staying }),
                         (line.startDate !== contract.startDate || line.endDate !== contract.endDate) && period(line.startDate, line.endDate),
                     ]
@@ -176,7 +175,7 @@ function UnitsHere({ contract, currency }) {
                                 <span className="truncate text-[0.8125rem] font-medium">{lineLabel(line)}</span>
                                 {detail && <span className="truncate text-xs text-muted-foreground">{detail}</span>}
                             </div>
-                            <span className="text-[0.8125rem] tabular-nums">{formatCurrency(line.monthlyAmount, currency)}</span>
+                            <span className="text-[0.8125rem] tabular-nums">{formatCurrency(line.monthlyRate, currency)}</span>
                         </li>
                     );
                 })}

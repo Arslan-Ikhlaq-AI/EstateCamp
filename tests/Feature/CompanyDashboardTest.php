@@ -28,6 +28,7 @@ test('users without a company see an empty dashboard', function () {
 describe('for the seeded demo company', function () {
     beforeEach(function () {
         $this->seed(PortfolioSeeder::class);
+        letDemoRooms();
 
         $this->superAdmin = User::where('email', 'omar.rahman@horizonfm.test')->sole();
     });
@@ -43,14 +44,14 @@ describe('for the seeded demo company', function () {
                 ->where('summary.properties', 2)
                 ->where('summary.rooms', 10)
                 ->where('summary.roomsUnderMaintenance', 1)
-                ->where('summary.beds', [
-                    'total' => 37,
-                    'occupied' => 27,
-                    'available' => 4,
-                    'outOfService' => 6,
-                    'occupancyRate' => 87.1,
+                ->where('summary.roomOccupancy', [
+                    'total' => 10,
+                    'occupied' => 4,
+                    'available' => 5,
+                    'outOfService' => 1,
+                    'occupancyRate' => 44.4,
                 ])
-                ->where('summary.rentRoll', 17450)
+                ->where('summary.rentRoll', 11100)
                 ->where('summary.potentialRent', 21100)
                 ->where('summary.documents', ['total' => 6, 'expiring' => 1, 'expired' => 0])
             );
@@ -62,10 +63,10 @@ describe('for the seeded demo company', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->has('properties', 2)
                 ->where('properties.0.name', 'Al Quoz Worker Village')
-                ->where('properties.0.beds.occupied', 22)
-                ->where('properties.0.beds.total', 30)
-                ->where('properties.0.beds.occupancyRate', 91.7)
-                ->where('properties.0.rentRoll', 10950)
+                ->where('properties.0.roomOccupancy.occupied', 3)
+                ->where('properties.0.roomOccupancy.total', 5)
+                ->where('properties.0.roomOccupancy.occupancyRate', 75)
+                ->where('properties.0.rentRoll', 9600)
                 ->has('roomTypes', 3)
                 ->has('rooms', 10)
                 ->where('rooms.0.photoUrl', '/images/demo/room-dormitory.svg')
@@ -139,14 +140,14 @@ test('summarises money collected and owed over the last six months', function ()
         ->get(route('dashboard'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('finance.collectedThisMonth', 27875)
-            ->where('finance.invoicedThisMonth', 52255)
-            ->where('finance.outstanding', 39500)
-            ->where('finance.overdue', ['count' => 4, 'amount' => 37800])
+            ->where('finance.collectedThisMonth', 28175)
+            ->where('finance.invoicedThisMonth', 52855)
+            ->where('finance.outstanding', 39800)
+            ->where('finance.overdue', ['count' => 4, 'amount' => 38100])
             ->has('finance.trend', 6)
-            ->where('finance.trend.0', ['month' => '2026-05', 'invoiced' => 65100, 'collected' => 65100])
-            ->where('finance.trend.3', ['month' => '2026-08', 'invoiced' => 68680, 'collected' => 83380])
-            ->where('finance.trend.5', ['month' => '2026-10', 'invoiced' => 52255, 'collected' => 27875])
+            ->where('finance.trend.0', ['month' => '2026-05', 'invoiced' => 65700, 'collected' => 65700])
+            ->where('finance.trend.3', ['month' => '2026-08', 'invoiced' => 69280, 'collected' => 83980])
+            ->where('finance.trend.5', ['month' => '2026-10', 'invoiced' => 52855, 'collected' => 28175])
         );
 });
 

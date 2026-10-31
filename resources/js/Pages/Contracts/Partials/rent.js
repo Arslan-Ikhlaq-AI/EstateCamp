@@ -12,7 +12,6 @@ function unitOf(line, properties) {
     const property = properties.find((item) => item.id === line.property_id);
 
     return {
-        bed: property?.rooms.find((room) => room.id === line.room_id),
         room: property?.rooms.find((room) => room.id === line.room_id),
         apartment: property?.apartments.find((apartment) => apartment.id === line.apartment_id),
         shop: property?.shops.find((shop) => shop.id === line.shop_id),
@@ -20,21 +19,13 @@ function unitOf(line, properties) {
 }
 
 /**
- * A line's list price for a month: a whole room at its bed rate for every
- * bed, beds at that rate each, an apartment or shop at its rent. Null when
- * the unit has none. Matches ContractLine::standardRent().
+ * A line's list price for a month: the room's, apartment's or shop's rent.
+ * Null when the unit has none. Matches ContractLine::standardRent().
  */
 export function standardRent(line, properties) {
     const unit = unitOf(line, properties);
 
-    if (!unit || unit.rate === null || unit.rate === undefined) {
-        return null;
-    }
-
-    return {
-        room: unit.rate * unit.capacity,
-        bed: unit.rate * (Number(line.quantity) || 0),
-    }[line.unit_type] ?? unit.rate;
+    return unit?.rate ?? null;
 }
 
 /**
@@ -65,13 +56,11 @@ export function shareRent(lines, monthlyRent, properties) {
 
     return lines.map((line, index) => {
         const share = index === lines.length - 1 ? round2(left) : round2((total * weights[index]) / sum);
-        const quantity = Number(line.quantity) || 1;
         left -= share;
 
         return {
             ...line,
-            quantity,
-            monthly_rate: round2(share / quantity),
+            monthly_rate: share,
             vat_rate: line.vat_rate ?? (line.unit_type === 'shop' ? SHOP_VAT_RATE : 0),
         };
     });

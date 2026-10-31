@@ -1,4 +1,4 @@
-import BedBar from '@/Components/BedBar';
+import RoomBar from '@/Components/RoomBar';
 import PropertyCover from '@/Components/PropertyCover';
 import RadialGauge from '@/Components/RadialGauge';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +27,7 @@ function Stat({ label, value }) {
 
 function PropertyCard({ property, currency }) {
     const { t, tOr, formatNumber, formatPercent, formatCurrency, formatDate } = useTranslation();
-    const { beds } = property;
+    const occupancy = property.roomOccupancy;
 
     return (
         <article className="group/property flex flex-col overflow-hidden rounded-2xl bg-card shadow-(--card-shadow) ring-1 ring-foreground/[0.07] transition-[box-shadow,translate] duration-200 hover:-translate-y-0.5 hover:shadow-(--overlay-shadow) motion-reduce:hover:translate-y-0">
@@ -58,24 +58,24 @@ function PropertyCard({ property, currency }) {
             <div className="flex flex-1 flex-col gap-4 p-4 sm:p-5">
                 <div className="flex items-center gap-4">
                     <RadialGauge
-                        value={beds.occupancyRate}
+                        value={occupancy.occupancyRate}
                         size={88}
                         thickness={9}
-                        label={`${t('dashboard.portfolioSection.occupancy')}: ${beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}`}
+                        label={`${t('dashboard.portfolioSection.occupancy')}: ${occupancy.occupancyRate === null ? '—' : formatPercent(occupancy.occupancyRate)}`}
                     >
                         <span className="text-base font-bold tracking-tight">
-                            {beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
+                            {occupancy.occupancyRate === null ? '—' : formatPercent(occupancy.occupancyRate)}
                         </span>
                     </RadialGauge>
                     <dl className="grid flex-1 grid-cols-2 gap-x-4 gap-y-3">
-                        <Stat label={t('dashboard.beds.occupied')} value={`${formatNumber(beds.occupied)} / ${formatNumber(beds.total)}`} />
-                        <Stat label={t('dashboard.beds.available')} value={formatNumber(beds.available)} />
-                        <Stat label={t('nav.rooms')} value={formatNumber(property.rooms)} />
+                        <Stat label={t('dashboard.roomStates.occupied')} value={`${formatNumber(occupancy.occupied)} / ${formatNumber(occupancy.total)}`} />
+                        <Stat label={t('dashboard.roomStates.available')} value={formatNumber(occupancy.available)} />
+                        <Stat label={t('dashboard.roomStates.outOfService')} value={formatNumber(occupancy.outOfService)} />
                         <Stat label={t('dashboard.portfolioSection.rentRoll')} value={formatCurrency(property.rentRoll, currency)} />
                     </dl>
                 </div>
 
-                <BedBar beds={beds} />
+                <RoomBar rooms={occupancy} />
 
                 {property.leaseEndsOn && (
                     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -89,7 +89,7 @@ function PropertyCard({ property, currency }) {
 }
 
 /**
- * Each property with its picture, an occupancy gauge, its beds and rent roll.
+ * Each property with its picture, an occupancy gauge, its rooms and rent roll.
  */
 export default function PropertiesOverview({ properties, currency, className }) {
     const { t } = useTranslation();

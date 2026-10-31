@@ -10,7 +10,6 @@ import PostButton from '@/Components/PostButton';
 import PropertyHoldings from '@/Components/PropertyHoldings';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FieldGroup } from '@/components/ui/field';
 import { todayIso, useLeasingFormat } from '@/hooks/use-leasing-format';
@@ -19,7 +18,6 @@ import { cn } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
 import {
     BanknoteIcon,
-    BedDoubleIcon,
     CalendarClockIcon,
     CircleCheckIcon,
     FilePlusIcon,
@@ -27,6 +25,7 @@ import {
     LogOutIcon,
     PencilIcon,
     RefreshCwIcon,
+    UsersIcon,
     WalletCardsIcon,
     WalletIcon,
     XCircleIcon,
@@ -123,11 +122,11 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
             ),
         },
         {
-            id: 'bed',
-            header: t('leasing.occupants.columns.bed'),
+            id: 'room',
+            header: t('leasing.occupants.columns.room'),
             cell: (stay) => (
                 <div className="flex flex-col text-sm">
-                    <span>{t('leasing.common.roomBed', { room: stay.roomNumber, bed: stay.bedLabel })}</span>
+                    <span>{t('leasing.lines.roomName', { room: stay.roomNumber })}</span>
                     <span className="text-xs text-muted-foreground" dir="auto">{stay.propertyName}</span>
                 </div>
             ),
@@ -212,7 +211,7 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
                     detail={t('leasing.contracts.show.balanceDetail', { invoiced: formatCurrency(totals.invoiced, currency), paid: formatCurrency(totals.paid, currency) })}
                 />
                 <StatCard
-                    icon={BedDoubleIcon}
+                    icon={UsersIcon}
                     label={t('leasing.contracts.show.staying')}
                     value={capacity > 0 ? `${formatNumber(current.length)} / ${formatNumber(capacity)}` : '—'}
                     meter={capacity > 0 ? (current.length / capacity) * 100 : undefined}
@@ -297,26 +296,12 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
                                     align: 'end',
                                     cell: (line) => (
                                         <div className="flex flex-col items-end">
-                                            <span className="font-medium tabular-nums">{formatMoney(line.monthlyAmount, currency)}</span>
-                                            <span className="text-xs text-muted-foreground tabular-nums">
-                                                {line.unitType === 'bed'
-                                                    ? t('leasing.contracts.show.perBed', { amount: formatCurrency(line.monthlyRate, currency) })
-                                                    : line.vatRate > 0
-                                                      ? t('leasing.contracts.show.plusVat', { rate: line.vatRate })
-                                                      : ''}
-                                            </span>
+                                            <span className="font-medium tabular-nums">{formatMoney(line.monthlyRate, currency)}</span>
+                                            {line.vatRate > 0 && (
+                                                <span className="text-xs text-muted-foreground tabular-nums">{t('leasing.contracts.show.plusVat', { rate: line.vatRate })}</span>
+                                            )}
                                         </div>
                                     ),
-                                },
-                                {
-                                    id: 'basis',
-                                    header: t('leasing.contracts.show.columns.billing'),
-                                    cell: (line) =>
-                                        line.unitType === 'bed' ? (
-                                            <Badge variant={line.billingBasis === 'actual' ? 'warning' : 'secondary'}>{t(`leasing.billingBases.${line.billingBasis}`)}</Badge>
-                                        ) : (
-                                            <span className="text-sm text-muted-foreground">{t('leasing.billingBases.contracted')}</span>
-                                        ),
                                 },
                                 {
                                     id: 'occupancy',

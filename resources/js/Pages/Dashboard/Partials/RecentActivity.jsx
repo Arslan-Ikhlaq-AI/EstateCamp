@@ -105,7 +105,7 @@ export default function RecentActivity({ activity, currency, className }) {
                         {events.map((event, index) => {
                             const { icon: Icon, tone, title } = describe(event, t);
                             const detail = event.room
-                                ? t('leasing.common.roomBed', { room: event.room, bed: event.bed })
+                                ? t('leasing.lines.roomName', { room: event.room })
                                 : event.reference;
 
                             return (

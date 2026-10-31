@@ -72,13 +72,18 @@ class ClientController extends Controller
     }
 
     /**
-     * Show the form for adding a client.
+     * Show the form for adding a client: a company, or a person with
+     * `?type=individual`.
      */
     public function create(Request $request): Response
     {
         $this->currentCompany($request);
 
-        return Inertia::render('Clients/Form', ['client' => null, ...$this->formOptions()]);
+        return Inertia::render('Clients/Form', [
+            'client' => null,
+            'defaultType' => $request->query('type') === 'individual' ? 'individual' : 'company',
+            ...$this->formOptions(),
+        ]);
     }
 
     /**
@@ -109,7 +114,7 @@ class ClientController extends Controller
         $stays = Occupancy::query()
             ->whereNull('check_out_date')
             ->whereHas('occupant', fn (Builder $occupants) => $occupants->where('client_id', $client->id))
-            ->with(['occupant:id,full_name,employee_number', 'bed.room.property:id,name,code', 'contractLine.contract:id,contract_number', 'roomRental:id,rental_number'])
+            ->with(['occupant:id,full_name,employee_number', 'room:id,room_number,property_id', 'room.property:id,name,code', 'contractLine.contract:id,contract_number', 'roomRental:id,rental_number'])
             ->orderBy('check_in_date')
             ->get();
         $invoices = $client->invoices()->with('contract:id,contract_number')->orderByDesc('issue_date')->orderByDesc('id')->limit(12)->get();
@@ -153,7 +158,7 @@ class ClientController extends Controller
             'contracts' => $contracts->map(fn (Contract $contract) => ContractController::listDetails($contract)),
             'holdings' => $holdings->map(fn (ContractLine $line) => [
                 ...ContractController::lineDetails($line),
-                'capacity' => $line->bedCapacity(),
+                'capacity' => $line->capacity(),
                 'staying' => $line->staying_count,
                 'housesOccupants' => $line->housesOccupants(),
                 'contract' => ['id' => $line->contract->id, 'number' => $line->contract->contract_number, 'status' => $line->contract->status],
@@ -165,9 +170,8 @@ class ClientController extends Controller
             'stays' => $stays->map(fn (Occupancy $stay) => [
                 'id' => $stay->id,
                 'occupant' => ['id' => $stay->occupant->id, 'name' => $stay->occupant->full_name, 'employeeNumber' => $stay->occupant->employee_number],
-                'property' => $stay->bed->room->property->only(['id', 'name', 'code']),
-                'roomNumber' => $stay->bed->room->room_number,
-                'bedLabel' => $stay->bed->label,
+                'property' => $stay->room->property->only(['id', 'name', 'code']),
+                'roomNumber' => $stay->room->room_number,
                 'contractNumber' => $stay->contractLine?->contract->contract_number ?? $stay->roomRental?->rental_number,
                 'checkInDate' => $stay->check_in_date->toDateString(),
             ]),

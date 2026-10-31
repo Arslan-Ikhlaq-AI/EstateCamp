@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 #[Fillable([
     'name',
@@ -77,10 +76,10 @@ class Property extends Model
     }
 
     /**
-     * Add room and bed totals from the property's rooms: `rooms_count`,
-     * `beds_total`, `beds_occupied`, `beds_available` (free beds in active
-     * rooms) and `rent_roll` (occupied beds at their room's bed rate). The sums
-     * are null for a property without rooms.
+     * Add room totals from the property's rooms: `rooms_count`,
+     * `occupied_rooms_count`, `available_rooms_count` (vacant rooms that are
+     * active) and `rent_roll` (the monthly rent of the occupied rooms, null
+     * when none is occupied).
      *
      * @param  Builder<Property>  $query
      */
@@ -88,21 +87,18 @@ class Property extends Model
     protected function withOccupancy(Builder $query): void
     {
         $query
-            ->withCount('rooms')
-            ->withSum('rooms as beds_total', 'capacity')
-            ->withSum('rooms as beds_occupied', 'occupied_count')
-            ->withSum(
-                ['rooms as beds_available' => fn (Builder $rooms) => $rooms->where('status', 'active')],
-                DB::raw('capacity - occupied_count'),
-            )
-            ->withSum('rooms as rent_roll', DB::raw('occupied_count * rent_per_bed'));
+            ->withCount([
+                'rooms',
+                'rooms as occupied_rooms_count' => fn (Builder $rooms) => $rooms->where('is_occupied', true),
+                'rooms as available_rooms_count' => fn (Builder $rooms) => $rooms->where('status', 'active')->where('is_occupied', false),
+            ])
+            ->withSum(['rooms as rent_roll' => fn (Builder $rooms) => $rooms->where('is_occupied', true)], 'monthly_rent');
     }
 
     /**
-     * Add how full the property's units are: `full_rooms_count` (every bed
-     * taken), `free_rooms_count` (some beds taken), `empty_rooms_count` (nobody
-     * staying), and `shops_count` and `apartments_count` with how many of each
-     * are occupied (`occupied_shops_count`, `occupied_apartments_count`).
+     * Add how many shops and apartments the property has and how many of
+     * each are occupied: `shops_count`, `occupied_shops_count`,
+     * `apartments_count` and `occupied_apartments_count`.
      *
      * @param  Builder<Property>  $query
      */
@@ -110,9 +106,6 @@ class Property extends Model
     protected function withUnitOccupancy(Builder $query): void
     {
         $query->withCount([
-            'rooms as full_rooms_count' => fn (Builder $rooms) => $rooms->whereColumn('occupied_count', '>=', 'capacity'),
-            'rooms as free_rooms_count' => fn (Builder $rooms) => $rooms->where('occupied_count', '>', 0)->whereColumn('occupied_count', '<', 'capacity'),
-            'rooms as empty_rooms_count' => fn (Builder $rooms) => $rooms->where('occupied_count', 0),
             'shops',
             'shops as occupied_shops_count' => fn (Builder $shops) => $shops->where('status', 'occupied'),
             'apartments',
@@ -121,7 +114,7 @@ class Property extends Model
     }
 
     /**
-     * Refresh the stored room and bed totals from the property's rooms.
+     * How many rooms, shops and apartments the property has.
      */
     public function unitCount(): int
     {
@@ -129,7 +122,7 @@ class Property extends Model
     }
 
     /**
-     * Refresh the room and bed counts from the property's rooms.
+     * Refresh the room count and capacity from the property's rooms.
      */
     public function recalculateTotals(): void
     {
@@ -174,8 +167,8 @@ class Property extends Model
 
     /**
      * Add rooms, shops and apartments in batches of alike units, each batch
-     * numbered up from its `first_number`. New rooms get their beds and the
-     * property's room and bed totals are refreshed.
+     * numbered up from its `first_number`. The property's room totals are
+     * refreshed.
      *
      * @param  array{rooms?: list<array<string, mixed>>, shops?: list<array<string, mixed>>, apartments?: list<array<string, mixed>>}  $units
      * @return array{rooms: int, shops: int, apartments: int}
@@ -194,12 +187,11 @@ class Property extends Model
                     'gender_policy' => $batch['gender_policy'] ?? null,
                     'floor_number' => $batch['floor_number'] ?? null,
                     'area_sqm' => $batch['area_sqm'] ?? null,
-                    'rent_per_bed' => $batch['rent_per_bed'] ?? null,
+                    'monthly_rent' => $batch['monthly_rent'] ?? null,
                     'amenities' => [],
                     'status' => 'active',
                 ]);
                 $room->forceFill($owner)->save();
-                $room->syncBeds();
                 $added['rooms']++;
             }
         }

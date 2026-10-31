@@ -10,7 +10,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
     BanknoteIcon,
-    BedDoubleIcon,
+    DoorOpenIcon,
     ExternalLinkIcon,
     FilePlusIcon,
     FileSignatureIcon,
@@ -30,14 +30,14 @@ import { ClientContracts, HeadLeases } from './Partials/PropertyContracts';
 import { LeaseNote, OwnershipBadge, StatusBadge } from './Partials/PropertyBadges';
 
 /**
- * One property: its photo and details, every room, bed, shop and apartment
+ * One property: its photo and details, every room, shop and apartment
  * by how full it is, which clients rent which units under which contracts,
  * its facilities, the landlord and head leases it is rented under, and its
  * documents.
  */
 export default function Show({ property, landlord, leases, contracts, clients, documents, currency }) {
     const { t, tOr, formatNumber, formatPercent, formatCurrency, formatDate } = useTranslation();
-    const { beds } = property;
+    const occupancy = property.roomOccupancy;
     const type = property.type ? tOr(`propertyTypes.${property.typeSlug}`, property.type) : null;
     const place = [property.area, property.city].filter(Boolean).join(', ');
     const activeContracts = contracts.filter((contract) => contract.status === 'active').length;
@@ -87,12 +87,12 @@ export default function Show({ property, landlord, leases, contracts, clients, d
 
             <section aria-label={t('propertyShow.stats')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 <StatCard
-                    icon={BedDoubleIcon}
+                    icon={DoorOpenIcon}
                     tone="success"
                     label={t('properties.stats.occupancy')}
-                    value={beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
-                    meter={beds.occupancyRate ?? 0}
-                    detail={t('properties.stats.occupancyDetail', { occupied: beds.occupied, total: beds.occupied + beds.available })}
+                    value={occupancy.occupancyRate === null ? '—' : formatPercent(occupancy.occupancyRate)}
+                    meter={occupancy.occupancyRate ?? 0}
+                    detail={t('properties.stats.occupancyDetail', { occupied: occupancy.occupied, total: occupancy.occupied + occupancy.available })}
                 />
                 <StatCard
                     icon={LayoutGridIcon}

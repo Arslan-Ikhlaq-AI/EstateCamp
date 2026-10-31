@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
 import {
     BanknoteIcon,
-    BedDoubleIcon,
+    DoorClosedIcon,
     DoorOpenIcon,
     PercentIcon,
     PlusIcon,
@@ -62,7 +62,7 @@ const defaultLayout = () => (window.matchMedia('(max-width: 767px)').matches ? '
 
 function RoomStats({ summary, currency }) {
     const { t, formatNumber, formatPercent, formatCurrency } = useTranslation();
-    const { beds } = summary;
+    const occupancy = summary.roomOccupancy;
 
     return (
         <section aria-label={t('roomList.stats.label')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
@@ -75,18 +75,18 @@ function RoomStats({ summary, currency }) {
             <StatCard
                 icon={PercentIcon}
                 label={t('roomList.stats.occupancy')}
-                value={beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
-                meter={beds.occupancyRate ?? 0}
-                detail={t('roomList.stats.occupancyDetail', { occupied: beds.occupied, total: beds.occupied + beds.available })}
+                value={occupancy.occupancyRate === null ? '—' : formatPercent(occupancy.occupancyRate)}
+                meter={occupancy.occupancyRate ?? 0}
+                detail={t('roomList.stats.occupancyDetail', { occupied: occupancy.occupied, total: occupancy.occupied + occupancy.available })}
             />
             <StatCard
-                icon={BedDoubleIcon}
-                tone={beds.available > 0 ? 'success' : 'primary'}
+                icon={DoorClosedIcon}
+                tone={occupancy.available > 0 ? 'success' : 'primary'}
                 label={t('roomList.stats.available')}
-                value={formatNumber(beds.available)}
+                value={formatNumber(occupancy.available)}
                 detail={
-                    beds.outOfService > 0
-                        ? t('roomList.stats.availableDetail', { count: beds.outOfService })
+                    occupancy.outOfService > 0
+                        ? t('roomList.stats.availableDetail', { count: occupancy.outOfService })
                         : t('roomList.stats.availableReady')
                 }
             />

@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
 import {
     BanknoteIcon,
-    BedDoubleIcon,
     Building2Icon,
     CircleCheckIcon,
     CirclePauseIcon,
@@ -21,6 +20,7 @@ import {
     PencilIcon,
     PlusIcon,
     ReceiptIcon,
+    UserCheckIcon,
     UserIcon,
     UsersIcon,
 } from 'lucide-react';
@@ -118,7 +118,7 @@ export default function Index({ company, filters, facets, summary, clients }) {
                             detail={t('leasing.clients.stats.contractsDetail')}
                         />
                         <StatCard
-                            icon={BedDoubleIcon}
+                            icon={UserCheckIcon}
                             label={t('leasing.clients.stats.staying')}
                             value={formatNumber(summary.staying)}
                             detail={t('leasing.clients.stats.stayingDetail')}

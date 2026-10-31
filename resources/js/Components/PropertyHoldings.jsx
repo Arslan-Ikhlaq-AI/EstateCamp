@@ -1,21 +1,21 @@
 import { Badge } from '@/components/ui/badge';
 import { useTranslation } from '@/hooks/use-translation';
 import { Link } from '@inertiajs/react';
-import { BedDoubleIcon, Building2Icon, DoorOpenIcon, HouseIcon, StoreIcon } from 'lucide-react';
+import { Building2Icon, DoorOpenIcon, HouseIcon, StoreIcon } from 'lucide-react';
 
-const UNIT_ICONS = { bed: BedDoubleIcon, room: DoorOpenIcon, apartment: HouseIcon, shop: StoreIcon };
+const UNIT_ICONS = { room: DoorOpenIcon, apartment: HouseIcon, shop: StoreIcon };
 
 /**
- * How many rooms, beds, apartments and shops a set of contract lines rents.
- * Rooms count once each, whether taken whole or a few beds at a time.
+ * How many rooms, apartments and shops a set of contract lines rents, and
+ * how many people the rooms sleep.
  *
- * @return {{ properties: number, rooms: number, beds: number, apartments: number, shops: number }}
+ * @return {{ properties: number, rooms: number, capacity: number, apartments: number, shops: number }}
  */
 export function holdingTotals(lines) {
     return {
         properties: new Set(lines.map((line) => line.property.id)).size,
         rooms: new Set(lines.filter((line) => line.roomId).map((line) => line.roomId)).size,
-        beds: lines.reduce((sum, line) => sum + (line.capacity ?? 0), 0),
+        capacity: lines.reduce((sum, line) => sum + (line.capacity ?? 0), 0),
         apartments: lines.filter((line) => line.unitType === 'apartment').length,
         shops: lines.filter((line) => line.unitType === 'shop').length,
     };
@@ -30,7 +30,7 @@ export function useHoldingSummary() {
     return (totals) =>
         [
             totals.rooms > 0 && t('propertyShow.clients.rooms', { count: totals.rooms }),
-            totals.beds > 0 && t('common.beds', { count: totals.beds }),
+            totals.capacity > 0 && t('common.sleeps', { count: totals.capacity }),
             totals.apartments > 0 && t('propertyShow.clients.apartments', { count: totals.apartments }),
             totals.shops > 0 && t('propertyShow.clients.shops', { count: totals.shops }),
         ]
@@ -39,8 +39,8 @@ export function useHoldingSummary() {
 }
 
 /**
- * Contract lines as one card per property: each room (with its beds and
- * who is staying), apartment and shop, its monthly amount and, with
+ * Contract lines as one card per property: each room (with how many it
+ * sleeps and who is staying), apartment and shop, its monthly amount and, with
  * `showContract`, the contract it is rented under.
  */
 export default function PropertyHoldings({ lines, currency, showContract = false }) {
@@ -81,7 +81,7 @@ export default function PropertyHoldings({ lines, currency, showContract = false
                             </div>
                             <span className="text-sm font-bold tabular-nums">
                                 {formatMoney(
-                                    propertyLines.reduce((sum, line) => sum + line.monthlyAmount, 0),
+                                    propertyLines.reduce((sum, line) => sum + line.monthlyRate, 0),
                                     currency,
                                 )}
                             </span>
@@ -90,14 +90,13 @@ export default function PropertyHoldings({ lines, currency, showContract = false
                             {propertyLines.map((line) => {
                                 const Icon = UNIT_ICONS[line.unitType];
                                 const label = {
-                                    bed: line.roomNumber ? t('leasing.lines.roomName', { room: line.roomNumber }) : t('leasing.holdings.anywhere'),
                                     room: t('leasing.lines.roomName', { room: line.roomNumber }),
                                     apartment: t('leasing.lines.apartment', { number: line.apartmentNumber }),
                                     shop: t('leasing.lines.shop', { number: line.shopNumber }),
                                 }[line.unitType];
                                 const detail = [
-                                    line.unitType === 'room' ? t('leasing.unitTypes.room') : line.unitType !== 'bed' && t(`leasing.unitTypes.${line.unitType}`),
-                                    line.capacity > 0 && t('common.beds', { count: line.capacity }),
+                                    t(`leasing.unitTypes.${line.unitType}`),
+                                    line.capacity > 0 && t('common.sleeps', { count: line.capacity }),
                                     line.housesOccupants && t('leasing.holdings.staying', { count: line.staying ?? 0 }),
                                 ]
                                     .filter(Boolean)
@@ -118,7 +117,7 @@ export default function PropertyHoldings({ lines, currency, showContract = false
                                                 {line.contract.number}
                                             </Badge>
                                         )}
-                                        <span className="text-[0.8125rem] tabular-nums">{formatMoney(line.monthlyAmount, currency)}</span>
+                                        <span className="text-[0.8125rem] tabular-nums">{formatMoney(line.monthlyRate, currency)}</span>
                                     </li>
                                 );
                             })}

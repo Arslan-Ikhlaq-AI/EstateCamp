@@ -11,7 +11,6 @@ use App\Models\Company;
 use App\Models\RentalPayment;
 use App\Models\Room;
 use App\Models\RoomRental;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -25,9 +24,9 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Short-term rentals: whole rooms rented to companies for a few months
- * without a contract, with where each tenant's rent stands, their receipts
- * and cheques, and moving them out.
+ * Short-term rentals: whole rooms rented to companies or people for a few
+ * months without a contract, with where each tenant's rent stands, their
+ * receipts and cheques, and moving them out.
  */
 class RoomRentalController extends Controller
 {
@@ -51,6 +50,7 @@ class RoomRentalController extends Controller
 
         $properties = $company->properties()->orderBy('name')->get(['id', 'name', 'code']);
         $filters = $this->listFilters($request, [
+            'types' => Client::TYPES,
             'status' => RoomRental::STATUSES,
             'standing' => RoomRental::STANDINGS,
             'properties' => $properties->pluck('code')->all(),
@@ -60,6 +60,9 @@ class RoomRentalController extends Controller
         $propertyCounts = $this->countBy($this->filteredQuery($company, $filters, $propertyIds, $standings, except: 'properties'), 'property_id');
         $standingCounts = $this->filteredQuery($company, $filters, $propertyIds, $standings, except: 'standing')->pluck('id')
             ->countBy(fn (int $id) => $standings[$id]['standing'] ?? 'paid_up');
+        $clientTypes = $company->clients()->withTrashed()->pluck('client_type', 'id');
+        $typeCounts = $this->filteredQuery($company, $filters, $propertyIds, $standings, except: 'types')->pluck('client_id')
+            ->countBy(fn (int $clientId) => $clientTypes[$clientId] ?? 'company');
 
         $rentals = $this->inStandingOrder($this->filteredQuery($company, $filters, $propertyIds, $standings), $standings)
             ->with(self::listRelations())
@@ -73,6 +76,7 @@ class RoomRentalController extends Controller
             'company' => ['currency' => $company->default_currency],
             'filters' => $filters,
             'facets' => [
+                'types' => $this->facetOptions(Client::TYPES, $typeCounts),
                 'status' => $this->facetOptions(RoomRental::STATUSES, $this->countBy($this->filteredQuery($company, $filters, $propertyIds, $standings, except: 'status'), 'status')),
                 'standing' => $this->facetOptions(RoomRental::STANDINGS, $standingCounts),
                 'properties' => $properties->map(fn ($property) => ['value' => $property->code, 'label' => $property->name, 'count' => $propertyCounts->get($property->id, 0)])->values(),
@@ -83,9 +87,9 @@ class RoomRentalController extends Controller
     }
 
     /**
-     * Show the form for renting rooms short-term to a company. `?room=`
-     * opens it on a room, `?property=` on a property and `?client=` on a
-     * company.
+     * Show the form for renting rooms short-term to a company or a person.
+     * `?room=` opens it on a room, `?property=` on a property, `?client=` on
+     * a renter on file and `?type=individual` on a person.
      */
     public function create(Request $request): Response
     {
@@ -93,20 +97,26 @@ class RoomRentalController extends Controller
         $rooms = RoomRental::roomsToRent($company);
         $room = $rooms->firstWhere('id', $request->integer('room'));
         $propertyId = $room?->property_id ?? $rooms->firstWhere('property_id', $request->integer('property'))?->property_id;
+        $clients = $company->clients()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'phone', 'client_type', 'id_number']);
+        $client = $clients->firstWhere('id', $request->integer('client'));
 
         return Inertia::render('Rentals/Form', [
             'rental' => null,
             'currency' => $company->default_currency,
             'defaults' => [
-                'client_id' => $request->integer('client') ?: null,
+                'client_type' => $client?->client_type ?? ($request->query('type') === 'individual' ? 'individual' : 'company'),
+                'client_id' => $client?->id,
                 'property_id' => $propertyId,
                 'room_ids' => $room ? [$room->id] : [],
             ],
-            'companies' => $company->clients()
-                ->where('client_type', 'company')
-                ->where('status', 'active')
-                ->orderBy('name')
-                ->get(['id', 'name', 'phone']),
+            'clients' => $clients->map(fn (Client $client) => [
+                'id' => $client->id,
+                'name' => $client->name,
+                'phone' => $client->phone,
+                'type' => $client->client_type,
+                'idNumber' => $client->id_number,
+            ]),
+            'idTypes' => Client::ID_TYPES,
             'properties' => $rooms->groupBy('property_id')->map(fn (Collection $rooms) => [
                 ...$rooms->first()->property->only(['id', 'name', 'code']),
                 'rooms' => $rooms->map(fn (Room $room) => [
@@ -115,18 +125,20 @@ class RoomRentalController extends Controller
                     'block' => $room->block,
                     'floor' => $room->floor_number,
                     'capacity' => $room->capacity,
-                    'rent' => $room->rent_per_bed === null ? null : round((float) $room->rent_per_bed * $room->capacity, 2),
+                    'rent' => $room->monthly_rent === null ? null : (float) $room->monthly_rent,
                 ])->values(),
             ])->values(),
             'maxMonths' => RoomRental::MAX_TERM_MONTHS,
             'paymentMethods' => RoomRental::FIRST_PAYMENT_METHODS,
+            'banks' => ChequeController::knownBanks($company),
         ]);
     }
 
     /**
-     * Rent the rooms to the company. A new company is added as a client.
-     * Unless the first payment is left for later, the first month's rent,
-     * and any deposit, are recorded as paid today.
+     * Rent the rooms to the company or person; a new one is added as a
+     * client. Unless the first payment is left for later, the first month's rent,
+     * and any deposit, are recorded as paid today by transfer, or their
+     * cheques go to the cheque register.
      */
     public function store(RoomRentalRequest $request): RedirectResponse
     {
@@ -134,7 +146,7 @@ class RoomRentalController extends Controller
 
         $rental = DB::transaction(function () use ($request, $company) {
             $client = $request->validated('client_mode') === 'new'
-                ? $this->newCompanyClient($company, $request->validated('new_client'))
+                ? $this->newClient($company, $request->validated('client_type'), $request->validated('new_client'))
                 : $company->clients()->findOrFail($request->integer('client_id'));
 
             $rental = new RoomRental($request->terms());
@@ -150,15 +162,18 @@ class RoomRentalController extends Controller
             $rental->recountRooms();
 
             if ($request->validated('first_payment') === 'now') {
-                $this->recordFirstPayment($rental, $request->validated('payment_method'), $request->validated('payment_reference'), $request->user());
+                $this->recordFirstPayment($rental, $request);
             }
 
             return $rental;
         });
 
         $rooms = $rental->rooms()->orderBy('room_number')->pluck('room_number');
+        $isPaidByCheque = $request->validated('payment_method') === 'cheque';
         $paid = match (true) {
             $request->validated('first_payment') !== 'now' => ' Record their first payment.',
+            $isPaidByCheque && $rental->security_deposit > 0 => ' The cheques for the first month’s rent and the deposit are in the cheque register.',
+            $isPaidByCheque => ' The cheque for the first month’s rent is in the cheque register.',
             $rental->security_deposit > 0 => ' The first month’s rent and the deposit are recorded as paid.',
             default => ' The first month’s rent is recorded as paid.',
         };
@@ -177,7 +192,7 @@ class RoomRentalController extends Controller
 
         $roomRental->load([
             ...self::listRelations(),
-            'client:id,name,contact_person_name,phone,email',
+            'client:id,name,client_type,contact_person_name,phone,email,id_type,id_number,nationality',
             'createdBy:id,name',
             'payments' => fn (HasMany $payments) => $payments->with('receivedBy:id,name')->orderByDesc('paid_on')->orderByDesc('id'),
         ]);
@@ -188,7 +203,7 @@ class RoomRentalController extends Controller
             'currency' => $roomRental->company->default_currency,
             'rental' => [
                 ...self::listDetails($roomRental, $standing),
-                'client' => $roomRental->client->only(['id', 'name', 'contact_person_name', 'phone', 'email']),
+                'client' => $roomRental->client->only(['id', 'name', 'client_type', 'contact_person_name', 'phone', 'email', 'id_type', 'id_number', 'nationality']),
                 'notes' => $roomRental->notes,
                 'createdBy' => $roomRental->createdBy?->name,
                 'createdAt' => $roomRental->created_at?->toDateString(),
@@ -237,10 +252,12 @@ class RoomRentalController extends Controller
             ],
             'currency' => $roomRental->company->default_currency,
             'defaults' => null,
-            'companies' => [],
+            'clients' => [],
+            'idTypes' => [],
             'properties' => [],
             'maxMonths' => RoomRental::MAX_TERM_MONTHS,
             'paymentMethods' => [],
+            'banks' => [],
         ]);
     }
 
@@ -289,7 +306,7 @@ class RoomRentalController extends Controller
     public static function listRelations(): array
     {
         return [
-            'client:id,name,phone',
+            'client:id,name,phone,client_type',
             'property' => fn ($query) => $query->withTrashed()->select(['id', 'name', 'code']),
             'rooms' => fn ($query) => $query->withTrashed()->select(['rooms.id', 'room_number', 'capacity'])->orderBy('room_number'),
         ];
@@ -307,7 +324,7 @@ class RoomRentalController extends Controller
             'id' => $rental->id,
             'number' => $rental->rental_number,
             'status' => $rental->status,
-            'tenant' => $rental->client?->only(['id', 'name', 'phone']),
+            'tenant' => $rental->client ? [...$rental->client->only(['id', 'name', 'phone']), 'type' => $rental->client->client_type] : null,
             'property' => $rental->property?->only(['id', 'name', 'code']),
             'rooms' => $rental->rooms->map(fn (Room $room) => ['id' => $room->id, 'number' => $room->room_number, 'capacity' => $room->capacity])->values()->all(),
             'months' => $rental->termMonths(),
@@ -452,42 +469,59 @@ class RoomRentalController extends Controller
                 ->whereLike('rental_number', "%{$search}%")
                 ->orWhereHas('client', fn (Builder $clients) => $clients->whereLike('name', "%{$search}%")->orWhereLike('phone', "%{$search}%")->orWhereLike('id_number', "%{$search}%"))
                 ->orWhereHas('rooms', fn (Builder $rooms) => $rooms->whereLike('room_number', "%{$search}%"))))
+            ->when($except !== 'types' && $filters['types'] !== [], fn (Builder $query) => $query->whereHas('client', fn (Builder $clients) => $clients->withTrashed()->whereIn('client_type', $filters['types'])))
             ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('status', $filters['status']))
             ->when($except !== 'properties' && $filters['properties'] !== [], fn (Builder $query) => $query->whereIn('property_id', $propertyIds))
             ->when($except !== 'standing' && $filters['standing'] !== [], fn (Builder $query) => $query->whereKey($standingIds()));
     }
 
     /**
-     * Receipts for the first month's rent, and the deposit when there is
-     * one, paid today.
+     * The first month's rent, and the deposit when there is one: receipts
+     * paid today by transfer, or a cheque for each into the cheque register.
      */
-    private function recordFirstPayment(RoomRental $rental, string $method, ?string $reference, User $by): void
+    private function recordFirstPayment(RoomRental $rental, RoomRentalRequest $request): void
     {
         $purposes = array_filter(['rent' => (float) $rental->monthly_rent, 'deposit' => (float) $rental->security_deposit]);
 
         foreach ($purposes as $purpose => $amount) {
-            $rental->recordPayment(['paid_on' => today(), 'amount' => $amount, 'purpose' => $purpose, 'method' => $method, 'reference' => $reference], $by);
+            if ($request->validated('payment_method') === 'cheque') {
+                $rental->receiveCheque([
+                    'purpose' => $purpose,
+                    'cheque_date' => $request->validated('cheque_date'),
+                    'amount' => $amount,
+                    'cheque_number' => $request->validated($purpose === 'deposit' ? 'deposit_cheque_number' : 'cheque_number'),
+                    'bank_name' => $request->validated('bank_name'),
+                    'account_holder' => $rental->client->name,
+                ], $request->user());
+
+                continue;
+            }
+
+            $rental->recordPayment(['paid_on' => today(), 'amount' => $amount, 'purpose' => $purpose, 'method' => $request->validated('payment_method'), 'reference' => $request->validated('payment_reference')], $request->user());
         }
     }
 
     /**
-     * Add a new company client from the rental form: its name and phone,
-     * and whichever other details were given.
+     * Add a new client from the rental form: a company or a person by name
+     * and phone (and a person's ID), with whichever other details were given.
      *
-     * @param  array{name: string, phone: string, contact_person_name?: ?string, email?: ?string, trade_license_number?: ?string, tax_registration_number?: ?string, address?: ?string}  $details
+     * @param  array{name: string, phone: string, contact_person_name?: ?string, email?: ?string, trade_license_number?: ?string, tax_registration_number?: ?string, id_type?: ?string, id_number?: ?string, nationality?: ?string, address?: ?string}  $details
      */
-    private function newCompanyClient(Company $company, array $details): Client
+    private function newClient(Company $company, string $type, array $details): Client
     {
         $optional = fn (string $key) => filled($details[$key] ?? null) ? trim($details[$key]) : null;
 
         $client = new Client([
-            'client_type' => 'company',
+            'client_type' => $type,
             'name' => trim($details['name']),
             'phone' => trim($details['phone']),
             'contact_person_name' => $optional('contact_person_name'),
             'email' => $optional('email'),
             'trade_license_number' => $optional('trade_license_number'),
             'tax_registration_number' => $optional('tax_registration_number'),
+            'id_type' => $optional('id_type'),
+            'id_number' => $optional('id_number'),
+            'nationality' => $optional('nationality'),
             'address' => $optional('address'),
             'status' => 'active',
         ]);

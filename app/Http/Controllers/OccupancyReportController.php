@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiltersByPeriod;
-use App\Http\Controllers\Concerns\MeasuresBeds;
+use App\Http\Controllers\Concerns\MeasuresRooms;
 use App\Http\Controllers\Concerns\PreparesReports;
 use App\Models\Company;
 use App\Models\Occupancy;
@@ -17,13 +17,13 @@ use Inertia\Response;
 
 /**
  * The occupancy report: how full each property and kind of room is today,
- * the rent the taken beds bring in against what a full house would, who
- * is staying (by client, nationality and gender), who moved in and out
- * over a period, a year of people staying, and the rooms with beds free.
+ * the rent the occupied rooms bring in against what a full house would,
+ * who is staying (by client, nationality and gender), who moved in and out
+ * over a period, a year of people staying, and the vacant rooms.
  */
 class OccupancyReportController extends Controller
 {
-    use FiltersByPeriod, MeasuresBeds, PreparesReports;
+    use FiltersByPeriod, MeasuresRooms, PreparesReports;
 
     /**
      * Months in the trend, ending with the period's last month.
@@ -61,7 +61,7 @@ class OccupancyReportController extends Controller
             'summary' => [
                 'properties' => $company->properties()->count(),
                 'rooms' => $rooms->count(),
-                'beds' => $this->beds($rooms),
+                'roomOccupancy' => $this->roomOccupancy($rooms),
                 'staying' => $staying->count(),
                 'rentRoll' => $this->rentRoll($rooms),
                 'potentialRent' => $this->potentialRent($rooms),
@@ -84,7 +84,7 @@ class OccupancyReportController extends Controller
                     'slug' => $typeRooms->first()->roomType->slug,
                     'name' => $typeRooms->first()->roomType->name,
                 ]))
-                ->sortByDesc('beds.total')
+                ->sortByDesc('rooms')
                 ->values()
                 ->all(),
             'clients' => $staying
@@ -107,7 +107,7 @@ class OccupancyReportController extends Controller
             ],
             'trend' => $this->stayingTrend($company, CarbonImmutable::parse($period['to'] ?? today()), self::TREND_MONTHS),
             'vacancies' => $rooms
-                ->filter(fn (Room $room) => $this->availableBeds($room) > 0)
+                ->filter(fn (Room $room) => $this->isAvailable($room))
                 ->map(fn (Room $room) => [
                     'id' => $room->id,
                     'property' => $room->property->name,
@@ -116,9 +116,7 @@ class OccupancyReportController extends Controller
                     'type' => $room->roomType->name,
                     'genderPolicy' => $room->gender_policy,
                     'capacity' => $room->capacity,
-                    'occupied' => $room->occupied_count,
-                    'free' => $this->availableBeds($room),
-                    'rentPerBed' => $room->rent_per_bed === null ? null : (float) $room->rent_per_bed,
+                    'monthlyRent' => $room->monthly_rent === null ? null : (float) $room->monthly_rent,
                 ])
                 ->values()
                 ->all(),
@@ -126,7 +124,7 @@ class OccupancyReportController extends Controller
     }
 
     /**
-     * A group of rooms (a property's, or one kind's) with its beds and rent.
+     * A group of rooms (a property's, or one kind's) with how full it is and its rent.
      *
      * @param  Collection<int, Room>  $rooms
      * @param  array<string, mixed>  $details
@@ -137,7 +135,7 @@ class OccupancyReportController extends Controller
         return [
             ...$details,
             'rooms' => $rooms->count(),
-            'beds' => $this->beds($rooms),
+            'roomOccupancy' => $this->roomOccupancy($rooms),
             'rentRoll' => $this->rentRoll($rooms),
             'potentialRent' => $this->potentialRent($rooms),
         ];

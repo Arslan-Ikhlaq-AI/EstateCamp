@@ -132,7 +132,7 @@ it('fills every column except those that do not apply', function () {
 it('seeds data that satisfies the database check constraints SQLite does not enforce', function () {
     $this->seed(DatabaseSeeder::class);
 
-    expect(Room::whereColumn('occupied_count', '>', 'capacity')->exists())->toBeFalse()
+    expect(Room::where('capacity', '<', 1)->orWhere('monthly_rent', '<', 0)->exists())->toBeFalse()
         ->and(Property::whereColumn('lease_end_date', '<', 'lease_start_date')->exists())->toBeFalse()
         ->and(PropertyDocument::whereColumn('expires_on', '<', 'issued_on')->exists())->toBeFalse()
         ->and(Property::pluck('makani_number')->every(fn (string $number) => preg_match('/^[0-9]{10}$/', $number) === 1))->toBeTrue()

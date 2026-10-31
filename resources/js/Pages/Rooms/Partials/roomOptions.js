@@ -48,6 +48,14 @@ export const ROOM_TYPE_ICONS = {
     private_room: UserIcon,
 };
 
+/**
+ * The room type a new room starts on: Dormitory, or the first type when a
+ * company has removed it.
+ */
+export function defaultRoomTypeId(roomTypes) {
+    return (roomTypes.find((type) => type.slug === 'dormitory') ?? roomTypes[0])?.id ?? null;
+}
+
 export const GENDER_ICONS = {
     male: MarsIcon,
     female: VenusIcon,

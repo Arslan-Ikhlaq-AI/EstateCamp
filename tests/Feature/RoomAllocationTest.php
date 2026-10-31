@@ -3,8 +3,6 @@
 use App\Models\Client;
 use App\Models\Contract;
 use App\Models\ContractLine;
-use App\Models\Occupancy;
-use App\Models\Occupant;
 use App\Models\Property;
 use App\Models\Room;
 use App\Models\RoomRental;
@@ -21,8 +19,7 @@ beforeEach(function () {
         'property_id' => $this->property->id,
         'room_number' => $number,
         'capacity' => 4,
-        'occupied_count' => 0,
-        'rent_per_bed' => 500,
+        'monthly_rent' => 2000,
         ...$attributes,
     ]);
     $this->contract = fn (string $clientName, bool $isIndividual = false, array $attributes = []) => Contract::factory()->active()->create([
@@ -35,7 +32,6 @@ beforeEach(function () {
     $this->line = fn (Contract $contract, array $attributes) => ContractLine::factory()->create([
         'contract_id' => $contract->id,
         'property_id' => $this->property->id,
-        'quantity' => 1,
         ...$attributes,
     ]);
 });
@@ -201,31 +197,6 @@ test('shares a short-term rental’s rent equally between its rooms', function (
             ->where('rooms.1.monthly', 1500)
             ->where('summaries.rooms.rent.short_term', 3000)
             ->where('summaries.rooms.clients.short_term', 1)
-        );
-});
-
-test('places beds a contract rents across the property in the rooms its people stay in', function () {
-    $room = ($this->room)('101');
-    $contract = ($this->contract)('Noor Alasayel Technical Services');
-    $line = ($this->line)($contract, ['unit_type' => 'bed', 'room_id' => null, 'quantity' => 6, 'monthly_rate' => 450]);
-
-    foreach ($room->beds()->take(2)->pluck('id') as $bedId) {
-        $stay = new Occupancy(['check_in_date' => '2026-10-01']);
-        $stay->forceFill([
-            'company_id' => $line->company_id,
-            'occupant_id' => Occupant::factory()->create(['client_id' => $contract->client_id])->id,
-            'contract_line_id' => $line->id,
-            'bed_id' => $bedId,
-        ])->save();
-    }
-
-    $this->actingAs($this->user)
-        ->get(route('properties.allocation', $this->property))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('rooms.0.allocation', 'contract')
-            ->where('rooms.0.holdings.0.reference.number', $contract->contract_number)
-            ->where('rooms.0.monthly', 900)
         );
 });
 

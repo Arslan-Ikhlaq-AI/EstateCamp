@@ -20,10 +20,9 @@ use Illuminate\Validation\Validator;
  * A contract with the units it rents, one monthly rent for all of them
  * and its cheque schedule. Besides the field rules, after() checks that
  * every unit is in the line's property and is not already let to another
- * live contract for the same days. Only lines already on the contract may
- * rent beds; new ones rent whole rooms, apartments or shops. Cheques are
- * optional: they are collected on the contract page as the client hands
- * them over.
+ * live contract or short-term rental for the same days. Units are rented
+ * whole: rooms, apartments or shops. Cheques are optional: they are
+ * collected on the contract page as the client hands them over.
  */
 class ContractRequest extends CompanyScopedRequest
 {
@@ -75,7 +74,7 @@ class ContractRequest extends CompanyScopedRequest
 
     /**
      * A client added from the contract form: a company with its trade
-     * licence, or a person with their ID, as on the client form.
+     * licence and TRN, or a person with their ID, as on the client form.
      *
      * @return array<string, array<mixed>>
      */
@@ -92,6 +91,8 @@ class ContractRequest extends CompanyScopedRequest
             'new_client.phone' => ['nullable', 'string', 'max:40'],
             'new_client.email' => ['nullable', 'email', 'max:255'],
             'new_client.trade_license_number' => ['nullable', 'string', 'max:255'],
+            'new_client.tax_registration_number' => ['nullable', 'digits:15'],
+            'new_client.address' => ['nullable', 'string', 'max:2000'],
             'new_client.id_type' => [Rule::requiredIf($isIndividual), 'nullable', Rule::in(Client::ID_TYPES)],
             'new_client.id_number' => [
                 Rule::requiredIf($isIndividual), 'nullable', 'string', 'max:50',
@@ -115,13 +116,12 @@ class ContractRequest extends CompanyScopedRequest
             $client = (array) $this->input('new_client', []);
             $isCompany = ($client['client_type'] ?? null) === 'company';
 
-            // A company has no personal ID and a person no trade licence, so the form's leftovers for the other type are dropped.
+            // A company has no personal ID and a person no trade licence, TRN or contact person, so the form's leftovers for the other type are dropped.
+            $dropped = $isCompany ? ['id_type', 'id_number'] : ['trade_license_number', 'tax_registration_number', 'contact_person_name'];
+
             $this->merge([
                 'client_id' => null,
-                'new_client' => [
-                    ...$client,
-                    ...($isCompany ? ['id_type' => null, 'id_number' => null] : ['trade_license_number' => null]),
-                ],
+                'new_client' => [...$client, ...array_fill_keys($dropped, null)],
             ]);
         } else {
             $this->merge(['client_mode' => 'existing', 'new_client' => null]);
@@ -137,7 +137,7 @@ class ContractRequest extends CompanyScopedRequest
             $line['end_date'] = ($line['end_date'] ?? null) ?: $this->input('end_date');
 
             foreach (['room' => 'room_id', 'apartment' => 'apartment_id', 'shop' => 'shop_id'] as $unitType => $column) {
-                if ($type !== $unitType && ! ($type === 'bed' && $column === 'room_id')) {
+                if ($type !== $unitType) {
                     $line[$column] = null;
                 }
             }
@@ -160,12 +160,6 @@ class ContractRequest extends CompanyScopedRequest
                 }
 
                 foreach ($this->input('lines') as $index => $line) {
-                    if ($line['unit_type'] === 'bed' && empty($line['id'])) {
-                        $validator->errors()->add("lines.{$index}.unit_type", 'Rent whole rooms: choose the rooms the client takes.');
-
-                        continue;
-                    }
-
                     if ($this->checkUnitIsInProperty($validator, $index, $line)) {
                         $this->checkUnitIsFree($validator, $index, $line);
                     }
@@ -179,9 +173,7 @@ class ContractRequest extends CompanyScopedRequest
      */
     private function checkUnitIsInProperty(Validator $validator, int $index, array $line): bool
     {
-        $unit = $this->unitFor($line);
-
-        if ($unit === false || $unit !== null) {
+        if ($this->unitFor($line) !== null) {
             return true;
         }
 
@@ -192,9 +184,8 @@ class ContractRequest extends CompanyScopedRequest
     }
 
     /**
-     * No other live contract may hold the same apartment, shop or whole room
-     * for overlapping days, nor a short-term rental the room, and bed lines
-     * in a room may not add up to more beds than it has.
+     * No other live contract may hold the same room, apartment or shop for
+     * overlapping days, nor a short-term rental the room.
      *
      * @param  array<string, mixed>  $line
      */
@@ -203,11 +194,6 @@ class ContractRequest extends CompanyScopedRequest
         $type = $line['unit_type'];
         $column = $this->unitColumn($type);
 
-        // A bed line for anywhere in the property names no unit to clash over.
-        if ($column === null || $line[$column] === null) {
-            return true;
-        }
-
         $others = fn () => ContractLine::query()
             ->whereDate('start_date', '<=', $line['end_date'])
             ->whereDate('end_date', '>=', $line['start_date'])
@@ -215,14 +201,7 @@ class ContractRequest extends CompanyScopedRequest
             ->when($this->route('contract'), fn (Builder $query, Contract $contract) => $query->whereNot('contract_id', $contract->id))
             ->with('contract:id,contract_number');
 
-        if (in_array($type, ['apartment', 'shop'], true)) {
-            $taken = $others()->where($column, $line[$column])->first();
-        } else {
-            // A room is taken when another contract rents it whole, or (for a whole-room line) has any of its beds.
-            $taken = $others()->where('room_id', $line['room_id'])
-                ->when($type === 'bed', fn (Builder $query) => $query->where('unit_type', 'room'))
-                ->first();
-        }
+        $taken = $others()->where($column, $line[$column])->first();
 
         if ($taken) {
             $validator->errors()->add("lines.{$index}.{$column}", "Already let under {$taken->contract->contract_number} until {$taken->end_date->format('j M Y')}.");
@@ -230,7 +209,7 @@ class ContractRequest extends CompanyScopedRequest
             return false;
         }
 
-        $rental = in_array($type, ['bed', 'room'], true) ? RoomRental::query()
+        $rental = $type === 'room' ? RoomRental::query()
             ->active()
             ->whereDate('start_date', '<=', $line['end_date'])
             ->where(fn (Builder $query) => $query->whereNull('end_date')->orWhereDate('end_date', '>=', $line['start_date']))
@@ -243,35 +222,17 @@ class ContractRequest extends CompanyScopedRequest
             return false;
         }
 
-        if ($type === 'bed') {
-            $room = Room::find($line['room_id']);
-            $booked = (int) $others()->where('unit_type', 'bed')->where('room_id', $room->id)->sum('quantity');
-
-            if ($booked + (int) ContractLine::query()->whereKey($line['id'])->value('quantity') > $room->capacity) {
-                $free = max(0, $room->capacity - $booked);
-                $validator->errors()->add("lines.{$index}.room_id", "Room {$room->room_number} has {$room->capacity} beds and {$booked} are already let; at most {$free} are free.");
-
-                return false;
-            }
-        }
-
         return true;
     }
 
     /**
-     * The line's unit if it belongs to the line's property, null if it does
-     * not, or false when the line names no unit (a bed line for anywhere in
-     * the property).
+     * The line's unit if it belongs to the line's property, otherwise null.
      *
      * @param  array<string, mixed>  $line
      */
-    private function unitFor(array $line): Room|Apartment|Shop|false|null
+    private function unitFor(array $line): Room|Apartment|Shop|null
     {
         $column = $this->unitColumn($line['unit_type']);
-
-        if ($column === null || $line[$column] === null) {
-            return false;
-        }
 
         $model = match ($column) {
             'room_id' => Room::class,
@@ -282,13 +243,12 @@ class ContractRequest extends CompanyScopedRequest
         return $model::query()->whereKey($line[$column])->where('property_id', $line['property_id'])->first();
     }
 
-    private function unitColumn(string $type): ?string
+    private function unitColumn(string $type): string
     {
         return match ($type) {
-            'bed', 'room' => 'room_id',
+            'room' => 'room_id',
             'apartment' => 'apartment_id',
             'shop' => 'shop_id',
-            default => null,
         };
     }
 
@@ -302,6 +262,8 @@ class ContractRequest extends CompanyScopedRequest
             'new_client.client_type' => 'client type',
             'new_client.name' => 'client name',
             'new_client.email' => 'client email',
+            'new_client.tax_registration_number' => 'tax registration number',
+            'new_client.address' => 'client address',
             'new_client.id_type' => 'ID type',
             'new_client.id_number' => 'ID number',
             'documents.*.document_type' => 'document type',

@@ -27,6 +27,7 @@ test('users without a company see an empty list', function () {
 describe('for the seeded demo company', function () {
     beforeEach(function () {
         $this->seed(PortfolioSeeder::class);
+        letDemoRooms();
 
         $this->superAdmin = User::where('email', 'omar.rahman@horizonfm.test')->sole();
     });
@@ -43,20 +44,20 @@ describe('for the seeded demo company', function () {
                 ->where('properties.data.0.typeSlug', 'worker_accommodation')
                 ->where('properties.data.0.ownership', 'owned')
                 ->where('properties.data.0.rooms', 5)
-                ->where('properties.data.0.unitOccupancy', ['full' => 5, 'free' => 2, 'empty' => 4])
-                ->where('properties.data.0.beds', [
-                    'total' => 30,
-                    'occupied' => 22,
-                    'available' => 2,
-                    'outOfService' => 6,
-                    'occupancyRate' => 91.7,
+                ->where('properties.data.0.unitOccupancy', ['occupied' => 6, 'empty' => 5])
+                ->where('properties.data.0.roomOccupancy', [
+                    'total' => 5,
+                    'occupied' => 3,
+                    'available' => 1,
+                    'outOfService' => 1,
+                    'occupancyRate' => 75,
                 ])
-                ->where('properties.data.0.rentRoll', 10950)
+                ->where('properties.data.0.rentRoll', 9600)
                 ->where('properties.data.0.documents', ['total' => 3, 'expiring' => 1, 'expired' => 0])
                 ->where('properties.data.1.name', 'Jebel Ali Staff Residence')
                 ->where('properties.data.1.leaseEndsOn', '2028-12-31')
-                ->where('properties.data.1.unitOccupancy', ['full' => 6, 'free' => 1, 'empty' => 5])
-                ->where('properties.data.1.rentRoll', 6500)
+                ->where('properties.data.1.unitOccupancy', ['occupied' => 4, 'empty' => 8])
+                ->where('properties.data.1.rentRoll', 1500)
             );
     });
 
@@ -72,13 +73,13 @@ describe('for the seeded demo company', function () {
                 ->where('summary.rooms', 10)
                 ->where('summary.shops', 6)
                 ->where('summary.apartments', 7)
-                ->where('summary.unitOccupancy', ['full' => 11, 'free' => 3, 'empty' => 9])
-                ->where('summary.beds.occupancyRate', 87.1)
-                ->where('summary.rentRoll', 17450)
+                ->where('summary.unitOccupancy', ['occupied' => 10, 'empty' => 13])
+                ->where('summary.roomOccupancy.occupancyRate', 44.4)
+                ->where('summary.rentRoll', 11100)
             );
     });
 
-    test('shows every room, bed, shop and apartment of a property by how full it is', function () {
+    test('shows every room, shop and apartment of a property by how full it is', function () {
         Shop::factory()->for(Property::where('code', 'HFM-AQZ-01')->sole())->create(['status' => 'inactive'])->delete();
 
         $this->actingAs($this->superAdmin)
@@ -87,11 +88,10 @@ describe('for the seeded demo company', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Properties/Show')
                 ->where('property.occupancy', [
-                    'rooms' => ['total' => 5, 'full' => 2, 'partial' => 2, 'empty' => 1],
                     'shops' => ['total' => 4, 'vacant' => 1, 'occupied' => 2, 'reserved' => 1, 'under_maintenance' => 0, 'inactive' => 0],
                     'apartments' => ['total' => 2, 'vacant' => 1, 'occupied' => 1, 'reserved' => 0, 'under_maintenance' => 0, 'inactive' => 0],
                 ])
-                ->where('property.beds', ['total' => 30, 'occupied' => 22, 'available' => 2, 'outOfService' => 6, 'occupancyRate' => 91.7])
+                ->where('property.roomOccupancy', ['total' => 5, 'occupied' => 3, 'available' => 1, 'outOfService' => 1, 'occupancyRate' => 75])
                 ->where('landlord', null)
                 ->where('leases', [])
                 ->where('contracts', [])
@@ -201,7 +201,6 @@ describe('for the seeded demo company', function () {
         'name, descending' => ['name', 'desc', ['HFM-JBA-01', 'HFM-AQZ-01']],
         'occupancy, ascending' => ['occupancy', 'asc', ['HFM-JBA-01', 'HFM-AQZ-01']],
         'occupancy, descending' => ['occupancy', 'desc', ['HFM-AQZ-01', 'HFM-JBA-01']],
-        'beds, ascending' => ['beds', 'asc', ['HFM-JBA-01', 'HFM-AQZ-01']],
         'rent roll, descending' => ['rent_roll', 'desc', ['HFM-AQZ-01', 'HFM-JBA-01']],
         'lease end, leased first' => ['lease_end', 'desc', ['HFM-JBA-01', 'HFM-AQZ-01']],
     ]);

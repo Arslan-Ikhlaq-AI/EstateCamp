@@ -2,16 +2,15 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Bed;
 use App\Models\ContractLine;
 use App\Models\Occupant;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Validator;
 
 /**
- * Checking an occupant into a bed under a contract line. The PostgreSQL
- * exclusion constraints also refuse overlapping stays; these checks give a
- * clear message first.
+ * Checking an occupant into the room a contract line rents. The PostgreSQL
+ * exclusion constraint also refuses overlapping stays for one person; these
+ * checks give a clear message first.
  */
 class CheckInRequest extends CompanyScopedRequest
 {
@@ -25,7 +24,6 @@ class CheckInRequest extends CompanyScopedRequest
         return [
             'contract_line_id' => ['required', 'integer', $this->existsInCompany('contract_lines', softDeletes: false)],
             'occupant_id' => ['required', 'integer', $this->existsInCompany('occupants')],
-            'bed_id' => ['required', 'integer', 'exists:beds,id'],
             'check_in_date' => ['required', 'date', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
@@ -44,9 +42,8 @@ class CheckInRequest extends CompanyScopedRequest
 
                 $line = ContractLine::with(['contract', 'room'])->find($this->integer('contract_line_id'));
                 $occupant = Occupant::find($this->integer('occupant_id'));
-                $bed = Bed::with('room')->find($this->integer('bed_id'));
 
-                foreach ($this->problems($line, $occupant, $bed) as $field => $message) {
+                foreach ($this->problems($line, $occupant) as $field => $message) {
                     $validator->errors()->add($field, $message);
                 }
             },
@@ -58,7 +55,7 @@ class CheckInRequest extends CompanyScopedRequest
      *
      * @return array<string, string>
      */
-    private function problems(ContractLine $line, Occupant $occupant, Bed $bed): array
+    private function problems(ContractLine $line, Occupant $occupant): array
     {
         $checkIn = $this->date('check_in_date');
 
@@ -67,7 +64,7 @@ class CheckInRequest extends CompanyScopedRequest
         }
 
         if (! $line->housesOccupants()) {
-            return ['contract_line_id' => 'Only bed and room lines house occupants.'];
+            return ['contract_line_id' => 'Only rooms house occupants.'];
         }
 
         if (! $line->covers($checkIn)) {
@@ -82,18 +79,22 @@ class CheckInRequest extends CompanyScopedRequest
             return ['occupant_id' => "{$occupant->full_name} is already checked in. Check them out first."];
         }
 
-        if ($line->occupancies()->whereNull('check_out_date')->count() >= $line->bedCapacity()) {
-            return ['contract_line_id' => "All {$line->bedCapacity()} beds on this line are taken."];
+        $room = $line->room;
+
+        if ($room->status !== 'active') {
+            return ['contract_line_id' => "Room {$room->room_number} is out of service."];
         }
 
-        if (! $line->availableBeds()->contains('id', $bed->id)) {
-            return ['bed_id' => 'This bed is taken, out of service, or not part of this contract line.'];
+        $staying = $room->occupancies()->whereNull('check_out_date')->count();
+
+        if ($staying >= $room->capacity) {
+            return ['contract_line_id' => "Room {$room->room_number} sleeps {$room->capacity} and {$staying} people are already staying in it."];
         }
 
-        $policy = $bed->room->gender_policy;
+        $policy = $room->gender_policy;
 
         if (in_array($policy, ['male', 'female'], true) && $policy !== $occupant->gender) {
-            return ['bed_id' => "Room {$bed->room->room_number} is for ".($policy === 'male' ? 'men' : 'women').' only.'];
+            return ['occupant_id' => "Room {$room->room_number} is for ".($policy === 'male' ? 'men' : 'women').' only.'];
         }
 
         return [];
@@ -107,7 +108,6 @@ class CheckInRequest extends CompanyScopedRequest
         return [
             'contract_line_id' => 'contract line',
             'occupant_id' => 'occupant',
-            'bed_id' => 'bed',
             'check_in_date' => 'check-in date',
         ];
     }

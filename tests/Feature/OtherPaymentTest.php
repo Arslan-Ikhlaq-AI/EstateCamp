@@ -140,8 +140,8 @@ test('marks a client cheque in hand as cashed in one step, recording the clientâ
         'start_date' => '2026-10-01',
         'end_date' => '2027-09-30',
     ]);
-    $room = Room::factory()->create(['property_id' => $this->property->id, 'capacity' => 4, 'occupied_count' => 0]);
-    ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => $room->id, 'quantity' => 1, 'monthly_rate' => 2000]);
+    $room = Room::factory()->create(['property_id' => $this->property->id, 'capacity' => 4]);
+    ContractLine::factory()->create(['contract_id' => $contract->id, 'property_id' => $this->property->id, 'unit_type' => 'room', 'room_id' => $room->id, 'monthly_rate' => 2000]);
     $cheque = Cheque::factory()->forAgreement($contract)->held()->create(['cheque_date' => '2026-10-01', 'amount' => 2000, 'period_start' => '2026-10-01', 'period_end' => '2026-10-31']);
 
     $this->actingAs($this->user)

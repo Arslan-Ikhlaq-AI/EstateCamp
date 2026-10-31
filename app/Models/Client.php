@@ -90,7 +90,7 @@ class Client extends Model
     }
 
     /**
-     * Beds or rooms the client rents without a contract.
+     * Rooms the client rents short-term, without a contract.
      *
      * @return HasMany<RoomRental, $this>
      */

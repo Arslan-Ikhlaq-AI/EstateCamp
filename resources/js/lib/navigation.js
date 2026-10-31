@@ -11,6 +11,7 @@ import {
     CalendarCheck2Icon,
     CalendarCheckIcon,
     ChartColumnBigIcon,
+    ChartNoAxesCombinedIcon,
     ChartPieIcon,
     ClipboardCheckIcon,
     CoinsIcon,
@@ -47,6 +48,7 @@ import {
     Trash2Icon,
     UserCogIcon,
     UserPlusIcon,
+    UserRoundIcon,
     UserRoundPlusIcon,
     UsersIcon,
     UsersRoundIcon,
@@ -78,6 +80,11 @@ export const navigation = [
                 icon: LayoutDashboardIcon,
                 routeName: 'dashboard',
             },
+            {
+                title: 'nav.analyze',
+                icon: ChartNoAxesCombinedIcon,
+                routeName: 'analyze',
+            },
         ],
     },
     {
@@ -98,6 +105,7 @@ export const navigation = [
                 icon: UsersIcon,
                 children: [
                     { title: 'nav.clients', icon: UsersIcon, routeName: 'clients.index', activeFor: ['clients.*'] },
+                    { title: 'nav.individuals', icon: UserRoundIcon, routeName: 'individuals.index', activeFor: ['individuals.*'] },
                     { title: 'nav.occupants', icon: IdCardIcon, routeName: 'occupants.index', activeFor: ['occupants.*', 'occupancies.*'] },
                     { title: 'nav.contracts', icon: FileSignatureIcon, routeName: 'contracts.index', activeFor: ['contracts.*'] },
                     { title: 'nav.rentals', icon: KeyRoundIcon, routeName: 'rentals.index', activeFor: ['rentals.*'] },

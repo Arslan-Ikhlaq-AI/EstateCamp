@@ -37,7 +37,7 @@ export const TERMS_SECTIONS = [
         id: 'use',
         title: 'Using EstateCamp',
         paragraphs: [
-            'EstateCamp is provided for running your own business: managing properties, rooms, beds, apartments and shops; landlords, head leases, clients and contracts; occupants and check-ins; cheques, invoices and payments; maintenance jobs, annual maintenance contracts and contractor visits; staff, attendance and payroll; and the reports drawn from them.',
+            'EstateCamp is provided for running your own business: managing properties, rooms, apartments and shops; landlords, head leases, clients and contracts; occupants and check-ins; cheques, invoices and payments; maintenance jobs, annual maintenance contracts and contractor visits; staff, attendance and payroll; and the reports drawn from them.',
         ],
         points: [
             'Do not use the service for anything unlawful, or to store content you have no right to hold.',

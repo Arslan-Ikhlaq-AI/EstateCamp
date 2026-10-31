@@ -12,10 +12,12 @@ import { useTranslation } from '@/hooks/use-translation';
 import { addDays } from '@/lib/cheques';
 import { cn } from '@/lib/utils';
 import { Head, useForm } from '@inertiajs/react';
-import { Building2Icon, CheckIcon, ClockIcon, DoorOpenIcon, InfoIcon, LayersIcon, ListChecksIcon, LockIcon, MinusIcon, PlusIcon, WalletIcon, XIcon } from 'lucide-react';
+import { Building2Icon, CheckIcon, ClockIcon, DoorOpenIcon, InfoIcon, LayersIcon, ListChecksIcon, LockIcon, MinusIcon, PlusIcon, UserIcon, WalletIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 
 const amount = (value) => Number.parseFloat(value) || 0;
+
+const RENTER_ICONS = { company: Building2Icon, individual: UserIcon };
 
 /**
  * Quick picks offered when a property has more free rooms than this.
@@ -57,7 +59,7 @@ function paymentSchedule(start, months) {
 }
 
 /**
- * What the company pays now and month by month, and when the stay ends.
+ * What the renter pays now and month by month, and when the stay ends.
  */
 function AtAGlance({ data, currency, isEdit }) {
     const { t, formatMoney, formatDate } = useTranslation();
@@ -132,7 +134,7 @@ function AtAGlance({ data, currency, isEdit }) {
 }
 
 /**
- * How many months the company stays, typed or stepped one at a time, with
+ * How many months the renter stays, typed or stepped one at a time, with
  * the day the stay ends.
  */
 function MonthsField({ value, onChange, max, startDate, error }) {
@@ -201,7 +203,7 @@ function RoomChoice({ room, isChosen, onToggle, currency }) {
                     {t('leasing.lines.roomName', { room: room.number })}
                 </span>
                 <span className="text-xs text-muted-foreground tabular-nums">
-                    <span className="block sm:inline">{t('finance.rentals.form.rooms.beds', { count: room.capacity })}</span>
+                    <span className="block sm:inline">{t('common.sleeps', { count: room.capacity })}</span>
                     <span className="hidden sm:inline"> · </span>
                     <span className="block sm:inline">{room.rent !== null ? formatMoney(room.rent, currency) : t('finance.rentals.form.rooms.noRate')}</span>
                 </span>
@@ -323,24 +325,142 @@ function RoomPicker({ properties, propertyId, roomIds, onPropertyChange, onRooms
 }
 
 /**
- * Rent whole rooms to a company for a stay of some months without a
- * contract, paid month by month with the first month paid now unless left
- * for later; or change a running rental's stay, start, rent and deposit.
+ * Who rents and pays: a company or a person, one already on file or a new
+ * one. A new company needs its name and phone; a new person their name,
+ * phone and ID.
  */
-export default function Form({ rental, currency, defaults, companies, properties, maxMonths, paymentMethods }) {
+function RenterSection({ clients, idTypes, data, setData, errors }) {
+    const { t } = useTranslation();
+    const type = data.client_type;
+    const onFile = clients.filter((client) => client.type === type);
+    const setNew = (field, value) => setData('new_client', { ...data.new_client, [field]: value });
+    const bindNew = (field) => ({
+        id: `new_client_${field}`,
+        value: data.new_client[field],
+        onChange: (value) => setNew(field, value),
+        error: errors[`new_client.${field}`],
+    });
+
+    const chooseType = (nextType) =>
+        setData((current) => ({
+            ...current,
+            client_type: nextType,
+            client_mode: clients.some((client) => client.type === nextType) ? 'existing' : 'new',
+            client_id: clients.find((client) => client.id === current.client_id)?.type === nextType ? current.client_id : null,
+        }));
+
+    return (
+        <FormSection title={t('finance.rentals.form.renter.title')} description={t('finance.rentals.form.renter.description')}>
+            <FieldGroup className="grid gap-4 sm:grid-cols-2">
+                <ChoiceField
+                    id="client_type"
+                    label={t('finance.rentals.form.renter.type')}
+                    value={type}
+                    onChange={chooseType}
+                    options={['company', 'individual'].map((value) => ({ value, label: t(`leasing.partyTypes.${value}`), icon: RENTER_ICONS[value] }))}
+                    description={data.client_mode === 'new' ? t(`finance.rentals.form.renter.${type}Hint`) : undefined}
+                    error={errors.client_type}
+                    className="sm:col-span-2"
+                />
+                {onFile.length > 0 && (
+                    <ChoiceField
+                        id="client_mode"
+                        label={t(`finance.rentals.form.renter.choose.${type}`)}
+                        value={data.client_mode}
+                        onChange={(mode) => setData('client_mode', mode)}
+                        options={[
+                            { value: 'existing', label: t(`finance.rentals.form.renter.existing.${type}`), icon: RENTER_ICONS[type] },
+                            { value: 'new', label: t(`finance.rentals.form.renter.new.${type}`), icon: PlusIcon },
+                        ]}
+                        error={errors.client_mode}
+                        className="sm:col-span-2"
+                    />
+                )}
+                {data.client_mode === 'existing' ? (
+                    <SelectField
+                        id="client_id"
+                        label={t(`finance.rentals.form.renter.choose.${type}`)}
+                        placeholder={t(`finance.rentals.form.renter.choosePlaceholder.${type}`)}
+                        value={data.client_id}
+                        onChange={(clientId) => setData('client_id', clientId)}
+                        items={onFile.map((client) => ({
+                            value: client.id,
+                            label: [client.name, client.phone, type === 'individual' && client.idNumber].filter(Boolean).join(' · '),
+                        }))}
+                        error={errors.client_id}
+                        className="sm:col-span-2"
+                    />
+                ) : type === 'individual' ? (
+                    <>
+                        <TextField {...bindNew('name')} label={t('finance.rentals.form.person.name')} dir="auto" />
+                        <TextField {...bindNew('phone')} label={t('finance.rentals.form.phone')} type="tel" inputMode="tel" />
+                        <ChoiceField
+                            id="new_client_id_type"
+                            label={t('finance.rentals.form.person.idType')}
+                            value={data.new_client.id_type}
+                            onChange={(idType) => setNew('id_type', idType)}
+                            options={idTypes.map((idType) => ({ value: idType, label: t(`leasing.idTypes.${idType}`) }))}
+                            error={errors['new_client.id_type']}
+                        />
+                        <TextField {...bindNew('id_number')} label={t('finance.rentals.form.person.idNumber')} inputClassName="font-mono" />
+                        <TextField {...bindNew('nationality')} label={t('finance.rentals.form.person.nationality')} dir="auto" optional />
+                        <TextField {...bindNew('email')} label={t('finance.rentals.form.email')} type="email" optional />
+                    </>
+                ) : (
+                    <>
+                        <TextField {...bindNew('name')} label={t('finance.rentals.form.company.name')} dir="auto" />
+                        <TextField {...bindNew('phone')} label={t('finance.rentals.form.phone')} type="tel" inputMode="tel" />
+                        <TextField {...bindNew('contact_person_name')} label={t('finance.rentals.form.contact')} dir="auto" optional />
+                        <TextField {...bindNew('email')} label={t('finance.rentals.form.email')} type="email" optional />
+                        <TextField {...bindNew('trade_license_number')} label={t('finance.rentals.form.company.license')} inputClassName="font-mono" optional />
+                        <TextField
+                            {...bindNew('tax_registration_number')}
+                            label={t('finance.rentals.form.company.trn')}
+                            inputMode="numeric"
+                            inputClassName="font-mono"
+                            description={t('finance.rentals.form.company.trnHint')}
+                            optional
+                        />
+                        <TextField {...bindNew('address')} label={t('finance.rentals.form.company.address')} dir="auto" optional className="sm:col-span-2" />
+                    </>
+                )}
+            </FieldGroup>
+        </FormSection>
+    );
+}
+
+/**
+ * Rent whole rooms to a company or a person for a stay of some months
+ * without a contract, paid month by month with the first month paid now
+ * unless left for later; or change a running rental's stay, start, rent and
+ * deposit.
+ */
+export default function Form({ rental, currency, defaults, clients, idTypes, properties, maxMonths, paymentMethods, banks }) {
     const { t, formatMoney } = useTranslation();
     const place = useRentalPlace();
     const isEdit = rental !== null;
-    const initialCompany = companies.find((company) => company.id === defaults?.client_id) ?? null;
+    const initialType = defaults?.client_type ?? 'company';
     const [rentTyped, setRentTyped] = useState(isEdit);
 
     const form = useForm(
         isEdit
             ? { ...rental.form, security_deposit: rental.form.security_deposit || '' }
             : {
-                  client_mode: companies.length > 0 ? 'existing' : 'new',
-                  client_id: initialCompany?.id ?? null,
-                  new_client: { name: '', phone: '', contact_person_name: '', email: '', trade_license_number: '', tax_registration_number: '', address: '' },
+                  client_type: initialType,
+                  client_mode: clients.some((client) => client.type === initialType) ? 'existing' : 'new',
+                  client_id: defaults?.client_id ?? null,
+                  new_client: {
+                      name: '',
+                      phone: '',
+                      contact_person_name: '',
+                      email: '',
+                      trade_license_number: '',
+                      tax_registration_number: '',
+                      id_type: idTypes[0] ?? null,
+                      id_number: '',
+                      nationality: '',
+                      address: '',
+                  },
                   property_id: defaults?.property_id ?? properties[0]?.id ?? null,
                   room_ids: defaults?.room_ids ?? [],
                   months: 1,
@@ -350,21 +470,21 @@ export default function Form({ rental, currency, defaults, companies, properties
                   first_payment: 'now',
                   payment_method: paymentMethods[0] ?? null,
                   payment_reference: '',
+                  cheque_number: '',
+                  deposit_cheque_number: '',
+                  bank_name: '',
+                  cheque_date: todayIso(),
               },
     );
     const { data, setData, errors, processing } = form;
     const title = isEdit ? t('finance.rentals.form.editTitle', { number: rental.number }) : t('finance.rentals.form.title');
     const rooms = properties.find((property) => property.id === data.property_id)?.rooms ?? [];
     const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
-    const bindNew = (field) => ({
-        id: `new_client_${field}`,
-        value: data.new_client[field],
-        onChange: (value) => setData('new_client', { ...data.new_client, [field]: value }),
-        error: errors[`new_client.${field}`],
-    });
     const roomsError = errors.room_ids ?? Object.entries(errors).find(([key]) => key.startsWith('room_ids.'))?.[1];
     const chosenRent = standardRent(rooms.filter((room) => data.room_ids.includes(room.id)));
     const paidNow = amount(data.monthly_rent) + amount(data.security_deposit);
+    const hasDeposit = amount(data.security_deposit) > 0;
+    const isPaidByCheque = data.payment_method === 'cheque';
 
     const chooseRooms = (roomIds) =>
         setData((current) => ({
@@ -396,55 +516,7 @@ export default function Form({ rental, currency, defaults, companies, properties
                 onSubmit={submit}
                 aside={<AtAGlance data={data} currency={currency} isEdit={isEdit} />}
             >
-                {!isEdit && (
-                    <FormSection title={t('finance.rentals.form.company.title')} description={t('finance.rentals.form.company.description')}>
-                        <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                            {companies.length > 0 && (
-                                <ChoiceField
-                                    id="client_mode"
-                                    label={t('finance.rentals.form.company.choose')}
-                                    value={data.client_mode}
-                                    onChange={(mode) => setData('client_mode', mode)}
-                                    options={[
-                                        { value: 'existing', label: t('finance.rentals.form.company.existing'), icon: Building2Icon },
-                                        { value: 'new', label: t('finance.rentals.form.company.new'), icon: PlusIcon },
-                                    ]}
-                                    error={errors.client_mode}
-                                    className="sm:col-span-2"
-                                />
-                            )}
-                            {data.client_mode === 'existing' ? (
-                                <SelectField
-                                    id="client_id"
-                                    label={t('finance.rentals.form.company.choose')}
-                                    placeholder={t('finance.rentals.form.company.choosePlaceholder')}
-                                    value={data.client_id}
-                                    onChange={(clientId) => setData('client_id', clientId)}
-                                    items={companies.map((company) => ({ value: company.id, label: [company.name, company.phone].filter(Boolean).join(' · ') }))}
-                                    error={errors.client_id}
-                                    className="sm:col-span-2"
-                                />
-                            ) : (
-                                <>
-                                    <TextField {...bindNew('name')} label={t('finance.rentals.form.company.name')} dir="auto" />
-                                    <TextField {...bindNew('phone')} label={t('finance.rentals.form.phone')} type="tel" inputMode="tel" />
-                                    <TextField {...bindNew('contact_person_name')} label={t('finance.rentals.form.contact')} dir="auto" optional />
-                                    <TextField {...bindNew('email')} label={t('finance.rentals.form.email')} type="email" optional />
-                                    <TextField {...bindNew('trade_license_number')} label={t('finance.rentals.form.company.license')} inputClassName="font-mono" optional />
-                                    <TextField
-                                        {...bindNew('tax_registration_number')}
-                                        label={t('finance.rentals.form.company.trn')}
-                                        inputMode="numeric"
-                                        inputClassName="font-mono"
-                                        description={t('finance.rentals.form.company.trnHint')}
-                                        optional
-                                    />
-                                    <TextField {...bindNew('address')} label={t('finance.rentals.form.company.address')} dir="auto" optional className="sm:col-span-2" />
-                                </>
-                            )}
-                        </FieldGroup>
-                    </FormSection>
-                )}
+                {!isEdit && <RenterSection clients={clients} idTypes={idTypes} data={data} setData={setData} errors={errors} />}
 
                 {!isEdit && (
                     <FormSection title={t('finance.rentals.form.rooms.title')} description={t('finance.rentals.form.rooms.description')}>
@@ -503,9 +575,7 @@ export default function Form({ rental, currency, defaults, companies, properties
                                 ]}
                                 description={
                                     data.first_payment === 'now'
-                                        ? amount(data.security_deposit) > 0
-                                            ? t('finance.rentals.form.payment.withDeposit', { amount: formatMoney(paidNow, currency) })
-                                            : t('finance.rentals.form.payment.rentOnly', { amount: formatMoney(paidNow, currency) })
+                                        ? t(`finance.rentals.form.payment.${isPaidByCheque ? 'cheque' : 'paid'}${hasDeposit ? 'WithDeposit' : 'RentOnly'}`, { amount: formatMoney(paidNow, currency) })
                                         : t('finance.rentals.form.payment.laterHint')
                                 }
                                 error={errors.first_payment}
@@ -519,15 +589,39 @@ export default function Form({ rental, currency, defaults, companies, properties
                                         value={data.payment_method}
                                         onChange={(method) => setData('payment_method', method)}
                                         options={paymentMethods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`), icon: METHOD_ICONS[method] }))}
-                                        description={t('finance.rentals.form.payment.chequeHint')}
+                                        description={isPaidByCheque ? t('finance.rentals.form.payment.chequeHint') : undefined}
                                         error={errors.payment_method}
                                         className="sm:col-span-2"
                                     />
-                                    {data.payment_method !== 'cash' && (
+                                    {isPaidByCheque ? (
+                                        <>
+                                            <TextField
+                                                {...bind('cheque_number')}
+                                                label={hasDeposit ? t('finance.rentals.form.payment.rentChequeNumber') : t('leasing.cheques.fields.number')}
+                                                inputClassName="font-mono"
+                                                inputMode="numeric"
+                                            />
+                                            {hasDeposit && (
+                                                <TextField
+                                                    {...bind('deposit_cheque_number')}
+                                                    label={t('finance.rentals.form.payment.depositChequeNumber')}
+                                                    inputClassName="font-mono"
+                                                    inputMode="numeric"
+                                                />
+                                            )}
+                                            <TextField {...bind('bank_name')} label={t('leasing.cheques.fields.bank')} list="rental-cheque-banks" />
+                                            <TextField {...bind('cheque_date')} type="date" label={t('leasing.cheques.fields.chequeDate')} />
+                                            <datalist id="rental-cheque-banks">
+                                                {banks.map((bank) => (
+                                                    <option key={bank} value={bank} />
+                                                ))}
+                                            </datalist>
+                                        </>
+                                    ) : (
                                         <TextField
                                             {...bind('payment_reference')}
                                             label={t('finance.rentals.payment.reference')}
-                                            placeholder={t('finance.rentals.payment.referencePlaceholder')}
+                                            placeholder={t('finance.rentals.form.payment.referencePlaceholder')}
                                             optional
                                             className="sm:col-span-2"
                                         />

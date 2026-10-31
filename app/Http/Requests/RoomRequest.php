@@ -59,12 +59,12 @@ class RoomRequest extends FormRequest
                     $staying = $room instanceof Room ? $room->peopleStaying() : 0;
 
                     if ((int) $value < $staying) {
-                        $fail("{$staying} people are staying in this room, so it needs at least {$staying} beds.");
+                        $fail("{$staying} people are staying in this room, so it must sleep at least {$staying}.");
                     }
                 },
             ],
             'area_sqm' => ['nullable', 'numeric', 'gt:0', 'max:10000'],
-            'rent_per_bed' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            'monthly_rent' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'amenities' => ['array'],
             'amenities.*' => ['distinct', Rule::in(Room::AMENITIES)],
             'status' => ['required', Rule::in(Room::STATUSES)],
@@ -84,6 +84,8 @@ class RoomRequest extends FormRequest
         return [
             'property_id' => 'property',
             'room_type_id' => 'room type',
+            'capacity' => 'sleeps',
+            'monthly_rent' => 'rent per month',
             'photos.*' => 'photo',
         ];
     }

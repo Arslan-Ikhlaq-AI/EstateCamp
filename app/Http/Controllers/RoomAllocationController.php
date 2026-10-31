@@ -14,7 +14,7 @@ use Inertia\Response;
 /**
  * Who holds each room, shop and apartment of a property over a period: a
  * client under contract, a company on a short-term rental without a
- * contract, or nobody. Units are taken whole; beds are not counted.
+ * contract, or nobody. Units are taken whole.
  */
 class RoomAllocationController extends Controller
 {

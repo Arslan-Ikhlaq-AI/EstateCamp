@@ -10,57 +10,56 @@ use Illuminate\Support\Collection;
 
 /**
  * How full the rooms are, worked out the same way on the dashboard and in
- * the reports: beds taken, free and out of service, the rent the taken beds
- * bring in each month, and how many people stayed at the end of each month.
+ * the reports: rooms occupied, vacant and out of service, the rent the
+ * occupied rooms bring in each month, and how many people stayed at the
+ * end of each month.
  */
-trait MeasuresBeds
+trait MeasuresRooms
 {
     /**
-     * Beds split into occupied, available (free beds in active rooms) and out
-     * of service (free beds in rooms under maintenance or inactive).
+     * Rooms split into occupied, available (vacant rooms that are active)
+     * and out of service (vacant rooms under maintenance or inactive).
      *
      * @param  Collection<int, Room>  $rooms
      * @return array{total: int, occupied: int, available: int, outOfService: int, occupancyRate: float|null}
      */
-    protected function beds(Collection $rooms): array
+    protected function roomOccupancy(Collection $rooms): array
     {
-        $total = (int) $rooms->sum('capacity');
-        $occupied = (int) $rooms->sum('occupied_count');
-        $available = (int) $rooms->sum(fn (Room $room) => $this->availableBeds($room));
-        $inService = $occupied + $available;
-
-        return [
-            'total' => $total,
-            'occupied' => $occupied,
-            'available' => $available,
-            'outOfService' => $total - $inService,
-            'occupancyRate' => $inService > 0 ? round($occupied / $inService * 100, 1) : null,
-        ];
-    }
-
-    protected function availableBeds(Room $room): int
-    {
-        return $room->status === 'active' ? $room->capacity - $room->occupied_count : 0;
+        return Room::occupancyBreakdown(
+            $rooms->count(),
+            $rooms->where('is_occupied', true)->count(),
+            $rooms->filter(fn (Room $room) => $this->isAvailable($room))->count(),
+        );
     }
 
     /**
-     * Monthly rent currently billed: occupied beds at their room's bed rate.
+     * Whether the room could be let today: active and vacant.
+     */
+    protected function isAvailable(Room $room): bool
+    {
+        return $room->status === 'active' && ! $room->is_occupied;
+    }
+
+    /**
+     * Monthly rent currently earned: the occupied rooms at their rent.
      *
      * @param  Collection<int, Room>  $rooms
      */
     protected function rentRoll(Collection $rooms): float
     {
-        return (float) $rooms->sum(fn (Room $room) => $room->occupied_count * (float) $room->rent_per_bed);
+        return (float) $rooms->where('is_occupied', true)->sum(fn (Room $room) => (float) $room->monthly_rent);
     }
 
     /**
-     * Monthly rent if every bed in service were let.
+     * Monthly rent if every room in service were let.
      *
      * @param  Collection<int, Room>  $rooms
      */
     protected function potentialRent(Collection $rooms): float
     {
-        return (float) $rooms->sum(fn (Room $room) => ($room->occupied_count + $this->availableBeds($room)) * (float) $room->rent_per_bed);
+        return (float) $rooms
+            ->filter(fn (Room $room) => $room->is_occupied || $this->isAvailable($room))
+            ->sum(fn (Room $room) => (float) $room->monthly_rent);
     }
 
     /**

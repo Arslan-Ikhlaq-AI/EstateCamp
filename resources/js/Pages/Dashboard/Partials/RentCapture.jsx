@@ -11,8 +11,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import { CircleCheckIcon } from 'lucide-react';
 
 /**
- * The monthly rent roll as a share of what every bed in service could earn,
- * with the rent still waiting in vacant beds.
+ * The monthly rent roll as a share of what every room in service could
+ * earn, with the rent still waiting in vacant rooms.
  */
 export default function RentCapture({ summary, currency, className }) {
     const { t, formatCurrency, formatPercent } = useTranslation();

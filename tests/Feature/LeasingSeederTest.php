@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Apartment;
-use App\Models\Bed;
 use App\Models\Cheque;
 use App\Models\Client;
 use App\Models\Contract;
@@ -27,7 +26,7 @@ beforeEach(function () {
 it('seeds landlords, clients, contracts, stays, invoices and payments for the demo company', function () {
     $this->seed(DatabaseSeeder::class);
 
-    expect(Bed::count())->toBe(37)
+    expect(Room::count())->toBe(10)
         ->and(Landlord::count())->toBe(2)
         ->and(HeadLease::count())->toBe(2)
         ->and(Cheque::where('direction', 'issued')->count())->toBe(18)
@@ -40,15 +39,14 @@ it('seeds landlords, clients, contracts, stays, invoices and payments for the de
         ->and(Payment::count())->toBe(47);
 });
 
-it('derives every room\'s occupied count from the beds let in it or the people staying, whichever is more', function () {
+it('marks a room occupied while a contract or rental holds it or people are staying in it', function () {
     $this->seed(DatabaseSeeder::class);
 
-    Room::with('beds')->get()->each(function (Room $room) {
-        $staying = Occupancy::whereNull('check_out_date')->whereIn('bed_id', $room->beds->pluck('id'))->count();
+    Room::all()->each(fn (Room $room) => expect($room->is_occupied)->toBe($room->isHeld() || $room->peopleStaying() > 0));
 
-        expect($room->occupied_count)->toBe(min($room->capacity, max($room->bedsHeld(), $staying)))
-            ->and($room->beds->where('is_active', true)->count())->toBe($room->capacity);
-    });
+    // Every room is let except the one under maintenance.
+    expect(Room::where('is_occupied', false)->with('property')->get()->map(fn (Room $room) => "{$room->property->code}/{$room->room_number}")->all())
+        ->toBe([PropertySeeder::AL_QUOZ.'/202']);
 });
 
 it('keeps apartment and shop statuses in step with the contracts', function () {
@@ -72,7 +70,7 @@ it('leaves this month\'s invoices in the states the demo describes', function ()
     $balance = fn (string $name) => Client::where('name', $name)->sole()->outstandingBalance();
 
     expect($balance(ClientSeeder::GULF_BUILDERS))->toBe(14700.0)
-        ->and($balance(ClientSeeder::AL_NOOR))->toBe(2100.0)
+        ->and($balance(ClientSeeder::AL_NOOR))->toBe(2400.0)
         ->and($balance(ClientSeeder::DANIEL))->toBe(1700.0)
         ->and($balance(ClientSeeder::FRESHFOLD))->toBe(15120.0)
         ->and($balance(ClientSeeder::BREW_CORNER))->toBe(5880.0)

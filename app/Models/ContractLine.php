@@ -6,19 +6,14 @@ use Carbon\CarbonInterface;
 use Database\Factories\ContractLineFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 /**
- * One thing a contract rents, at its share of the contract's monthly rent:
- * - room: a whole room, charged per room;
- * - apartment or shop: that unit;
- * - bed: `quantity` beds in the property, or in one room of it, on older
- *   contracts only. New contracts rent whole rooms.
+ * One unit a contract rents whole, at its share of the contract's monthly
+ * rent: a room, an apartment or a shop.
  */
 #[Fillable([
     'property_id',
@@ -26,9 +21,7 @@ use Illuminate\Support\Str;
     'apartment_id',
     'shop_id',
     'unit_type',
-    'quantity',
     'monthly_rate',
-    'billing_basis',
     'vat_rate',
     'start_date',
     'end_date',
@@ -39,13 +32,7 @@ class ContractLine extends Model
     /** @use HasFactory<ContractLineFactory> */
     use HasFactory;
 
-    public const UNIT_TYPES = ['bed', 'room', 'apartment', 'shop'];
-
-    /**
-     * Contracted bills every bed on the line; actual bills only the beds that
-     * had someone in them during the period.
-     */
-    public const BILLING_BASES = ['contracted', 'actual'];
+    public const UNIT_TYPES = ['room', 'apartment', 'shop'];
 
     /**
      * VAT on a shop's rent: shops are let commercially, homes are exempt.
@@ -60,7 +47,6 @@ class ContractLine extends Model
     protected function casts(): array
     {
         return [
-            'quantity' => 'integer',
             'monthly_rate' => 'decimal:2',
             'vat_rate' => 'decimal:2',
             'start_date' => 'date',
@@ -77,15 +63,13 @@ class ContractLine extends Model
     }
 
     /**
-     * The unit's list price for a month: a whole room at its bed rate for
-     * every bed, beds at that rate each, an apartment or shop at its rent.
-     * Null when the unit has none.
+     * The unit's list price for a month: the room's, apartment's or shop's
+     * monthly rent. Null when the unit has none.
      */
     public function standardRent(): ?float
     {
         $rent = match ($this->unit_type) {
-            'room' => $this->room?->rent_per_bed === null ? null : (float) $this->room->rent_per_bed * $this->room->capacity,
-            'bed' => $this->room?->rent_per_bed === null ? null : (float) $this->room->rent_per_bed * $this->quantity,
+            'room' => $this->room?->monthly_rent,
             'apartment' => $this->apartment?->monthly_rent,
             'shop' => $this->shop?->monthly_rent,
             default => null,
@@ -98,8 +82,7 @@ class ContractLine extends Model
      * Share a contract's monthly rent between its lines: in proportion to
      * their units' list prices when every unit has one, otherwise equally.
      * Shares are rounded to the fils and the last line takes what rounding
-     * leaves, so they add up to the rent. A bed line's rate is its share
-     * per bed.
+     * leaves, so they add up to the rent.
      *
      * @param  list<ContractLine>  $lines
      */
@@ -117,56 +100,34 @@ class ContractLine extends Model
         foreach ($lines as $index => $line) {
             $share = $index === count($lines) - 1 ? round($left, 2) : round($monthlyRent * $weights[$index] / $total, 2);
             $left -= $share;
-            $line->monthly_rate = round($share / max(1, $line->quantity), 2);
+            $line->monthly_rate = $share;
         }
     }
 
     /**
-     * Whether people check in under this line (beds and whole rooms do).
+     * Whether people check in under this line (rooms house them).
      */
     public function housesOccupants(): bool
     {
-        return in_array($this->unit_type, ['bed', 'room'], true);
+        return $this->unit_type === 'room';
     }
 
     /**
-     * How many people the line can house at once.
+     * How many people the line can house at once: as many as its room sleeps.
      */
-    public function bedCapacity(): int
+    public function capacity(): int
     {
-        return match ($this->unit_type) {
-            'bed' => $this->quantity,
-            'room' => (int) $this->room?->capacity,
-            default => 0,
-        };
+        return $this->unit_type === 'room' ? (int) $this->room?->capacity : 0;
     }
 
     /**
-     * How many units to bill for a stretch of days: every contracted bed, or
-     * on the actual basis only the stays that overlapped it.
-     */
-    public function billedQuantity(CarbonInterface $from, CarbonInterface $to): int
-    {
-        if ($this->billing_basis !== 'actual') {
-            return $this->quantity;
-        }
-
-        return $this->occupancies()
-            ->whereDate('check_in_date', '<=', $to)
-            ->where(fn (Builder $query) => $query->whereNull('check_out_date')->orWhereDate('check_out_date', '>', $from))
-            ->count();
-    }
-
-    /**
-     * A plain description for invoices, such as "8 beds in room 101 at Al Quoz Worker Village".
+     * A plain description for invoices, such as "Room 101 at Al Quoz Worker Village".
      */
     public function describe(): string
     {
         $property = $this->property->name;
 
         return match ($this->unit_type) {
-            'bed' => $this->quantity.' '.Str::plural('bed', $this->quantity)
-                .($this->room ? " in room {$this->room->room_number}" : '')." at {$property}",
             'room' => "Room {$this->room->room_number} at {$property}",
             'apartment' => "Apartment {$this->apartment->apartment_number} at {$property}",
             'shop' => "Shop {$this->shop->shop_number} at {$property}",
@@ -174,7 +135,7 @@ class ContractLine extends Model
     }
 
     /**
-     * Whether another live contract also rents this line's apartment, shop or whole room.
+     * Whether another live contract also rents this line's room, apartment or shop.
      */
     public function unitHeldByAnotherContract(): bool
     {
@@ -182,12 +143,7 @@ class ContractLine extends Model
             'apartment' => 'apartment_id',
             'shop' => 'shop_id',
             'room' => 'room_id',
-            default => null,
         };
-
-        if ($column === null) {
-            return false;
-        }
 
         return self::query()
             ->where('unit_type', $this->unit_type)
@@ -196,38 +152,6 @@ class ContractLine extends Model
             ->whereDate('end_date', '>=', today())
             ->whereHas('contract', fn (Builder $contracts) => $contracts->whereIn('status', ['draft', 'active']))
             ->exists();
-    }
-
-    /**
-     * Beds someone could check into under this line today: active beds in
-     * active rooms of the line's property (or of its room) with nobody in them.
-     * A bed line never offers a room that another contract rents whole, or
-     * that a short-term rental holds.
-     *
-     * @return Collection<int, Bed>
-     */
-    public function availableBeds(): Collection
-    {
-        $roomsRentedWhole = self::query()
-            ->where('unit_type', 'room')
-            ->whereKeyNot($this->id)
-            ->whereDate('end_date', '>=', today())
-            ->whereHas('contract', fn (Builder $contracts) => $contracts->whereIn('status', ['draft', 'active']))
-            ->pluck('room_id')
-            ->concat(RoomRental::heldRoomIds($this->company_id));
-
-        return Bed::query()
-            ->where('is_active', true)
-            ->whereHas('room', fn (Builder $rooms) => $rooms
-                ->where('property_id', $this->property_id)
-                ->where('status', 'active')
-                ->when($this->room_id, fn (Builder $query) => $query->whereKey($this->room_id))
-                ->when($this->unit_type === 'bed', fn (Builder $query) => $query->whereKeyNot($roomsRentedWhole)))
-            ->whereDoesntHave('occupancies', fn (Builder $stays) => $stays->whereNull('check_out_date'))
-            ->with('room:id,room_number,block,floor_number,gender_policy')
-            ->get()
-            ->sortBy(fn (Bed $bed) => [$bed->room->room_number, (int) $bed->label])
-            ->values();
     }
 
     /**

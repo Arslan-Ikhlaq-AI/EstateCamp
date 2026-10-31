@@ -2,19 +2,17 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 
 /**
- * Unit fill levels in display order, read like a traffic light: full units
- * green, rooms with free beds gold, empty units red.
+ * Unit states in display order: occupied units green, empty units red.
  */
 export const UNIT_SEGMENTS = [
-    { key: 'full', swatch: 'bg-success', chip: 'bg-success/12 text-success' },
-    { key: 'free', swatch: 'bg-gold', chip: 'bg-gold/20 text-gold-ink' },
+    { key: 'occupied', swatch: 'bg-success', chip: 'bg-success/12 text-success' },
     { key: 'empty', swatch: 'bg-destructive', chip: 'bg-destructive/10 text-destructive' },
 ];
 
-const unitTotal = (units) => units.full + units.free + units.empty;
+const unitTotal = (units) => units.occupied + units.empty;
 
 /**
- * A stacked bar of full, free and empty units. The counts are always shown
+ * A stacked bar of occupied and empty units. The counts are always shown
  * as text nearby too, so colour never carries them alone.
  */
 export function UnitOccupancyBar({ units, className }) {
@@ -39,7 +37,7 @@ export function UnitOccupancyBar({ units, className }) {
 }
 
 /**
- * The legend for unit bars, with each fill level's count beside its swatch.
+ * The legend for unit bars, with each state's count beside its swatch.
  */
 export function UnitOccupancyLegend({ units, className }) {
     const { t, formatNumber } = useTranslation();
@@ -58,7 +56,7 @@ export function UnitOccupancyLegend({ units, className }) {
 }
 
 /**
- * A property's full, free and empty unit counts as coloured chips; a level
+ * A property's occupied and empty unit counts as coloured chips; a state
  * with no units is greyed out.
  */
 export default function UnitOccupancyCounts({ units, className }) {

@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import RoomCard from './Partials/RoomCard';
-import { AMENITY_ICONS, GENDER_ICONS, ROOM_TYPE_ICONS } from './Partials/roomOptions';
+import { AMENITY_ICONS, defaultRoomTypeId, GENDER_ICONS, ROOM_TYPE_ICONS } from './Partials/roomOptions';
 
 const MAX_PHOTOS = 10;
 
@@ -53,12 +53,11 @@ function initialData(room, propertyId, roomTypes) {
         room_number: room?.room_number ?? '',
         block: room?.block ?? '',
         floor_number: room?.floor_number ?? '',
-        room_type_id: room?.room_type_id ?? roomTypes[0]?.id ?? null,
+        room_type_id: room?.room_type_id ?? defaultRoomTypeId(roomTypes),
         gender_policy: room?.gender_policy ?? '',
         capacity: room?.capacity ?? 4,
-        occupied_count: room?.occupied_count ?? 0,
         area_sqm: room?.area_sqm ?? '',
-        rent_per_bed: room?.rent_per_bed ?? '',
+        monthly_rent: room?.monthly_rent ?? '',
         amenities: room?.amenities ?? [],
         status: room?.status ?? 'active',
         notes: room?.notes ?? '',
@@ -194,26 +193,6 @@ function PhotoPicker({ existing, keepIds, files, onKeepChange, onFilesChange, er
     );
 }
 
-function RentSummary({ capacity, occupied, rent, currency }) {
-    const { t, formatCurrency } = useTranslation();
-    const rows = [
-        { label: t('roomForm.current'), value: occupied * rent },
-        { label: t('roomForm.potential'), value: capacity * rent },
-    ];
-
-    return (
-        <dl className="grid grid-cols-2 gap-3">
-            {rows.map((row) => (
-                <div key={row.label} className="flex flex-col gap-0.5 rounded-lg bg-muted/60 p-3">
-                    <dt className="text-xs text-muted-foreground">{row.label}</dt>
-                    <dd className="text-base font-semibold tabular-nums">{formatCurrency(row.value, currency)}</dd>
-                    <dd className="text-xs text-muted-foreground">{t('roomForm.perMonth')}</dd>
-                </div>
-            ))}
-        </dl>
-    );
-}
-
 export default function Form({ room, propertyId, currency, properties, roomTypes, statuses, genderPolicies, amenities }) {
     const { t, tOr } = useTranslation();
     const isEditing = room !== null;
@@ -224,8 +203,7 @@ export default function Form({ room, propertyId, currency, properties, roomTypes
     const roomType = roomTypes.find((item) => item.id === data.room_type_id);
     const title = isEditing ? t('roomForm.editTitle') : t('roomForm.addTitle');
     const capacity = Math.max(Number(data.capacity) || 0, 0);
-    const occupied = Math.min(Math.max(Number(data.occupied_count) || 0, 0), capacity);
-    const rent = Number(data.rent_per_bed) || 0;
+    const isOccupied = Boolean(room?.is_occupied);
 
     const bind = (field) => ({
         id: field,
@@ -249,8 +227,8 @@ export default function Form({ room, propertyId, currency, properties, roomTypes
         typeSlug: roomType?.slug,
         genderPolicy: data.gender_policy || null,
         capacity,
-        occupied,
-        rentPerBed: data.rent_per_bed === '' ? null : rent,
+        occupied: isOccupied,
+        monthlyRent: data.monthly_rent === '' ? null : Number(data.monthly_rent) || 0,
         areaSqm: Number(data.area_sqm) || null,
         amenities: data.amenities,
         status: data.status,
@@ -381,37 +359,37 @@ export default function Form({ room, propertyId, currency, properties, roomTypes
                                     max={100}
                                     error={errors.capacity}
                                 />
-                                {/* Occupied beds follow check-ins and check-outs, so they are shown, not edited. */}
+                                {/* Whether the room is taken follows contracts, rentals and check-ins, so it is shown, not edited. */}
                                 <Field>
-                                    <FieldLabel htmlFor="occupied_count">{t('roomForm.fields.occupied')}</FieldLabel>
+                                    <FieldLabel htmlFor="is_occupied">{t('roomForm.fields.occupied')}</FieldLabel>
                                     <InputGroup>
-                                        <InputGroupInput id="occupied_count" value={occupied} readOnly className="tabular-nums" />
+                                        <InputGroupInput id="is_occupied" value={isOccupied ? t('roomList.occupied') : t('roomList.vacant')} readOnly />
                                     </InputGroup>
                                     <FieldDescription>{t('roomForm.fields.occupiedHint')}</FieldDescription>
                                 </Field>
-                                <Field data-invalid={errors.rent_per_bed ? true : undefined}>
-                                    <FieldLabel htmlFor="rent_per_bed">{t('roomForm.fields.rent')}</FieldLabel>
+                                <Field data-invalid={errors.monthly_rent ? true : undefined}>
+                                    <FieldLabel htmlFor="monthly_rent">{t('roomForm.fields.rent')}</FieldLabel>
                                     <InputGroup>
                                         <InputGroupAddon>
                                             <InputGroupText>{currency}</InputGroupText>
                                         </InputGroupAddon>
                                         <InputGroupInput
-                                            id="rent_per_bed"
+                                            id="monthly_rent"
                                             type="number"
                                             inputMode="decimal"
                                             min={0}
                                             step={50}
-                                            value={data.rent_per_bed}
-                                            onChange={(event) => setData('rent_per_bed', event.target.value)}
-                                            aria-invalid={Boolean(errors.rent_per_bed)}
-                                            placeholder="600"
+                                            value={data.monthly_rent}
+                                            onChange={(event) => setData('monthly_rent', event.target.value)}
+                                            aria-invalid={Boolean(errors.monthly_rent)}
+                                            placeholder="2400"
                                             className="tabular-nums"
                                         />
                                         <InputGroupAddon align="inline-end">
                                             <InputGroupText>{t('roomForm.perMonth')}</InputGroupText>
                                         </InputGroupAddon>
                                     </InputGroup>
-                                    <FieldError>{errors.rent_per_bed}</FieldError>
+                                    <FieldError>{errors.monthly_rent}</FieldError>
                                 </Field>
                                 <Field data-invalid={errors.area_sqm ? true : undefined}>
                                     <FieldLabel htmlFor="area_sqm">{t('roomForm.fields.area')}</FieldLabel>
@@ -545,7 +523,6 @@ export default function Form({ room, propertyId, currency, properties, roomTypes
                             <p className="text-sm text-muted-foreground">{t('roomForm.sections.preview.description')}</p>
                         </div>
                         <RoomCard room={previewRoom} currency={currency} />
-                        <RentSummary capacity={capacity} occupied={occupied} rent={rent} currency={currency} />
                     </aside>
                 </div>
 

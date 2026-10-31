@@ -1,6 +1,6 @@
 import StatCard from '@/Components/StatCard';
 import { useTranslation } from '@/hooks/use-translation';
-import { BanknoteIcon, BedDoubleIcon, Building2Icon, LayoutGridIcon } from 'lucide-react';
+import { BanknoteIcon, Building2Icon, DoorOpenIcon, LayoutGridIcon } from 'lucide-react';
 import { UnitOccupancyBar, UnitOccupancyLegend } from './UnitOccupancy';
 
 /**
@@ -8,7 +8,7 @@ import { UnitOccupancyBar, UnitOccupancyLegend } from './UnitOccupancy';
  */
 export default function PortfolioStats({ summary, currency }) {
     const { t, formatNumber, formatPercent, formatCurrency } = useTranslation();
-    const { beds } = summary;
+    const occupancy = summary.roomOccupancy;
 
     return (
         <section
@@ -38,14 +38,14 @@ export default function PortfolioStats({ summary, currency }) {
                 <UnitOccupancyLegend units={summary.unitOccupancy} />
             </StatCard>
             <StatCard
-                icon={BedDoubleIcon}
+                icon={DoorOpenIcon}
                 tone="success"
                 label={t('properties.stats.occupancy')}
-                value={beds.occupancyRate === null ? '—' : formatPercent(beds.occupancyRate)}
-                meter={beds.occupancyRate ?? 0}
+                value={occupancy.occupancyRate === null ? '—' : formatPercent(occupancy.occupancyRate)}
+                meter={occupancy.occupancyRate ?? 0}
                 detail={t('properties.stats.occupancyDetail', {
-                    occupied: beds.occupied,
-                    total: beds.occupied + beds.available,
+                    occupied: occupancy.occupied,
+                    total: occupancy.occupied + occupancy.available,
                 })}
             />
             <StatCard

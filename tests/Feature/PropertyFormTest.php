@@ -152,7 +152,7 @@ describe('for the seeded demo company', function () {
                 'total_units' => 8,
                 'units' => [
                     'rooms' => [
-                        ['count' => 3, 'first_number' => '101', 'room_type_id' => $dormitory, 'capacity' => 4, 'rent_per_bed' => 450],
+                        ['count' => 3, 'first_number' => '101', 'room_type_id' => $dormitory, 'capacity' => 4, 'monthly_rent' => 1800],
                         ['count' => 2, 'first_number' => '201', 'room_type_id' => $dormitory, 'capacity' => 6],
                     ],
                     'shops' => [['count' => 2, 'first_number' => 'S-09', 'area_sqm' => 30]],
@@ -165,8 +165,7 @@ describe('for the seeded demo company', function () {
         $property = Property::where('code', 'HFM-SNP-01')->sole();
 
         expect($property->rooms()->orderBy('room_number')->pluck('room_number')->all())->toBe(['101', '102', '103', '201', '202'])
-            ->and($property->rooms()->where('room_number', '101')->sole()->beds()->count())->toBe(4)
-            ->and((float) $property->rooms()->where('room_number', '101')->sole()->rent_per_bed)->toBe(450.0)
+            ->and((float) $property->rooms()->where('room_number', '101')->sole()->monthly_rent)->toBe(1800.0)
             ->and($property->total_rooms)->toBe(5)
             ->and($property->total_capacity)->toBe(24)
             ->and($property->shops()->orderBy('shop_number')->pluck('shop_number')->all())->toBe(['S-09', 'S-10'])

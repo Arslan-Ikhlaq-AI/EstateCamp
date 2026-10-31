@@ -195,7 +195,7 @@ class PropertyRequest extends FormRequest
             'units.rooms.*.room_type_id' => ['required', 'integer', Rule::exists('room_types', 'id')],
             'units.rooms.*.capacity' => ['required', 'integer', 'between:1,100'],
             'units.rooms.*.gender_policy' => ['nullable', Rule::in(Room::GENDER_POLICIES)],
-            'units.rooms.*.rent_per_bed' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            'units.rooms.*.monthly_rent' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             ...$batch('shops'),
             'units.shops.*.shop_type' => ['nullable', Rule::in(Shop::TYPES)],
             'units.shops.*.monthly_rent' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
@@ -347,7 +347,7 @@ class PropertyRequest extends FormRequest
             'units.*.*.count' => 'how many',
             'units.*.*.first_number' => 'first number',
             'units.rooms.*.room_type_id' => 'room type',
-            'units.rooms.*.capacity' => 'beds per room',
+            'units.rooms.*.capacity' => 'people per room',
             ...$this->chequeAttributes(),
         ];
     }

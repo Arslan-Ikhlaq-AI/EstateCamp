@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AgesReceivables;
 use App\Http\Controllers\Concerns\FiltersByPeriod;
-use App\Http\Controllers\Concerns\MeasuresBeds;
+use App\Http\Controllers\Concerns\MeasuresRooms;
 use App\Http\Controllers\Concerns\PreparesReports;
 use App\Http\Controllers\Concerns\ReadsCashFlow;
 use App\Models\Company;
@@ -29,7 +29,7 @@ use Inertia\Response;
  */
 class SummaryReportController extends Controller
 {
-    use AgesReceivables, FiltersByPeriod, MeasuresBeds, PreparesReports, ReadsCashFlow;
+    use AgesReceivables, FiltersByPeriod, MeasuresRooms, PreparesReports, ReadsCashFlow;
 
     /**
      * Contracts ending within this many days count as ending soon.
@@ -62,7 +62,7 @@ class SummaryReportController extends Controller
             'occupancy' => [
                 'properties' => $company->properties()->count(),
                 'rooms' => $rooms->count(),
-                'beds' => $this->beds($rooms),
+                'roomOccupancy' => $this->roomOccupancy($rooms),
                 'rentRoll' => $this->rentRoll($rooms),
                 'potentialRent' => $this->potentialRent($rooms),
                 'checkIns' => $this->wherePeriod($company->occupancies(), 'check_in_date', $period)->count(),
@@ -155,7 +155,7 @@ class SummaryReportController extends Controller
     }
 
     /**
-     * Each property side by side: its beds and rent today, and its
+     * Each property side by side: how full its rooms are and its rent today, and its
      * maintenance open today and paid in the period.
      *
      * @param  Collection<int, Room>  $rooms
@@ -181,7 +181,7 @@ class SummaryReportController extends Controller
                     'name' => $property->name,
                     'code' => $property->code,
                     'rooms' => $propertyRooms->count(),
-                    'beds' => $this->beds($propertyRooms),
+                    'roomOccupancy' => $this->roomOccupancy($propertyRooms),
                     'rentRoll' => $this->rentRoll($propertyRooms),
                     'openJobs' => $open->get($property->id, 0),
                     'maintenanceSpend' => $spend->get($property->id, 0.0),
