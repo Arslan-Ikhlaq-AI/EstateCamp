@@ -12,7 +12,7 @@ import {
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, FileSignatureIcon, LayoutPanelLeftIcon, MapPinIcon, WalletIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, MapPinIcon } from 'lucide-react';
 import {
     ComplianceBadge,
     LeaseNote,
@@ -20,6 +20,7 @@ import {
     StatusBadge,
 } from './PropertyBadges';
 import PropertyActions from './PropertyActions';
+import PropertyQuickLinks from './PropertyQuickLinks';
 import UnitOccupancyCounts from './UnitOccupancy';
 
 /**
@@ -28,7 +29,6 @@ import UnitOccupancyCounts from './UnitOccupancy';
  */
 export const TABLE_COLUMNS = [
     { id: 'property', sort: 'name', hideable: false },
-    { id: 'location' },
     { id: 'type' },
     { id: 'ownership', sort: 'lease_end' },
     { id: 'occupancy', sort: 'occupancy' },
@@ -38,10 +38,14 @@ export const TABLE_COLUMNS = [
     { id: 'status' },
 ];
 
-export const DEFAULT_HIDDEN_COLUMNS = ['type'];
+/**
+ * Status starts hidden: most properties are active, so the property cell
+ * flags only those that are not while the column is off.
+ */
+export const DEFAULT_HIDDEN_COLUMNS = ['type', 'status'];
 
-// Solid equivalents of the header and hover tints, so the pinned actions
-// column matches the row it sits on while the rest of the table scrolls under it.
+// Solid equivalents of the header and hover tints, so the pinned property
+// and actions columns match the row they sit on while the rest scrolls under them.
 const HEADER_BACKGROUND = 'bg-[color-mix(in_oklab,var(--color-brand-cyan)_5%,var(--card))]';
 const ROW_HOVER_BACKGROUND = 'hover:bg-[color-mix(in_oklab,var(--color-brand-cyan)_7%,var(--card))]';
 
@@ -75,19 +79,23 @@ function SortableHead({ column, query, onSort, className, children }) {
     );
 }
 
-function PropertyCell({ property }) {
-    const { tOr } = useTranslation();
+/**
+ * The property's picture, name, code and where it is. With `flagStatus`,
+ * a property that is not active says so under them.
+ */
+function PropertyCell({ property, flagStatus }) {
+    const location = [property.area, property.city].filter(Boolean).join(', ');
 
     return (
-        <div className="flex max-w-56 items-center gap-3">
-            <div className="h-11 w-14 shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-foreground/10 transition-transform duration-200 group-hover/row:scale-105 motion-reduce:transform-none">
-                <PropertyCover src={property.coverImageUrl} />
+        <div className="flex w-56 items-center gap-3 2xl:w-64">
+            <div className="size-12 shrink-0 overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10">
+                <PropertyCover src={property.coverImageUrl} className="transition-transform duration-300 group-hover/row:scale-110 motion-reduce:transform-none" />
             </div>
             <div className="flex min-w-0 flex-col items-start gap-1">
                 <Link
                     href={route('properties.show', property.id)}
                     dir="auto"
-                    className="max-w-full truncate font-semibold outline-none hover:text-brand-ink focus-visible:underline"
+                    className="max-w-full truncate text-[0.9375rem] leading-tight font-semibold outline-none hover:text-brand-ink focus-visible:underline"
                     title={property.name}
                 >
                     {property.name}
@@ -96,15 +104,12 @@ function PropertyCell({ property }) {
                     <span className="shrink-0 rounded-md bg-brand-cyan/10 px-1.5 py-px font-mono text-[0.6875rem] font-semibold tracking-tight text-brand-ink">
                         {property.code}
                     </span>
-                    {property.type && (
-                        <>
-                            <span aria-hidden="true">·</span>
-                            <span className="truncate">
-                                {tOr(`propertyTypes.${property.typeSlug}`, property.type)}
-                            </span>
-                        </>
-                    )}
+                    <MapPinIcon aria-hidden="true" className="size-3.5 shrink-0 text-gold" />
+                    <span dir="auto" className="truncate" title={property.address ?? undefined}>
+                        {location || '—'}
+                    </span>
                 </span>
+                {flagStatus && property.status !== 'active' && <StatusBadge status={property.status} />}
             </div>
         </div>
     );
@@ -132,26 +137,12 @@ function OccupancyCell({ rooms }) {
     );
 }
 
-function Cell({ column, property, currency }) {
+function Cell({ column, property, currency, flagStatus }) {
     const { tOr, formatCurrency } = useTranslation();
 
     switch (column.id) {
         case 'property':
-            return <PropertyCell property={property} />;
-        case 'location':
-            return (
-                <div className="flex max-w-36 items-start gap-1.5">
-                    <MapPinIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-gold" />
-                    <div className="flex min-w-0 flex-col items-start">
-                        <span dir="auto" className="max-w-full truncate font-medium" title={property.address ?? undefined}>
-                            {property.area ?? '—'}
-                        </span>
-                        <span dir="auto" className="max-w-full truncate text-xs text-muted-foreground">
-                            {property.city ?? property.address}
-                        </span>
-                    </div>
-                </div>
-            );
+            return <PropertyCell property={property} flagStatus={flagStatus} />;
         case 'type':
             return property.type ? tOr(`propertyTypes.${property.typeSlug}`, property.type) : '—';
         case 'ownership':
@@ -164,7 +155,7 @@ function Cell({ column, property, currency }) {
         case 'occupancy':
             return <OccupancyCell rooms={property.roomOccupancy} />;
         case 'units':
-            return <UnitOccupancyCounts units={property.unitOccupancy} className="flex-nowrap" />;
+            return <UnitOccupancyCounts units={property.unitOccupancy} className="flex-col items-start gap-1" />;
         case 'rentRoll':
             return (
                 <span className="font-bold tabular-nums">
@@ -181,101 +172,76 @@ function Cell({ column, property, currency }) {
 }
 
 /**
- * The property list as a table with sortable headers and a menu per row.
+ * The property list as a table with sortable headers, the property pinned
+ * at the start and its page links and menu pinned at the end, so both stay
+ * in view when the table scrolls sideways.
  */
-export default function PropertiesTable({ properties, currency, query, onSort, hiddenColumns }) {
+export default function PropertiesTable({ properties, currency, query, onSort, hiddenColumns, className }) {
     const { t } = useTranslation();
     const columns = TABLE_COLUMNS.filter((column) => !hiddenColumns.includes(column.id));
 
     return (
-        <Table>
-            <TableHeader className={cn(HEADER_BACKGROUND, '[&_th]:font-semibold [&_th]:tracking-wide [&_th]:uppercase')}>
-                <TableRow className="hover:bg-transparent">
-                    {columns.map((column, index) => {
-                        const label = t(`properties.columns.${column.id}`);
-                        const padding = index === 0 && 'ps-4 sm:ps-5 lg:ps-6';
+        <div className={className}>
+            <Table>
+                <TableHeader className={cn(HEADER_BACKGROUND, '[&_th]:font-semibold [&_th]:tracking-wide [&_th]:uppercase')}>
+                    <TableRow className="hover:bg-transparent">
+                        {columns.map((column, index) => {
+                            const label = t(`properties.columns.${column.id}`);
+                            const pinned = index === 0 && cn('sticky start-0 z-10 ps-4 sm:ps-5 lg:ps-6', HEADER_BACKGROUND);
 
-                        return column.sort ? (
-                            <SortableHead
-                                key={column.id}
-                                column={column}
-                                query={query}
-                                onSort={onSort}
-                                className={padding}
-                            >
-                                {label}
-                            </SortableHead>
-                        ) : (
-                            <TableHead
-                                key={column.id}
-                                className={cn(padding, column.align === 'end' && 'text-end')}
-                            >
-                                {label}
-                            </TableHead>
-                        );
-                    })}
-                    <TableHead className={cn('sticky end-0 pe-4 sm:pe-5 lg:pe-6', HEADER_BACKGROUND)}>
-                        <span className="sr-only">{t('properties.columns.actions')}</span>
-                    </TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {properties.map((property) => (
-                    <TableRow key={property.id} className={cn('group/row transition-colors', ROW_HOVER_BACKGROUND)}>
-                        {columns.map((column, index) => (
-                            <TableCell
-                                key={column.id}
-                                className={cn(
-                                    'py-3.5',
-                                    index === 0 &&
-                                        'relative ps-4 before:absolute before:inset-y-2 before:start-0 before:w-[3px] before:rounded-e-full before:bg-linear-to-b before:from-brand-cyan before:to-gold before:opacity-0 before:transition-opacity group-hover/row:before:opacity-100 sm:ps-5 lg:ps-6',
-                                    column.align === 'end' && 'text-end',
-                                )}
-                            >
-                                <Cell column={column} property={property} currency={currency} />
-                            </TableCell>
-                        ))}
-                        <TableCell className="sticky end-0 bg-card pe-4 text-end group-hover/row:bg-inherit sm:pe-5 lg:pe-6 before:pointer-events-none before:absolute before:inset-y-0 before:-start-4 before:w-4 before:bg-linear-to-l before:from-black/[0.04] before:to-transparent rtl:before:bg-linear-to-r dark:before:from-black/30">
-                            <div className="flex items-center justify-end gap-1.5">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    nativeButton={false}
-                                    render={<Link href={route('properties.allocation', property.id)} />}
-                                    aria-label={`${t('properties.actions.allocation')}: ${property.name}`}
-                                    className="whitespace-nowrap"
+                            return column.sort ? (
+                                <SortableHead
+                                    key={column.id}
+                                    column={column}
+                                    query={query}
+                                    onSort={onSort}
+                                    className={pinned}
                                 >
-                                    <LayoutPanelLeftIcon data-icon="inline-start" className="text-brand-ink" />
-                                    {t('properties.actions.allocation')}
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    nativeButton={false}
-                                    render={<Link href={route('properties.tenant-contracts', property.id)} />}
-                                    aria-label={`${t('properties.actions.tenantContracts')}: ${property.name}`}
-                                    className="whitespace-nowrap"
+                                    {label}
+                                </SortableHead>
+                            ) : (
+                                <TableHead
+                                    key={column.id}
+                                    className={cn(pinned, column.align === 'end' && 'text-end')}
                                 >
-                                    <FileSignatureIcon data-icon="inline-start" className="text-brand-ink" />
-                                    {t('properties.actions.tenantContracts')}
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    nativeButton={false}
-                                    render={<Link href={route('properties.payments', property.id)} />}
-                                    aria-label={`${t('properties.actions.payments')}: ${property.name}`}
-                                    className="whitespace-nowrap"
-                                >
-                                    <WalletIcon data-icon="inline-start" className="text-brand-ink" />
-                                    {t('properties.actions.payments')}
-                                </Button>
-                                <PropertyActions property={property} />
-                            </div>
-                        </TableCell>
+                                    {label}
+                                </TableHead>
+                            );
+                        })}
+                        <TableHead className={cn('sticky end-0 z-10 pe-4 text-end sm:pe-5 lg:pe-6', HEADER_BACKGROUND)}>
+                            <span className="sr-only">{t('properties.columns.actions')}</span>
+                        </TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {properties.map((property) => (
+                        <TableRow key={property.id} className={cn('group/row transition-colors', ROW_HOVER_BACKGROUND)}>
+                            {columns.map((column, index) => (
+                                <TableCell
+                                    key={column.id}
+                                    className={cn(
+                                        'py-3.5',
+                                        index === 0 && 'sticky start-0 z-10 bg-card ps-4 group-hover/row:bg-inherit sm:ps-5 lg:ps-6',
+                                        column.align === 'end' && 'text-end',
+                                    )}
+                                >
+                                    <Cell
+                                        column={column}
+                                        property={property}
+                                        currency={currency}
+                                        flagStatus={hiddenColumns.includes('status')}
+                                    />
+                                </TableCell>
+                            ))}
+                            <TableCell className="sticky end-0 z-10 bg-card pe-4 text-end group-hover/row:bg-inherit sm:pe-5 lg:pe-6">
+                                <PropertyQuickLinks property={property} compact>
+                                    <PropertyActions property={property} size="icon-xs" />
+                                </PropertyQuickLinks>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     );
 }

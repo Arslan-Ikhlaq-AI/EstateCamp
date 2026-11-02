@@ -13,6 +13,7 @@ import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { FieldGroup } from '@/components/ui/field';
 import { todayIso, useLeasingFormat } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -100,6 +101,8 @@ function ChequeFigure({ label, value, tone = 'muted' }) {
 
 export default function Show({ contract, lines, stays, invoices, documents, totals, nextPeriod, cheques, chequeStats, banks, chequeStatuses, can, currency }) {
     const { t, formatCurrency, formatMoney, formatDate, formatNumber } = useTranslation();
+    // `can` holds what this contract allows the user next; this is what they may do anywhere.
+    const hasPermission = useCan();
     const { period, lineLabel } = useLeasingFormat();
     const [isTerminating, setIsTerminating] = useState(false);
     const [checkingOut, setCheckingOut] = useState(null);
@@ -342,12 +345,16 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
                                 <DataTable
                                     rows={current}
                                     columns={stayColumns(true)}
-                                    actions={(stay) => (
-                                        <Button variant="outline" size="sm" onClick={() => setCheckingOut(stay)}>
-                                            <LogOutIcon data-icon="inline-start" />
-                                            {t('leasing.occupants.checkOut.button')}
-                                        </Button>
-                                    )}
+                                    actions={
+                                        hasPermission('occupants.check_in')
+                                            ? (stay) => (
+                                                  <Button variant="outline" size="sm" onClick={() => setCheckingOut(stay)}>
+                                                      <LogOutIcon data-icon="inline-start" />
+                                                      {t('leasing.occupants.checkOut.button')}
+                                                  </Button>
+                                              )
+                                            : undefined
+                                    }
                                 />
                             )}
                         </SectionCard>

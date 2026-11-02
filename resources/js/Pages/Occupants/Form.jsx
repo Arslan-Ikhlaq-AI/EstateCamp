@@ -2,6 +2,7 @@ import { ChoiceField, FormSection, SelectField, TextareaField, TextField } from 
 import FormShell from '@/Components/FormShell';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { FieldGroup } from '@/components/ui/field';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { MarsIcon, VenusIcon } from 'lucide-react';
@@ -12,6 +13,7 @@ const FIELDS = ['client_id', 'full_name', 'gender', 'nationality', 'id_type', 'i
 
 export default function Form({ occupant, clientId, clients, genders, idTypes }) {
     const { t } = useTranslation();
+    const can = useCan();
     const isEditing = occupant !== null;
     const defaults = { client_id: clientId, gender: 'male', id_type: 'passport' };
     const form = useForm(Object.fromEntries(FIELDS.map((field) => [field, occupant?.[field] ?? defaults[field] ?? ''])));
@@ -51,9 +53,11 @@ export default function Form({ occupant, clientId, clients, genders, idTypes }) 
                         placeholder={t('leasing.contracts.form.fields.chooseClient')}
                         items={clients.map((client) => ({ value: client.id, label: `${client.name} · ${t(`leasing.partyTypes.${client.client_type}`)}` }))}
                         description={
-                            <Link href={route('clients.create')} className="underline underline-offset-3 hover:text-foreground">
-                                {t('leasing.contracts.form.fields.newClient')}
-                            </Link>
+                            can('clients.create') && (
+                                <Link href={route('clients.create')} className="underline underline-offset-3 hover:text-foreground">
+                                    {t('leasing.contracts.form.fields.newClient')}
+                                </Link>
+                            )
                         }
                     />
                 </FormSection>

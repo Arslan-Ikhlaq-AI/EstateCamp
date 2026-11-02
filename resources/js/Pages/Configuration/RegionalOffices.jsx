@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -85,7 +86,7 @@ function OfficeDialog({ office, open, onOpenChange }) {
  * One office in the list: its name and code, where it is, how many staff
  * work there, whether it is offered, and its actions.
  */
-function OfficeRow({ office, onEdit, onDelete }) {
+function OfficeRow({ office, canManage, onEdit, onDelete }) {
     const { t } = useTranslation();
 
     return (
@@ -138,6 +139,7 @@ function OfficeRow({ office, onEdit, onDelete }) {
                     {t('staff.offices.off')}
                 </Badge>
             )}
+            {canManage && (
             <DropdownMenu>
                 <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t('staff.offices.actions', { name: office.name })} />}>
                     <MoreHorizontalIcon />
@@ -164,23 +166,25 @@ function OfficeRow({ office, onEdit, onDelete }) {
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
+            )}
         </li>
     );
 }
 
 /**
  * The company's regional offices: the figures, the list, and adding,
- * editing, switching off and deleting them. Each company keeps its own, so
- * any member of the company can manage them.
+ * editing, switching off and deleting them for someone who may manage
+ * them. Each company keeps its own.
  */
 export default function RegionalOffices({ company, offices }) {
     const { t, formatNumber } = useTranslation();
+    const canManage = useCan()('regional_offices.manage');
     const [editing, setEditing] = useState(null);
     const [deleting, setDeleting] = useState(null);
     const [deleteProcessing, setDeleteProcessing] = useState(false);
     const title = t('staff.offices.title');
 
-    const addButton = (
+    const addButton = canManage && (
         <Button variant="brand" onClick={() => setEditing('new')}>
             <PlusIcon data-icon="inline-start" />
             {t('staff.offices.add')}
@@ -244,12 +248,12 @@ export default function RegionalOffices({ company, offices }) {
                                     <EmptyTitle>{t('staff.offices.empty.title')}</EmptyTitle>
                                     <EmptyDescription>{t('staff.offices.empty.description')}</EmptyDescription>
                                 </EmptyHeader>
-                                <EmptyContent>{addButton}</EmptyContent>
+                                {addButton && <EmptyContent>{addButton}</EmptyContent>}
                             </Empty>
                         ) : (
                             <ul className="flex flex-col divide-y">
                                 {offices.map((office) => (
-                                    <OfficeRow key={office.id} office={office} onEdit={setEditing} onDelete={setDeleting} />
+                                    <OfficeRow key={office.id} office={office} canManage={canManage} onEdit={setEditing} onDelete={setDeleting} />
                                 ))}
                             </ul>
                         )}

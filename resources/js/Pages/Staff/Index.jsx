@@ -8,6 +8,7 @@ import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
@@ -32,10 +33,11 @@ const WORKPLACE_ICONS = { head_office: LEVEL_ICONS.head_office, office: LEVEL_IC
 
 export default function Index({ company, filters, facets, summary, staff, canManage }) {
     const { t, formatNumber, formatMoney, formatCurrency, formatDate } = useTranslation();
+    const can = useCan();
     const { roleName } = useStaffNames();
     const title = t('staff.title');
 
-    const addButton = (
+    const addButton = can('staff.create') && (
         <Button nativeButton={false} render={<Link href={route('staff.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('staff.add')}
@@ -136,7 +138,7 @@ export default function Index({ company, filters, facets, summary, staff, canMan
                                 <CalendarCheckIcon data-icon="inline-start" />
                                 {t('staff.actions.attendance')}
                             </Button>
-                            {canManage && addButton}
+                            {addButton}
                         </>
                     )
                 }
@@ -216,7 +218,7 @@ export default function Index({ company, filters, facets, summary, staff, canMan
                         paginator={staff}
                         searchLabel={t('staff.searchLabel')}
                         searchPlaceholder={t('staff.searchPlaceholder')}
-                        empty={<ListEmpty icon={ContactRoundIcon} title={t('staff.empty.title')} description={t('staff.empty.description')} action={canManage && addButton} />}
+                        empty={<ListEmpty icon={ContactRoundIcon} title={t('staff.empty.title')} description={t('staff.empty.description')} action={addButton} />}
                     >
                         <DataTable
                             columns={columns}
@@ -225,8 +227,8 @@ export default function Index({ company, filters, facets, summary, staff, canMan
                                 <RowActions
                                     label={t('staff.actions.menu', { name: member.name })}
                                     items={[
-                                        { label: t('staff.actions.view'), href: route('staff.show', member.id), icon: EyeIcon },
-                                        ...(canManage ? [{ label: t('staff.actions.edit'), href: route('staff.edit', member.id), icon: PencilIcon }] : []),
+                                        { label: t('staff.actions.view'), href: route('staff.show', member.id), icon: EyeIcon, permission: 'staff.view' },
+                                        ...(canManage ? [{ label: t('staff.actions.edit'), href: route('staff.edit', member.id), icon: PencilIcon, permission: 'staff.edit' }] : []),
                                         {
                                             label: t('staff.actions.attendance'),
                                             href: route('attendance.index', { workplace: member.workplace.key }),

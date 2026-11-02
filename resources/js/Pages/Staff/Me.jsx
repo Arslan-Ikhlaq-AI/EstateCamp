@@ -6,15 +6,14 @@ import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { addMonths } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, router } from '@inertiajs/react';
-import { BanknoteIcon, CalendarCheckIcon, ChevronLeftIcon, ChevronRightIcon, CircleCheckIcon, LogInIcon, LogOutIcon, UserRoundXIcon } from 'lucide-react';
+import { BanknoteIcon, CalendarCheckIcon, ChevronLeftIcon, ChevronRightIcon, CircleCheckIcon, LogInIcon, LogOutIcon } from 'lucide-react';
 import { useState } from 'react';
 import AttendanceCalendar from './Partials/AttendanceCalendar';
-import { DocumentsCard, SalaryCard, SalaryHistory } from './Partials/StaffCards';
+import { DocumentsCard, NoStaffRecord, SalaryCard, SalaryHistory } from './Partials/StaffCards';
 
 /**
  * Today at work: check in, check out (also of last night's shift), or what
@@ -94,15 +93,7 @@ export default function Me({ staff, today, attendance, salaries, currency }) {
             <DashboardLayout>
                 <Head title={title} />
                 <PageHeader breadcrumbs={[{ label: title }]} title={title} />
-                <Empty className="border bg-card py-16 shadow-(--card-shadow)">
-                    <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                            <UserRoundXIcon />
-                        </EmptyMedia>
-                        <EmptyTitle>{t('staff.me.noRecord.title')}</EmptyTitle>
-                        <EmptyDescription>{t('staff.me.noRecord.description')}</EmptyDescription>
-                    </EmptyHeader>
-                </Empty>
+                <NoStaffRecord />
             </DashboardLayout>
         );
     }

@@ -7,6 +7,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
@@ -29,9 +30,10 @@ const GENDER_ICONS = { male: MarsIcon, female: VenusIcon };
 
 export default function Index({ company, filters, facets, summary, occupants }) {
     const { t, formatNumber, formatDate } = useTranslation();
+    const can = useCan();
     const title = t('leasing.occupants.title');
 
-    const addButton = (
+    const addButton = can('occupants.create') && (
         <Button nativeButton={false} render={<Link href={route('occupants.create')} />}>
             <UserPlusIcon data-icon="inline-start" />
             {t('leasing.occupants.add')}
@@ -107,10 +109,12 @@ export default function Index({ company, filters, facets, summary, occupants }) 
                 actions={
                     company && (
                         <>
-                            <Button variant="outline" nativeButton={false} render={<Link href={route('occupancies.create')} />}>
-                                <LogInIcon data-icon="inline-start" />
-                                {t('leasing.checkIn.button')}
-                            </Button>
+                            {can('occupants.check_in') && (
+                                <Button variant="outline" nativeButton={false} render={<Link href={route('occupancies.create')} />}>
+                                    <LogInIcon data-icon="inline-start" />
+                                    {t('leasing.checkIn.button')}
+                                </Button>
+                            )}
                             {addButton}
                         </>
                     )
@@ -158,11 +162,11 @@ export default function Index({ company, filters, facets, summary, occupants }) 
                                 <RowActions
                                     label={occupant.name}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('occupants.show', occupant.id), icon: EyeIcon },
-                                        { label: t('leasing.common.edit'), href: route('occupants.edit', occupant.id), icon: PencilIcon },
+                                        { label: t('leasing.common.view'), href: route('occupants.show', occupant.id), icon: EyeIcon, permission: 'occupants.view' },
+                                        { label: t('leasing.common.edit'), href: route('occupants.edit', occupant.id), icon: PencilIcon, permission: 'occupants.edit' },
                                         ...(occupant.stay
                                             ? []
-                                            : [{ label: t('leasing.checkIn.button'), href: route('occupancies.create', { occupant: occupant.id }), icon: LogInIcon }]),
+                                            : [{ label: t('leasing.checkIn.button'), href: route('occupancies.create', { occupant: occupant.id }), icon: LogInIcon, permission: 'occupants.check_in' }]),
                                     ]}
                                 />
                             )}

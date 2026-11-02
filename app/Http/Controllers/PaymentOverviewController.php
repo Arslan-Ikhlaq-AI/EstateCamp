@@ -38,7 +38,7 @@ class PaymentOverviewController extends Controller
             return Inertia::render('Payments/Overview', ['company' => null]);
         }
 
-        $withSalaries = Gate::allows('view-staff');
+        $withSalaries = Gate::allows('salaries.view');
         $categories = $this->cashCategories($withSalaries);
         $period = $this->periodFilter($request, 'this_month');
         $previous = $this->previousPeriod($period);

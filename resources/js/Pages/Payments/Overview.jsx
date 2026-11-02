@@ -19,8 +19,8 @@ import {
     DropdownMenuLabel,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useCan } from '@/hooks/use-can';
 import { LOCALES, useTranslation } from '@/hooks/use-translation';
-import { useCanOpen } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { Head, Link, router } from '@inertiajs/react';
 import {
@@ -360,14 +360,18 @@ function Methods({ methods, currency }) {
  */
 function RecordMenu() {
     const { t } = useTranslation();
-    const canOpen = useCanOpen();
+    const can = useCan();
     const items = [
-        { label: t('finance.overview.record.clientPayment'), href: route('payments.create'), icon: FileSignatureIcon },
-        { label: t('finance.overview.record.rentPayment'), href: route('rentals.index', { status: ['active'] }), icon: KeyRoundIcon },
-        { label: t('finance.overview.record.newRental'), href: route('rentals.create'), icon: PlusIcon },
-        { label: t('finance.overview.record.maintenanceBill'), href: route('maintenance-bills.index', { status: ['unpaid'] }), icon: WrenchIcon },
-        ...(canOpen({ ability: 'viewStaff' }) ? [{ label: t('finance.overview.record.salaries'), href: route('payroll.index'), icon: BanknoteIcon }] : []),
-    ];
+        can('payments_received.create') && { label: t('finance.overview.record.clientPayment'), href: route('payments.create'), icon: FileSignatureIcon },
+        can('rentals.view') && can('rent_collections.create') && { label: t('finance.overview.record.rentPayment'), href: route('rentals.index', { status: ['active'] }), icon: KeyRoundIcon },
+        can('rentals.create') && { label: t('finance.overview.record.newRental'), href: route('rentals.create'), icon: PlusIcon },
+        can('maintenance_bills.pay') && { label: t('finance.overview.record.maintenanceBill'), href: route('maintenance-bills.index', { status: ['unpaid'] }), icon: WrenchIcon },
+        can('payroll.view') && { label: t('finance.overview.record.salaries'), href: route('payroll.index'), icon: BanknoteIcon },
+    ].filter(Boolean);
+
+    if (items.length === 0) {
+        return null;
+    }
 
     return (
         <DropdownMenu>

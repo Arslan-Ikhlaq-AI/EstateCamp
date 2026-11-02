@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -27,7 +29,7 @@ use Illuminate\Support\Facades\DB;
 ])]
 class Payment extends Model
 {
-    use HasDocumentNumber;
+    use HasDocumentNumber, LimitedToCamps;
 
     public const NUMBER_PREFIX = 'RCPT';
 
@@ -153,5 +155,26 @@ class Payment extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class);
+    }
+
+    /**
+     * Payments towards the camps' contracts, or settling their invoices.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->where(fn (Builder $payments) => $payments->whereHas('contract')->orWhereHas('allocations', fn (Builder $allocations) => $allocations->whereHas('invoice')));
+    }
+
+    /**
+     * A payment is reached through the contract or invoice it is for.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return true;
     }
 }

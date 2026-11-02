@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
@@ -82,6 +83,7 @@ function HoldingLink({ icon: Icon, label, href }) {
  */
 export default function ClientShares({ property, clients, currency }) {
     const { t, formatNumber, formatCurrency } = useTranslation();
+    const can = useCan();
 
     if (clients.length === 0) {
         return (
@@ -94,10 +96,12 @@ export default function ClientShares({ property, clients, currency }) {
                     <EmptyDescription>{t('propertyShow.clients.emptyDescription')}</EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                    <Button variant="outline" nativeButton={false} render={<Link href={route('contracts.create')} />}>
-                        <FilePlusIcon data-icon="inline-start" />
-                        {t('propertyShow.newContract')}
-                    </Button>
+                    {can('contracts.create') && (
+                        <Button variant="outline" nativeButton={false} render={<Link href={route('contracts.create')} />}>
+                            <FilePlusIcon data-icon="inline-start" />
+                            {t('propertyShow.newContract')}
+                        </Button>
+                    )}
                 </EmptyContent>
             </Empty>
         );

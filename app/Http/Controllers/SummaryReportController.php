@@ -44,7 +44,7 @@ class SummaryReportController extends Controller
             return Inertia::render('Reports/Summary', ['company' => null]);
         }
 
-        $withStaff = Gate::allows('view-staff');
+        $withStaff = Gate::allows('salaries.view');
         $categories = $this->cashCategories($withStaff);
         $period = $this->periodFilter($request, 'this_month');
         $previous = $this->previousPeriod($period);

@@ -52,7 +52,7 @@ class OccupantRequest extends CompanyScopedRequest
 
                 if ($occupant instanceof Occupant
                     && $occupant->client_id !== $this->integer('client_id')
-                    && $occupant->currentStay()->exists()) {
+                    && $occupant->currentStay()->withoutGlobalScope('camps')->exists()) {
                     $validator->errors()->add('client_id', "{$occupant->full_name} is checked in under their current client's contract. Check them out first.");
                 }
             },

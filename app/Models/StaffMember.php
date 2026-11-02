@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonInterface;
 use Database\Factories\StaffMemberFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -60,7 +62,7 @@ use Illuminate\Support\Facades\DB;
 class StaffMember extends Model
 {
     /** @use HasFactory<StaffMemberFactory> */
-    use HasDocumentNumber, HasFactory, SoftDeletes;
+    use HasDocumentNumber, HasFactory, LimitedToCamps, SoftDeletes;
 
     public const NUMBER_PREFIX = 'EMP';
 
@@ -231,6 +233,11 @@ class StaffMember extends Model
 
             if (filled($password)) {
                 $user->password = $password;
+            }
+
+            // Access chosen here replaces any permissions picked for the sign-in on the users page.
+            if ($user->exists && ($this->access !== $access || $this->app_access !== $appAccess)) {
+                $user->permissions = null;
             }
 
             $user->save();
@@ -412,5 +419,26 @@ class StaffMember extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * The camps' staff, and the user's own staff record.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->where(fn (Builder $staff) => $staff->whereIn($this->qualifyColumn('property_id'), $propertyIds)->orWhere($this->qualifyColumn('user_id'), Auth::id()));
+    }
+
+    /**
+     * Working at the camps, or the user's own record.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return in_array((int) $this->property_id, $propertyIds, true) || ($this->user_id !== null && (int) $this->user_id === Auth::id());
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasBillingStatement;
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\RoomRentalFactory;
@@ -45,7 +46,7 @@ use Illuminate\Validation\ValidationException;
 class RoomRental extends Model
 {
     /** @use HasFactory<RoomRentalFactory> */
-    use HasBillingStatement, HasDocumentNumber, HasFactory;
+    use HasBillingStatement, HasDocumentNumber, HasFactory, LimitedToCamps;
 
     public const NUMBER_PREFIX = 'RNT';
 

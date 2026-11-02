@@ -75,7 +75,8 @@ class CheckInRequest extends CompanyScopedRequest
             return ['occupant_id' => "{$occupant->full_name} is registered with a different client from this contract's."];
         }
 
-        if ($occupant->currentStay()->exists()) {
+        // At any camp, including one the user does not look after.
+        if ($occupant->currentStay()->withoutGlobalScope('camps')->exists()) {
             return ['occupant_id' => "{$occupant->full_name} is already checked in. Check them out first."];
         }
 

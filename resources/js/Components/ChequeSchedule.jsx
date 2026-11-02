@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FieldGroup } from '@/components/ui/field';
 import { todayIso } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link, useForm } from '@inertiajs/react';
@@ -137,7 +138,7 @@ function StatusDate({ cheque }) {
  */
 const settleWording = (cheque, quickSettle) => (typeof quickSettle === 'string' ? quickSettle : cheque.direction === 'received' ? 'cashed' : 'paid');
 
-function ChequeActions({ cheque, statuses, quickSettle, onOpen }) {
+function ChequeActions({ cheque, statuses, quickSettle, mayEdit, mayReplace, onOpen }) {
     const { t } = useTranslation();
     const label = useChequeLabel()(cheque);
     const statusName = useChequeStatusName();
@@ -167,7 +168,7 @@ function ChequeActions({ cheque, statuses, quickSettle, onOpen }) {
                             {t(`leasing.cheques.settle.${settleWording(cheque, quickSettle)}.action`)}
                         </DropdownMenuItem>
                     )}
-                    {cheque.canEdit && (
+                    {cheque.canEdit && mayEdit && (
                         <DropdownMenuItem onClick={() => onOpen('details')}>
                             <PencilIcon />
                             {cheque.status === 'pending' ? t('leasing.cheques.actions.record') : t('leasing.cheques.actions.edit')}
@@ -191,7 +192,7 @@ function ChequeActions({ cheque, statuses, quickSettle, onOpen }) {
                                 </DropdownMenuItem>
                             );
                         })}
-                    {cheque.canReplace && (
+                    {cheque.canReplace && mayReplace && (
                         <DropdownMenuItem onClick={() => onOpen('replace')}>
                             <RefreshCwIcon />
                             {t('leasing.cheques.actions.replace')}
@@ -699,8 +700,14 @@ function ChequePhotoDialog({ cheque, open, onOpenChange }) {
  * client's cheque cashed, or one handed over paid, in one step (or worded
  * as it names, such as `submitted`).
  */
-export default function ChequeSchedule({ cheques, currency, statuses = [], showParty = false, selectable = false, banks = [], quickSettle = false }) {
+export default function ChequeSchedule({ cheques, currency, statuses: allStatuses = [], showParty = false, selectable: isSelectable = false, banks = [], quickSettle: settleWay = false }) {
     const { t, formatDate, formatMoney } = useTranslation();
+    const can = useCan();
+    // Only those who may change a cheque's status are offered its moves, the quick settle and the bulk update.
+    const mayMove = can('cheques.status');
+    const statuses = mayMove ? allStatuses : [];
+    const selectable = mayMove && isSelectable;
+    const quickSettle = mayMove && settleWay;
     const label = useChequeLabel();
     const [dialog, setDialog] = useState(null);
     const [selected, setSelected] = useState([]);
@@ -859,7 +866,14 @@ export default function ChequeSchedule({ cheques, currency, statuses = [], showP
                         : undefined
                 }
                 actions={(cheque) => (
-                    <ChequeActions cheque={cheque} statuses={statuses} quickSettle={quickSettle} onOpen={(type, statusId) => setDialog({ type, cheque, statusId })} />
+                    <ChequeActions
+                        cheque={cheque}
+                        statuses={statuses}
+                        quickSettle={quickSettle}
+                        mayEdit={can('cheques.edit')}
+                        mayReplace={mayMove}
+                        onOpen={(type, statusId) => setDialog({ type, cheque, statusId })}
+                    />
                 )}
             />
 

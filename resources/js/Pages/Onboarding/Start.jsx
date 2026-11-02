@@ -212,7 +212,7 @@ export default function Start({ completed, businessTypes, roles, countries, curr
 
     const changeTeamCount = (count) => {
         const size = Math.max(0, Math.min(maxTeam, count));
-        const added = Array.from({ length: Math.max(0, size - data.team.length) }, () => ({ key: nextMemberKey.current++, name: '', email: '', role: 'manager', password: '' }));
+        const added = Array.from({ length: Math.max(0, size - data.team.length) }, () => ({ key: nextMemberKey.current++, name: '', email: '', role: 'office_admin', password: '' }));
 
         form.setData('team', size > data.team.length ? [...data.team, ...added] : data.team.slice(0, size));
         clearTeamErrors();

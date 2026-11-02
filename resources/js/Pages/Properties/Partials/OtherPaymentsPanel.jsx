@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FieldGroup } from '@/components/ui/field';
 import { todayIso } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link, router, useForm } from '@inertiajs/react';
@@ -84,7 +85,13 @@ function CancelDialog({ payment, open, onOpenChange }) {
 
 function PaymentActions({ payment, onOpen }) {
     const { t } = useTranslation();
+    const can = useCan();
+    const canEdit = can('other_payments.edit');
     const reopen = () => router.post(route('other-payments.status', payment.id), { status: 'pending' }, { preserveScroll: true });
+
+    if (!canEdit && !payment.receiptUrl) {
+        return null;
+    }
 
     return (
         <DropdownMenu>
@@ -103,22 +110,24 @@ function PaymentActions({ payment, onOpen }) {
             <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuGroup>
                     <DropdownMenuLabel className="truncate">{payment.number}</DropdownMenuLabel>
-                    {payment.status !== 'paid' && (
+                    {canEdit && payment.status !== 'paid' && (
                         <DropdownMenuItem onClick={() => onOpen('pay')}>
                             <CircleCheckIcon />
                             {t('finance.otherPayments.actions.pay')}
                         </DropdownMenuItem>
                     )}
-                    {payment.status !== 'pending' && (
+                    {canEdit && payment.status !== 'pending' && (
                         <DropdownMenuItem onClick={reopen}>
                             <RotateCcwIcon />
                             {t('finance.otherPayments.actions.reopen')}
                         </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem render={<Link href={route('other-payments.edit', payment.id)} />}>
-                        <PencilIcon />
-                        {t('finance.otherPayments.actions.edit')}
-                    </DropdownMenuItem>
+                    {canEdit && (
+                        <DropdownMenuItem render={<Link href={route('other-payments.edit', payment.id)} />}>
+                            <PencilIcon />
+                            {t('finance.otherPayments.actions.edit')}
+                        </DropdownMenuItem>
+                    )}
                     {payment.receiptUrl && (
                         <DropdownMenuItem render={<a href={payment.receiptUrl} target="_blank" rel="noreferrer" />}>
                             <ExternalLinkIcon />
@@ -126,7 +135,7 @@ function PaymentActions({ payment, onOpen }) {
                         </DropdownMenuItem>
                     )}
                 </DropdownMenuGroup>
-                {payment.status !== 'cancelled' && (
+                {canEdit && payment.status !== 'cancelled' && (
                     <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onClick={() => onOpen('cancel')}>
@@ -149,6 +158,7 @@ function PaymentActions({ payment, onOpen }) {
  */
 export default function OtherPaymentsPanel({ payments, currency, methods, showHandover = false }) {
     const { t, formatCurrency, formatDate } = useTranslation();
+    const can = useCan();
     const [dialog, setDialog] = useState(null);
     const close = (open) => !open && setDialog(null);
 
@@ -205,7 +215,7 @@ export default function OtherPaymentsPanel({ payments, currency, methods, showHa
                                     {formatCurrency(payment.amount, currency)}
                                 </span>
                                 <span className="flex items-center gap-1">
-                                    {payment.status === 'pending' && (
+                                    {payment.status === 'pending' && can('other_payments.edit') && (
                                         <Button type="button" variant="outline" size="sm" onClick={() => setDialog({ type: 'pay', payment })} className="text-success">
                                             <CircleCheckIcon data-icon="inline-start" />
                                             {t('finance.otherPayments.actions.paid')}

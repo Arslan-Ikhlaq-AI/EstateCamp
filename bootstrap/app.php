@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\ActAsChosenCompany;
+use App\Http\Middleware\AuthorizeByPermission;
 use App\Http\Middleware\EndFormerStaffSessions;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -16,12 +18,13 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
+            ActAsChosenCompany::class,
             EndFormerStaffSessions::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        //
+        $middleware->alias(['permission' => AuthorizeByPermission::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

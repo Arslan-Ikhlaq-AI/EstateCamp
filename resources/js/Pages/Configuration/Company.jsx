@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldError, FieldGroup } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { getInitials } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -156,10 +157,12 @@ function BrandPreview({ data, logoUrl }) {
 /**
  * The company profile: identity and logo, registration, contacts, address,
  * and currency and time zone; beside it, a preview, the account and the
- * company's figures.
+ * company's figures. Someone who may only see the profile gets it without
+ * the means to change it.
  */
 export default function Company({ company, figures, currencies, timezones }) {
     const { t, formatNumber, formatDate } = useTranslation();
+    const canEdit = useCan()('company_profile.edit');
     const form = useForm({
         ...Object.fromEntries(FIELDS.map((field) => [field, company[field] ?? ''])),
         logo: null,
@@ -187,7 +190,7 @@ export default function Company({ company, figures, currencies, timezones }) {
         { icon: UserRoundIcon, label: t('configuration.company.figures.users'), value: figures.users },
     ];
 
-    const actions = (
+    const actions = canEdit && (
         <Button type="submit" variant="brand" disabled={processing}>
             {processing && <Spinner data-icon="inline-start" />}
             {t('configuration.company.save')}
@@ -210,7 +213,7 @@ export default function Company({ company, figures, currencies, timezones }) {
                 <FlashMessages />
 
                 <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]">
-                    <div className="flex min-w-0 flex-col gap-6">
+                    <fieldset disabled={!canEdit} className="flex min-w-0 flex-col gap-6">
                         <Section
                             icon={Building2Icon}
                             tone="from-brand-cyan to-brand-navy text-white"
@@ -311,7 +314,7 @@ export default function Company({ company, figures, currencies, timezones }) {
                                 <SelectField {...bind('timezone')} label={t('configuration.company.fields.timezone')} items={timezones.map((zone) => ({ value: zone, label: zone.replace('_', ' ') }))} />
                             </FieldGroup>
                         </Section>
-                    </div>
+                    </fieldset>
 
                     <aside className="flex flex-col gap-6 xl:sticky xl:top-20">
                         <BrandPreview data={data} logoUrl={logoUrl} />
@@ -371,7 +374,7 @@ export default function Company({ company, figures, currencies, timezones }) {
                     </aside>
                 </div>
 
-                <FormActions>{actions}</FormActions>
+                {canEdit && <FormActions>{actions}</FormActions>}
             </form>
         </DashboardLayout>
     );

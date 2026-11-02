@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use Database\Factories\OccupantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,7 +31,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Occupant extends Model
 {
     /** @use HasFactory<OccupantFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, LimitedToCamps, SoftDeletes;
 
     public const GENDERS = ['male', 'female'];
 
@@ -67,5 +69,26 @@ class Occupant extends Model
     public function currentStay(): HasOne
     {
         return $this->hasOne(Occupancy::class)->whereNull('check_out_date');
+    }
+
+    /**
+     * Occupants who have stayed at the camps, and those not yet checked in anywhere.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->where(fn (Builder $occupants) => $occupants->whereHas('occupancies')->orWhereDoesntHave('occupancies', fn (Builder $stays) => $stays->withoutGlobalScope('camps')));
+    }
+
+    /**
+     * Occupants are reached through their stays.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return true;
     }
 }

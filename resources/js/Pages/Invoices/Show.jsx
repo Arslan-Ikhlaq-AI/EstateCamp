@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useCan } from '@/hooks/use-can';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -47,6 +48,7 @@ function Totals({ rows }) {
 
 export default function Show({ invoice, items, allocations, company, currency }) {
     const { t, formatMoney, formatDate, formatNumber } = useTranslation();
+    const can = useCan();
     const { period } = useLeasingFormat();
     const [isVoiding, setIsVoiding] = useState(false);
     const isOpen = invoice.status !== 'void' && invoice.balance > 0;
@@ -72,13 +74,13 @@ export default function Show({ invoice, items, allocations, company, currency })
                 }
                 actions={
                     <>
-                        {invoice.canVoid && (
+                        {invoice.canVoid && can('invoices.void') && (
                             <Button variant="outline" onClick={() => setIsVoiding(true)}>
                                 <BanIcon data-icon="inline-start" />
                                 {t('leasing.invoices.void.button')}
                             </Button>
                         )}
-                        {isOpen && (
+                        {isOpen && can('payments_received.create') && (
                             <Button nativeButton={false} render={<Link href={route('payments.create', { client: invoice.client.id, invoice: invoice.id })} />}>
                                 <ReceiptIcon data-icon="inline-start" />
                                 {t('leasing.payments.add')}

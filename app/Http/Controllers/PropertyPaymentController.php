@@ -205,7 +205,7 @@ class PropertyPaymentController extends Controller
                 'toPay' => round($agreements->sum('due') + (float) $unpaidBills->sum('amount') + (float) $othersPending->sum('amount'), 2),
                 'paidOut' => round(array_sum($expenses), 2),
             ],
-            'can' => ['confirmCash' => $request->user()->can('confirm-cash-handover')],
+            'can' => ['confirmCash' => $request->user()->can('property_payments.confirm_cash')],
             'chequeStatuses' => ChequeController::statusOptions(),
             'banks' => ChequeController::knownBanks($property->company),
             'collectionMethods' => BillingPaymentRequest::RENTAL_METHODS,

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonInterface;
 use Database\Factories\MaintenanceVisitFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -36,7 +37,7 @@ use Illuminate\Validation\ValidationException;
 class MaintenanceVisit extends Model
 {
     /** @use HasFactory<MaintenanceVisitFactory> */
-    use HasFactory;
+    use HasFactory, LimitedToCamps;
 
     public const STATUSES = ['scheduled', 'confirmed', 'done', 'missed', 'cancelled'];
 
@@ -262,5 +263,26 @@ class MaintenanceVisit extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    /**
+     * Visits under the camps' maintenance contracts.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->whereHas('contract');
+    }
+
+    /**
+     * Under a maintenance contract at the camps.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return $this->contract()->exists();
     }
 }

@@ -167,7 +167,7 @@ export default function Index({ company, filters, period, facets, summary, salar
                                     label={salary.staff.name}
                                     items={[
                                         { label: t('finance.salaries.actions.payroll', { month: formatMonth(salary.period) }), href: route('payroll.index', { month: salary.period }), icon: CalculatorIcon },
-                                        { label: t('staff.payroll.actions.profile'), href: route('staff.show', salary.staff.id), icon: EyeIcon },
+                                        { label: t('staff.payroll.actions.profile'), href: route('staff.show', salary.staff.id), icon: EyeIcon, permission: 'staff.view' },
                                     ]}
                                 />
                             )}

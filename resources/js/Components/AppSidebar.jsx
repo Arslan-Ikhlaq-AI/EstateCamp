@@ -29,8 +29,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import { getInitials } from '@/lib/format';
 import { footerNavigation, isCurrentRoute, navigation, useCanOpen } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
-import { Link, usePage } from '@inertiajs/react';
-import { Building2Icon, CheckIcon, ChevronRightIcon } from 'lucide-react';
+import { Link, router, usePage } from '@inertiajs/react';
+import { Building2Icon, CheckIcon, ChevronRightIcon, ChevronsUpDownIcon, LayoutGridIcon, Undo2Icon } from 'lucide-react';
 import { Fragment } from 'react';
 
 function NavLink({ item }) {
@@ -158,37 +158,112 @@ function NavSection({ item }) {
 /**
  * The top of the sidebar belongs to the signed-in company: its logo (or
  * initials), its name and the user's role there. Users without a company
- * see a neutral placeholder instead.
+ * see a neutral placeholder instead. For the parent super admin it opens
+ * the company switcher: every company to work in, and the way back.
  */
 function CompanyBrand() {
     const { t } = useTranslation();
-    const { company, role } = usePage().props.auth;
+    const { company, role, switcher } = usePage().props.auth;
     const name = company?.name ?? t('common.tagline');
+
+    const content = (
+        <>
+            <CompanyAvatar company={company} className="size-11 shadow-lg shadow-black/20 group-data-[collapsible=icon]:size-8" />
+            <span className="grid min-w-0 flex-1 leading-tight whitespace-normal!">
+                <span className="line-clamp-2 text-[0.9375rem] font-bold text-white" dir="auto">
+                    {name}
+                </span>
+                {switcher?.isElsewhere ? (
+                    <span className="mt-0.5 truncate text-xs text-brand-sun">{t('permissions.switcher.elsewhere')}</span>
+                ) : (
+                    company && role && <span className="mt-0.5 truncate text-xs text-sidebar-foreground">{role}</span>
+                )}
+            </span>
+        </>
+    );
+    const buttonClassName =
+        'h-auto gap-3 rounded-2xl bg-white/[0.06] p-2.5 inset-ring inset-ring-white/10 hover:bg-white/10 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:inset-ring-0';
+
+    if (!switcher) {
+        return (
+            <SidebarMenu>
+                <SidebarMenuItem>
+                    <SidebarMenuButton size="lg" className={buttonClassName} tooltip={{ children: name, side: 'inline-end' }} render={<Link href={route('dashboard')} />}>
+                        {content}
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            </SidebarMenu>
+        );
+    }
 
     return (
         <SidebarMenu>
             <SidebarMenuItem>
-                <SidebarMenuButton
-                    size="lg"
-                    className="h-auto gap-3 rounded-2xl bg-white/[0.06] p-2.5 inset-ring inset-ring-white/10 hover:bg-white/10 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:inset-ring-0"
-                    tooltip={{ children: name, side: 'inline-end' }}
-                    render={<Link href={route('dashboard')} />}
-                >
-                    <Avatar className="size-11 rounded-xl shadow-lg shadow-black/20 after:rounded-xl group-data-[collapsible=icon]:size-8">
-                        {company && <AvatarImage src={company.logo_url ?? undefined} alt="" className="rounded-xl bg-white" />}
-                        <AvatarFallback className="rounded-xl bg-linear-to-br from-brand-cyan to-[#0b4f8a] text-sm font-bold text-white">
-                            {company ? getInitials(company.short_name ?? company.name) : <Building2Icon className="size-5" />}
-                        </AvatarFallback>
-                    </Avatar>
-                    <span className="grid min-w-0 flex-1 leading-tight whitespace-normal!">
-                        <span className="line-clamp-2 text-[0.9375rem] font-bold text-white" dir="auto">
-                            {name}
-                        </span>
-                        {company && role && <span className="mt-0.5 truncate text-xs text-sidebar-foreground">{role}</span>}
-                    </span>
-                </SidebarMenuButton>
+                <DropdownMenu>
+                    <DropdownMenuTrigger
+                        render={
+                            <SidebarMenuButton
+                                size="lg"
+                                className={cn(buttonClassName, switcher.isElsewhere && 'inset-ring-brand-sun/40')}
+                                aria-label={t('permissions.switcher.label')}
+                            />
+                        }
+                    >
+                        {content}
+                        <ChevronsUpDownIcon className="size-4 shrink-0 text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="bottom" align="start" className="max-h-[70vh] w-72 overflow-y-auto">
+                        <DropdownMenuGroup>
+                            <DropdownMenuLabel>{t('permissions.switcher.title')}</DropdownMenuLabel>
+                            {switcher.companies.map((option) => {
+                                const isCurrent = option.id === company?.id;
+
+                                return (
+                                    <DropdownMenuItem
+                                        key={option.id}
+                                        aria-current={isCurrent ? 'true' : undefined}
+                                        onClick={() => !isCurrent && router.post(route('admin.companies.open', option.id))}
+                                    >
+                                        <CompanyAvatar company={option} className="size-6 rounded-md after:rounded-md" />
+                                        <span dir="auto" className="min-w-0 flex-1 truncate">
+                                            {option.name}
+                                        </span>
+                                        {isCurrent && <CheckIcon className="text-brand-ink" />}
+                                    </DropdownMenuItem>
+                                );
+                            })}
+                        </DropdownMenuGroup>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuGroup>
+                            {switcher.isElsewhere && (
+                                <DropdownMenuItem onClick={() => router.delete(route('admin.companies.leave'))}>
+                                    <Undo2Icon />
+                                    {t('permissions.switcher.back')}
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem render={<Link href={route('admin.companies.index')} />}>
+                                <LayoutGridIcon />
+                                {t('permissions.switcher.all')}
+                            </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </SidebarMenuItem>
         </SidebarMenu>
+    );
+}
+
+/**
+ * A company's logo, or its initials (a building when there is no company).
+ */
+function CompanyAvatar({ company, className }) {
+    return (
+        <Avatar className={cn('rounded-xl after:rounded-xl', className)}>
+            {company && <AvatarImage src={company.logo_url ?? undefined} alt="" className="rounded-[inherit] bg-white" />}
+            <AvatarFallback className="rounded-[inherit] bg-linear-to-br from-brand-cyan to-[#0b4f8a] text-xs font-bold text-white">
+                {company ? getInitials(company.short_name ?? company.name) : <Building2Icon className="size-5" />}
+            </AvatarFallback>
+        </Avatar>
     );
 }
 

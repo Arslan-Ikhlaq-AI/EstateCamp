@@ -20,14 +20,30 @@ class UserRole extends Model
     public const SUPER_ADMIN = 'super_admin';
 
     /**
-     * Slug of the built-in role that runs the company's day-to-day operations.
+     * Slug of the built-in role that runs the company from its office.
      */
-    public const MANAGER = 'manager';
+    public const OFFICE_ADMIN = 'office_admin';
 
     /**
-     * Slug of the built-in role that looks after the company's money.
+     * Slug of the built-in role that looks after a few of the company's camps.
      */
-    public const ACCOUNTANT = 'accountant';
+    public const AREA_MANAGER = 'area_manager';
+
+    /**
+     * Slug of the built-in role that runs one camp.
+     */
+    public const CAMP_BOSS = 'camp_boss';
+
+    /**
+     * Roles that see only the properties given to the user (see
+     * User::campPropertyIds()), with the most each may have.
+     *
+     * @var array<string, int|null>
+     */
+    public const CAMP_ROLES = [
+        self::AREA_MANAGER => null,
+        self::CAMP_BOSS => 1,
+    ];
 
     /**
      * The roles every company account can give its users, by slug, in the
@@ -40,13 +56,17 @@ class UserRole extends Model
             'name' => 'Super Admin',
             'description' => 'Full access to every module and setting in the company account.',
         ],
-        self::MANAGER => [
-            'name' => 'Manager',
-            'description' => 'Runs day-to-day operations: properties, rooms, tenants, contracts and maintenance.',
+        self::OFFICE_ADMIN => [
+            'name' => 'Office Admin',
+            'description' => 'Runs the company from the office, with access to every camp and page.',
         ],
-        self::ACCOUNTANT => [
-            'name' => 'Accountant',
-            'description' => 'Looks after invoices, cheques, payments, payroll and reports.',
+        self::AREA_MANAGER => [
+            'name' => 'Area Manager',
+            'description' => 'Looks after the camps given to them: their rooms, tenants, money and maintenance.',
+        ],
+        self::CAMP_BOSS => [
+            'name' => 'Camp Boss',
+            'description' => 'Runs one camp: its rooms, check-ins, rent collection, cash and maintenance.',
         ],
     ];
 

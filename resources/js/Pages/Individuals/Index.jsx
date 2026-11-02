@@ -8,6 +8,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
@@ -34,10 +35,11 @@ const STATUS_ICONS = { active: CircleCheckIcon, inactive: CirclePauseIcon };
  */
 export default function Index({ company, filters, facets, summary, individuals }) {
     const { t, formatNumber, formatCurrency, formatMoney, formatDate } = useTranslation();
+    const can = useCan();
     const place = useRentalPlace();
     const title = t('leasing.individuals.title');
 
-    const rentButton = (
+    const rentButton = can('rentals.create') && (
         <Button nativeButton={false} render={<Link href={route('rentals.create', { type: 'individual' })} />}>
             <KeyRoundIcon data-icon="inline-start" />
             {t('leasing.individuals.rentRooms')}
@@ -46,10 +48,12 @@ export default function Index({ company, filters, facets, summary, individuals }
 
     const actions = (
         <>
-            <Button variant="outline" nativeButton={false} render={<Link href={route('clients.create', { type: 'individual' })} />}>
-                <UserPlusIcon data-icon="inline-start" />
-                {t('leasing.individuals.add')}
-            </Button>
+            {can('clients.create') && (
+                <Button variant="outline" nativeButton={false} render={<Link href={route('clients.create', { type: 'individual' })} />}>
+                    <UserPlusIcon data-icon="inline-start" />
+                    {t('leasing.individuals.add')}
+                </Button>
+            )}
             {rentButton}
         </>
     );
@@ -220,9 +224,9 @@ export default function Index({ company, filters, facets, summary, individuals }
                                 <RowActions
                                     label={person.name}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('clients.show', person.id), icon: EyeIcon },
-                                        { label: t('leasing.common.edit'), href: route('clients.edit', person.id), icon: PencilIcon },
-                                        { label: t('leasing.individuals.actions.rent'), href: route('rentals.create', { client: person.id }), icon: KeyRoundIcon },
+                                        { label: t('leasing.common.view'), href: route('clients.show', person.id), icon: EyeIcon, permission: 'clients.view' },
+                                        { label: t('leasing.common.edit'), href: route('clients.edit', person.id), icon: PencilIcon, permission: 'clients.edit' },
+                                        { label: t('leasing.individuals.actions.rent'), href: route('rentals.create', { client: person.id }), icon: KeyRoundIcon, permission: 'rentals.create' },
                                         ...person.rentals.map((rental) => ({
                                             label: t('leasing.individuals.actions.openRental', { number: rental.number }),
                                             href: route('rentals.show', rental.id),

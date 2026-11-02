@@ -7,6 +7,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { BellRingIcon, Building2Icon, LogInIcon, PercentIcon, ReceiptIcon } from 'lucide-react';
@@ -36,11 +37,12 @@ function greetingKey(hour) {
 
 /**
  * The welcome banner on the brand navy: today's date, the greeting, the
- * portfolio's headline occupancy and the two most common next steps:
- * recording a payment and checking someone in.
+ * portfolio's headline occupancy and the two most common next steps, for
+ * those who may take them: recording a payment and checking someone in.
  */
 function Greeting({ company, summary }) {
     const { t, formatLongDate, formatPercent } = useTranslation();
+    const can = useCan();
     const { auth, notifications = [] } = usePage().props;
     const now = new Date();
     const firstName = auth.user.name.split(/\s+/)[0];
@@ -98,14 +100,18 @@ function Greeting({ company, summary }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
-                    <Button variant="glass" size="lg" nativeButton={false} render={<Link href={route('payments.create')} />}>
-                        <ReceiptIcon data-icon="inline-start" />
-                        {t('leasing.payments.add')}
-                    </Button>
-                    <Button variant="inverse" size="lg" nativeButton={false} render={<Link href={route('occupancies.create')} />}>
-                        <LogInIcon data-icon="inline-start" />
-                        {t('leasing.checkIn.button')}
-                    </Button>
+                    {can('payments_received.create') && (
+                        <Button variant="glass" size="lg" nativeButton={false} render={<Link href={route('payments.create')} />}>
+                            <ReceiptIcon data-icon="inline-start" />
+                            {t('leasing.payments.add')}
+                        </Button>
+                    )}
+                    {can('occupants.check_in') && (
+                        <Button variant="inverse" size="lg" nativeButton={false} render={<Link href={route('occupancies.create')} />}>
+                            <LogInIcon data-icon="inline-start" />
+                            {t('leasing.checkIn.button')}
+                        </Button>
+                    )}
                 </div>
             </div>
         </section>
@@ -149,19 +155,21 @@ export default function Dashboard({ company, summary, finance, cheques, visitAle
                         <div className="flex min-w-0 flex-col gap-6">
                             <AttentionCard />
 
-                            <ChequesOverview cheques={cheques} currency={company.currency} />
+                            {cheques && <ChequesOverview cheques={cheques} currency={company.currency} />}
 
-                            <CollectionsChart trend={finance.trend} currency={company.currency} />
+                            {finance && <CollectionsChart trend={finance.trend} currency={company.currency} />}
 
                             <div className="grid gap-6 lg:grid-cols-2">
                                 <OccupancyTrend trend={occupancyTrend} />
                                 <RoomStatus rooms={summary.roomOccupancy} />
                             </div>
 
-                            <div className="grid gap-6 lg:grid-cols-2">
-                                <InvoiceStatus status={finance.invoiceStatus} />
-                                <PaymentMethods methods={finance.paymentMethods} currency={company.currency} />
-                            </div>
+                            {finance && (
+                                <div className="grid gap-6 lg:grid-cols-2">
+                                    <InvoiceStatus status={finance.invoiceStatus} />
+                                    <PaymentMethods methods={finance.paymentMethods} currency={company.currency} />
+                                </div>
+                            )}
 
                             <PropertiesOverview properties={properties} currency={company.currency} />
 
@@ -175,7 +183,7 @@ export default function Dashboard({ company, summary, finance, cheques, visitAle
 
                         <aside aria-label={t('dashboard.activity.title')} className="grid gap-6 md:grid-cols-2 xl:grid-cols-1">
                             <RecentActivity activity={activity} currency={company.currency} />
-                            <TopDebtors debtors={finance.topDebtors} currency={company.currency} />
+                            {finance && <TopDebtors debtors={finance.topDebtors} currency={company.currency} />}
                         </aside>
                     </div>
                 </>

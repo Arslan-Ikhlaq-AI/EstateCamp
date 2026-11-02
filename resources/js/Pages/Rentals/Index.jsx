@@ -7,6 +7,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
@@ -34,10 +35,11 @@ const STATUS_ICONS = { active: KeyRoundIcon, ended: CircleSlashIcon };
  */
 export default function Index({ company, filters, facets, summary, rentals }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
+    const can = useCan();
     const place = useRentalPlace();
     const title = t('finance.rentals.title');
 
-    const addButton = (
+    const addButton = can('rentals.create') && (
         <Button nativeButton={false} render={<Link href={route('rentals.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('finance.rentals.add')}
@@ -177,9 +179,9 @@ export default function Index({ company, filters, facets, summary, rentals }) {
                                 <RowActions
                                     label={rental.number}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('rentals.show', rental.id), icon: EyeIcon },
-                                        ...(rental.status === 'active' ? [{ label: t('finance.rentals.edit'), href: route('rentals.edit', rental.id), icon: PencilIcon }] : []),
-                                        ...(rental.tenant ? [{ label: t('finance.rentals.viewTenant'), href: route('clients.show', rental.tenant.id), icon: UserIcon }] : []),
+                                        { label: t('leasing.common.view'), href: route('rentals.show', rental.id), icon: EyeIcon, permission: 'rentals.view' },
+                                        ...(rental.status === 'active' ? [{ label: t('finance.rentals.edit'), href: route('rentals.edit', rental.id), icon: PencilIcon, permission: 'rentals.edit' }] : []),
+                                        ...(rental.tenant ? [{ label: t('finance.rentals.viewTenant'), href: route('clients.show', rental.tenant.id), icon: UserIcon, permission: 'clients.view' }] : []),
                                     ]}
                                 />
                             )}

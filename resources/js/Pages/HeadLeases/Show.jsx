@@ -9,6 +9,7 @@ import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
@@ -60,6 +61,7 @@ function UnitTile({ icon: Icon, label, value, detail, href }) {
 
 export default function Show({ lease, property, documents, stats, cheques, banks, chequeStatuses, currency }) {
     const { t, tOr, formatCurrency, formatMoney, formatDate, formatNumber, formatPercent } = useTranslation();
+    const can = useCan();
     const filter = { properties: [property.code] };
     const place = [property.area, property.city].filter(Boolean).join(', ');
     const { period } = useLeasingFormat();
@@ -83,11 +85,13 @@ export default function Show({ lease, property, documents, stats, cheques, banks
                 }
                 actions={
                     <>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('head-leases.edit', lease.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('leasing.common.edit')}
-                        </Button>
-                        {canRenew && (
+                        {can('head_leases.edit') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('head-leases.edit', lease.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('leasing.common.edit')}
+                            </Button>
+                        )}
+                        {canRenew && can('head_leases.create') && (
                             <Button nativeButton={false} render={<Link href={route('head-leases.create', { renew: lease.id })} />}>
                                 <RefreshCwIcon data-icon="inline-start" />
                                 {t('leasing.headLeases.renew')}
@@ -198,18 +202,22 @@ export default function Show({ lease, property, documents, stats, cheques, banks
                         description={t('leasing.cheques.schedule.description.issued')}
                         flush
                         action={
-                            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('head-leases.edit', lease.id)} />}>
-                                <PencilIcon data-icon="inline-start" />
-                                {t('leasing.cheques.actions.record')}
-                            </Button>
+                            can('head_leases.edit') && (
+                                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('head-leases.edit', lease.id)} />}>
+                                    <PencilIcon data-icon="inline-start" />
+                                    {t('leasing.cheques.actions.record')}
+                                </Button>
+                            )
                         }
                     >
                         {cheques.length === 0 ? (
                             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-5 lg:px-6">
                                 <p className="max-w-xl text-sm text-muted-foreground">{t('leasing.cheques.schedule.setUpDescription')}</p>
-                                <PostButton href={route('head-leases.cheques.store', lease.id)} icon={WalletCardsIcon}>
-                                    {t('leasing.cheques.schedule.setUp')}
-                                </PostButton>
+                                {can('cheques.schedule') && (
+                                    <PostButton href={route('head-leases.cheques.store', lease.id)} icon={WalletCardsIcon}>
+                                        {t('leasing.cheques.schedule.setUp')}
+                                    </PostButton>
+                                )}
                             </div>
                         ) : (
                             <ChequeSchedule cheques={cheques} currency={currency} statuses={chequeStatuses} banks={banks} />
@@ -220,10 +228,12 @@ export default function Show({ lease, property, documents, stats, cheques, banks
                         title={t('leasing.headLeases.show.documents')}
                         description={t('leasing.headLeases.show.documentsDescription')}
                         action={
-                            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('head-leases.edit', lease.id)} />}>
-                                <FilePlusIcon data-icon="inline-start" />
-                                {t('leasing.headLeases.show.addDocuments')}
-                            </Button>
+                            can('head_leases.edit') && (
+                                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('head-leases.edit', lease.id)} />}>
+                                    <FilePlusIcon data-icon="inline-start" />
+                                    {t('leasing.headLeases.show.addDocuments')}
+                                </Button>
+                            )
                         }
                     >
                         {documents.length > 0 ? (

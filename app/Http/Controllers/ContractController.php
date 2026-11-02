@@ -128,6 +128,8 @@ class ContractController extends Controller
     {
         $this->ensureSameCompany($request, $contract);
 
+        $user = $request->user();
+
         $contract->load([
             'client:id,name,client_type',
             'lines' => fn (HasMany $lines) => $lines->orderBy('id'),
@@ -206,14 +208,15 @@ class ContractController extends Controller
                 'toCollect' => $cheques->filter(fn (Cheque $cheque) => $cheque->isDueNow())->count(),
                 'bounced' => $cheques->filter(fn (Cheque $cheque) => $cheque->status === 'bounced' && $cheque->replacement === null)->count(),
             ],
+            // What the contract allows next, and what the signed-in user may do of it.
             'can' => [
-                'edit' => $contract->isEditable(),
-                'activate' => $contract->status === 'draft' && $contract->lines->isNotEmpty(),
-                'terminate' => $contract->isEditable(),
-                'renew' => in_array($contract->status, ['active', 'ended'], true) && $contract->renewal === null,
-                'invoice' => $period !== null,
-                'checkIn' => $contract->status === 'active' && $contract->lines->contains(fn (ContractLine $line) => $line->housesOccupants()),
-                'scheduleCheques' => $contract->isEditable() && $cheques->isEmpty() && $contract->lines->isNotEmpty(),
+                'edit' => $contract->isEditable() && $user->can('contracts.edit'),
+                'activate' => $contract->status === 'draft' && $contract->lines->isNotEmpty() && $user->can('contracts.edit'),
+                'terminate' => $contract->isEditable() && $user->can('contracts.terminate'),
+                'renew' => in_array($contract->status, ['active', 'ended'], true) && $contract->renewal === null && $user->can('contracts.create'),
+                'invoice' => $period !== null && $user->can('invoices.create'),
+                'checkIn' => $contract->status === 'active' && $contract->lines->contains(fn (ContractLine $line) => $line->housesOccupants()) && $user->can('occupants.check_in'),
+                'scheduleCheques' => $contract->isEditable() && $cheques->isEmpty() && $contract->lines->isNotEmpty() && $user->can('cheques.schedule'),
             ],
         ]);
     }

@@ -7,6 +7,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
@@ -362,6 +363,7 @@ function AllocationSummary({ kind, summary, currency, periodLabel }) {
 
 function NoUnits({ kind, propertyId }) {
     const { t } = useTranslation();
+    const can = useCan();
     const Icon = KIND_ICONS[kind];
 
     return (
@@ -375,10 +377,12 @@ function NoUnits({ kind, propertyId }) {
                     <EmptyDescription>{t(`propertyAllocation.noUnits.${kind}.description`)}</EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                    <Button variant="outline" nativeButton={false} render={<Link href={route('properties.edit', propertyId)} />}>
-                        <PlusIcon data-icon="inline-start" />
-                        {t('propertyAllocation.noUnits.add')}
-                    </Button>
+                    {can('properties.edit') && (
+                        <Button variant="outline" nativeButton={false} render={<Link href={route('properties.edit', propertyId)} />}>
+                            <PlusIcon data-icon="inline-start" />
+                            {t('propertyAllocation.noUnits.add')}
+                        </Button>
+                    )}
                 </EmptyContent>
             </Empty>
         </Card>

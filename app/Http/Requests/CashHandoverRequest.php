@@ -26,7 +26,7 @@ class CashHandoverRequest extends CompanyScopedRequest
      */
     public function authorize(): bool
     {
-        return parent::authorize() && Gate::allows('confirm-cash-handover');
+        return parent::authorize() && Gate::allows('property_payments.confirm_cash');
     }
 
     /**

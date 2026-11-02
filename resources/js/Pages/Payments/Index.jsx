@@ -8,6 +8,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
@@ -31,10 +32,11 @@ const STATUS_ICONS = { pending: ClockIcon, cleared: CircleCheckIcon, bounced: Un
 
 export default function Index({ company, filters, period, facets, summary, payments }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
+    const can = useCan();
     const { full } = usePeriodLabel();
     const title = t('leasing.payments.title');
 
-    const addButton = (
+    const addButton = can('payments_received.create') && (
         <Button nativeButton={false} render={<Link href={route('payments.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('leasing.payments.add')}
@@ -167,8 +169,8 @@ export default function Index({ company, filters, period, facets, summary, payme
                                 <RowActions
                                     label={payment.number}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('payments.show', payment.id), icon: EyeIcon },
-                                        { label: t('leasing.payments.viewClient'), href: route('clients.show', payment.client.id), icon: UserIcon },
+                                        { label: t('leasing.common.view'), href: route('payments.show', payment.id), icon: EyeIcon, permission: 'payments_received.view' },
+                                        { label: t('leasing.payments.viewClient'), href: route('clients.show', payment.client.id), icon: UserIcon, permission: 'clients.view' },
                                     ]}
                                 />
                             )}

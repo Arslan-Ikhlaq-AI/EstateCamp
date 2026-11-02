@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use Database\Factories\LandlordFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -28,7 +30,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Landlord extends Model
 {
     /** @use HasFactory<LandlordFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, LimitedToCamps, SoftDeletes;
 
     public const TYPES = ['company', 'individual'];
 
@@ -56,5 +58,31 @@ class Landlord extends Model
     public function properties(): HasMany
     {
         return $this->hasMany(Property::class);
+    }
+
+    /**
+     * The camps' landlords, and those not yet letting anything.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->where(fn (Builder $landlords) => $landlords
+            ->whereHas('properties')
+            ->orWhereHas('headLeases')
+            ->orWhere(fn (Builder $unplaced) => $unplaced
+                ->whereDoesntHave('properties', fn (Builder $properties) => $properties->withoutGlobalScope('camps'))
+                ->whereDoesntHave('headLeases', fn (Builder $leases) => $leases->withoutGlobalScope('camps'))));
+    }
+
+    /**
+     * Landlords are reached through what they let.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return true;
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonInterface;
 use Database\Factories\MaintenanceJobFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -51,7 +52,7 @@ use Illuminate\Support\Str;
 class MaintenanceJob extends Model
 {
     /** @use HasFactory<MaintenanceJobFactory> */
-    use HasDocumentNumber, HasFactory, SoftDeletes;
+    use HasDocumentNumber, HasFactory, LimitedToCamps, SoftDeletes;
 
     public const NUMBER_PREFIX = 'MNT';
 

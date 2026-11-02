@@ -7,12 +7,14 @@ import PageHeader from '@/Components/PageHeader';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import { FileSignatureIcon, PencilIcon } from 'lucide-react';
 
 export default function Show({ landlord, leases, upcomingCheques, chequeTotals, currency }) {
     const { t, formatCurrency } = useTranslation();
+    const can = useCan();
     const { period } = useLeasingFormat();
     const isCompany = landlord.landlord_type === 'company';
 
@@ -27,14 +29,18 @@ export default function Show({ landlord, leases, upcomingCheques, chequeTotals, 
                 description={landlord.contact_person_name}
                 actions={
                     <>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('landlords.edit', landlord.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('leasing.common.edit')}
-                        </Button>
-                        <Button nativeButton={false} render={<Link href={route('head-leases.create', { landlord: landlord.id })} />}>
-                            <FileSignatureIcon data-icon="inline-start" />
-                            {t('leasing.landlords.newLease')}
-                        </Button>
+                        {can('landlords.edit') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('landlords.edit', landlord.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('leasing.common.edit')}
+                            </Button>
+                        )}
+                        {can('head_leases.create') && (
+                            <Button nativeButton={false} render={<Link href={route('head-leases.create', { landlord: landlord.id })} />}>
+                                <FileSignatureIcon data-icon="inline-start" />
+                                {t('leasing.landlords.newLease')}
+                            </Button>
+                        )}
                     </>
                 }
             />

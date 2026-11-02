@@ -20,6 +20,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { FieldGroup } from '@/components/ui/field';
+import { useCan } from '@/hooks/use-can';
 import { todayIso } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -111,6 +112,7 @@ function UnpayDialog({ bill, open, onOpenChange }) {
 
 function BillActions({ bill, onPay, onUnpay }) {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <DropdownMenu>
@@ -135,10 +137,12 @@ function BillActions({ bill, onPay, onUnpay }) {
                             {t('finance.bills.actions.voucher')}
                         </DropdownMenuItem>
                     ) : (
-                        <DropdownMenuItem onClick={onPay}>
-                            <HandCoinsIcon />
-                            {t('finance.bills.actions.pay')}
-                        </DropdownMenuItem>
+                        can('maintenance_bills.pay') && (
+                            <DropdownMenuItem onClick={onPay}>
+                                <HandCoinsIcon />
+                                {t('finance.bills.actions.pay')}
+                            </DropdownMenuItem>
+                        )
                     )}
                     {bill.invoiceUrl && (
                         <DropdownMenuItem render={<a href={bill.invoiceUrl} target="_blank" rel="noreferrer" />}>
@@ -151,7 +155,7 @@ function BillActions({ bill, onPay, onUnpay }) {
                         {t('finance.bills.actions.job')}
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
-                {bill.isPaid && (
+                {bill.isPaid && can('maintenance_bills.pay') && (
                     <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onClick={onUnpay}>

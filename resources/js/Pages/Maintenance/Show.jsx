@@ -3,6 +3,7 @@ import FlashMessages from '@/Components/FlashMessages';
 import PageHeader from '@/Components/PageHeader';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
@@ -137,6 +138,7 @@ function CostCard({ job, currency }) {
 
 export default function Show({ job, history, statuses, paymentMethods, currency }) {
     const { t, formatDate } = useTranslation();
+    const can = useCan();
     const { categoryName } = useLookupNames();
     const unitLabel = useUnitLabel();
     const [isChangingStatus, setChangingStatus] = useState(false);
@@ -152,14 +154,18 @@ export default function Show({ job, history, statuses, paymentMethods, currency 
                 description={[job.number, job.property?.name, unitLabel(job, { withLocation: false })].filter(Boolean).join(' · ')}
                 actions={
                     <>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('maintenance.edit', job.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('leasing.common.edit')}
-                        </Button>
-                        <Button onClick={() => setChangingStatus(true)}>
-                            <ArrowRightLeftIcon data-icon="inline-start" />
-                            {t('maintenance.actions.changeStatus')}
-                        </Button>
+                        {can('maintenance.edit') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('maintenance.edit', job.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('leasing.common.edit')}
+                            </Button>
+                        )}
+                        {can('maintenance.edit') && (
+                            <Button onClick={() => setChangingStatus(true)}>
+                                <ArrowRightLeftIcon data-icon="inline-start" />
+                                {t('maintenance.actions.changeStatus')}
+                            </Button>
+                        )}
                     </>
                 }
             />

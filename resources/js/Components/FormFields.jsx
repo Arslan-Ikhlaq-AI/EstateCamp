@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/card';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
 import {
     Select,
     SelectContent,
@@ -20,6 +20,10 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useTranslation } from '@/hooks/use-translation';
+import { generatePassword } from '@/lib/onboarding';
+import { cn } from '@/lib/utils';
+import { EyeIcon, EyeOffIcon, WandSparklesIcon } from 'lucide-react';
+import { useState } from 'react';
 
 function OptionalLabel({ id, label, optional }) {
     const { t } = useTranslation();
@@ -162,6 +166,57 @@ export function TextField({ id, label, value, onChange, error, description, opti
                 className={inputClassName}
                 {...props}
             />
+            {description && !error && <FieldDescription>{description}</FieldDescription>}
+            <FieldError>{error}</FieldError>
+        </Field>
+    );
+}
+
+/**
+ * A password chosen for someone else, with a show toggle and a button that
+ * makes up a strong one and shows it, so it can be passed on to them.
+ */
+export function PasswordField({ id, label, value, onChange, error, description, className }) {
+    const { t } = useTranslation();
+    const [isVisible, setIsVisible] = useState(false);
+
+    return (
+        <Field data-invalid={error ? true : undefined} className={className}>
+            <FieldLabel htmlFor={id}>{label}</FieldLabel>
+            <InputGroup>
+                <InputGroupInput
+                    id={id}
+                    type={isVisible ? 'text' : 'password'}
+                    value={value ?? ''}
+                    onChange={(event) => onChange(event.target.value)}
+                    autoComplete="new-password"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    aria-invalid={Boolean(error)}
+                    className={cn(isVisible && value && 'font-mono tracking-wide')}
+                />
+                <InputGroupAddon align="inline-end" className="gap-1">
+                    <InputGroupButton
+                        size="xs"
+                        className="font-semibold text-brand-ink"
+                        onClick={() => {
+                            onChange(generatePassword());
+                            setIsVisible(true);
+                        }}
+                    >
+                        <WandSparklesIcon /> {t('common.password.generate')}
+                    </InputGroupButton>
+                    <InputGroupButton
+                        size="icon-xs"
+                        aria-label={t(isVisible ? 'common.password.hide' : 'common.password.show')}
+                        aria-pressed={isVisible}
+                        aria-controls={id}
+                        onClick={() => setIsVisible((visible) => !visible)}
+                    >
+                        {isVisible ? <EyeOffIcon /> : <EyeIcon />}
+                    </InputGroupButton>
+                </InputGroupAddon>
+            </InputGroup>
             {description && !error && <FieldDescription>{description}</FieldDescription>}
             <FieldError>{error}</FieldError>
         </Field>

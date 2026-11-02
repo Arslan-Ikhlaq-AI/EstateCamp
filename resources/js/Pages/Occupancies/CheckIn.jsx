@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { FieldGroup } from '@/components/ui/field';
 import { todayIso } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { CircleAlertIcon, DoorOpenIcon, FileSignatureIcon, MarsIcon, UserPlusIcon, VenusIcon } from 'lucide-react';
@@ -70,6 +71,7 @@ function RoomCard({ line, occupantGender }) {
 
 export default function CheckIn({ lines, selectedLineId, selectedOccupantId, occupants, clientId }) {
     const { t } = useTranslation();
+    const can = useCan();
     const form = useForm({
         contract_line_id: selectedLineId,
         occupant_id: selectedOccupantId,
@@ -147,10 +149,12 @@ export default function CheckIn({ lines, selectedLineId, selectedOccupantId, occ
                                     {occupants.length === 0 ? (
                                         <div className="flex flex-col items-start gap-3">
                                             <p className="text-sm text-muted-foreground">{t('leasing.checkIn.noOccupants')}</p>
-                                            <Button variant="outline" nativeButton={false} render={<Link href={route('occupants.create', { client: clientId })} />}>
-                                                <UserPlusIcon data-icon="inline-start" />
-                                                {t('leasing.occupants.add')}
-                                            </Button>
+                                            {can('occupants.create') && (
+                                                <Button variant="outline" nativeButton={false} render={<Link href={route('occupants.create', { client: clientId })} />}>
+                                                    <UserPlusIcon data-icon="inline-start" />
+                                                    {t('leasing.occupants.add')}
+                                                </Button>
+                                            )}
                                         </div>
                                     ) : (
                                         <SelectField
@@ -164,9 +168,11 @@ export default function CheckIn({ lines, selectedLineId, selectedOccupantId, occ
                                                 label: [person.name, t(`gender.${person.gender}`), person.employeeNumber].filter(Boolean).join(' · '),
                                             }))}
                                             description={
-                                                <Link href={route('occupants.create', { client: clientId })} className="underline underline-offset-3 hover:text-foreground">
-                                                    {t('leasing.checkIn.registerSomeone')}
-                                                </Link>
+                                                can('occupants.create') && (
+                                                    <Link href={route('occupants.create', { client: clientId })} className="underline underline-offset-3 hover:text-foreground">
+                                                        {t('leasing.checkIn.registerSomeone')}
+                                                    </Link>
+                                                )
                                             }
                                             error={errors.occupant_id}
                                         />

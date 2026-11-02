@@ -7,6 +7,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { daysFromToday, useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
@@ -39,6 +40,7 @@ const UNCOVERED_SHOWN = 6;
  */
 function UncoveredProperties({ service, properties }) {
     const { t } = useTranslation();
+    const canAdd = useCan()(`amc_${service}.create`);
 
     return (
         <section className="flex flex-col gap-4 rounded-xl bg-warning/[0.06] p-4 ring-1 ring-warning/25 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
@@ -52,13 +54,14 @@ function UncoveredProperties({ service, properties }) {
                 </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                {properties.slice(0, UNCOVERED_SHOWN).map((property) => (
-                    <Button key={property.id} variant="outline" size="sm" nativeButton={false} render={<Link href={route(amcRoute(service, 'create'), { property: property.id })} />}>
-                        <PlusIcon data-icon="inline-start" />
-                        <span dir="auto">{property.name}</span>
-                    </Button>
-                ))}
-                {properties.length > UNCOVERED_SHOWN && (
+                {canAdd &&
+                    properties.slice(0, UNCOVERED_SHOWN).map((property) => (
+                        <Button key={property.id} variant="outline" size="sm" nativeButton={false} render={<Link href={route(amcRoute(service, 'create'), { property: property.id })} />}>
+                            <PlusIcon data-icon="inline-start" />
+                            <span dir="auto">{property.name}</span>
+                        </Button>
+                    ))}
+                {canAdd && properties.length > UNCOVERED_SHOWN && (
                     <span className="text-[0.8125rem] text-muted-foreground">{t('amcs.uncovered.more', { count: properties.length - UNCOVERED_SHOWN })}</span>
                 )}
             </div>
@@ -72,10 +75,11 @@ function UncoveredProperties({ service, properties }) {
  */
 export default function Index({ service, company, filters, facets, summary, contracts }) {
     const { t, formatNumber, formatCurrency, formatDate } = useTranslation();
+    const can = useCan();
     const { period } = useLeasingFormat();
     const title = t(`amcs.services.${service}.title`);
 
-    const addButton = (
+    const addButton = can(`amc_${service}.create`) && (
         <Button nativeButton={false} render={<Link href={route(amcRoute(service, 'create'))} />}>
             <PlusIcon data-icon="inline-start" />
             {t(`amcs.services.${service}.add`)}
@@ -264,9 +268,9 @@ export default function Index({ service, company, filters, facets, summary, cont
                                     label={contract.number}
                                     items={[
                                         { label: t('amcs.actions.view'), href: route(amcRoute(service, 'show'), contract.id), icon: EyeIcon },
-                                        { label: t('amcs.actions.edit'), href: route(amcRoute(service, 'edit'), contract.id), icon: PencilIcon },
+                                        { label: t('amcs.actions.edit'), href: route(amcRoute(service, 'edit'), contract.id), icon: PencilIcon, permission: `amc_${service}.edit` },
                                         ...(contract.canRenew
-                                            ? [{ label: t('amcs.actions.renew'), href: route(amcRoute(service, 'create'), { renew: contract.id }), icon: RefreshCwIcon }]
+                                            ? [{ label: t('amcs.actions.renew'), href: route(amcRoute(service, 'create'), { renew: contract.id }), icon: RefreshCwIcon, permission: `amc_${service}.create` }]
                                             : []),
                                     ]}
                                 />

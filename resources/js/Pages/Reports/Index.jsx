@@ -21,26 +21,26 @@ import {
 } from 'lucide-react';
 
 /**
- * Every report, grouped by what it covers. `ability` follows the
- * navigation's (see canOpen); the company summary leads.
+ * Every report, grouped by what it covers, with the permission that opens
+ * it (as in the navigation, see canOpen); the company summary leads.
  */
 const REPORT_GROUPS = [
-    { key: 'company', reports: [{ key: 'summary', routeName: 'reports.summary', icon: PresentationIcon }] },
+    { key: 'company', reports: [{ key: 'summary', routeName: 'reports.summary', icon: PresentationIcon, permission: 'report_summary.view' }] },
     {
         key: 'finance',
         reports: [
-            { key: 'income', routeName: 'reports.income', icon: ScaleIcon },
-            { key: 'receivables', routeName: 'reports.receivables', icon: HourglassIcon },
+            { key: 'income', routeName: 'reports.income', icon: ScaleIcon, permission: 'report_income.view' },
+            { key: 'receivables', routeName: 'reports.receivables', icon: HourglassIcon, permission: 'report_receivables.view' },
         ],
     },
     {
         key: 'operations',
         reports: [
-            { key: 'occupancy', routeName: 'reports.occupancy', icon: BedDoubleIcon },
-            { key: 'maintenance', routeName: 'reports.maintenance', icon: WrenchIcon },
+            { key: 'occupancy', routeName: 'reports.occupancy', icon: BedDoubleIcon, permission: 'report_occupancy.view' },
+            { key: 'maintenance', routeName: 'reports.maintenance', icon: WrenchIcon, permission: 'report_maintenance.view' },
         ],
     },
-    { key: 'people', reports: [{ key: 'staff', routeName: 'reports.staff', icon: UsersRoundIcon, ability: 'viewStaff' }] },
+    { key: 'people', reports: [{ key: 'staff', routeName: 'reports.staff', icon: UsersRoundIcon, permission: 'report_staff.view' }] },
 ];
 
 /**

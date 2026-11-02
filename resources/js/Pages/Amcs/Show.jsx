@@ -9,6 +9,7 @@ import StatCard from '@/Components/StatCard';
 import VisitSchedule, { AddVisitsDialog, AlertPulse } from '@/Components/VisitSchedule';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { daysFromToday, useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
@@ -116,6 +117,7 @@ function VisitAlert({ stats }) {
  */
 export default function Show({ service, contract, currency, visits, visitStats, cheques, chequeStats, banks, chequeStatuses }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
+    const can = useCan();
     const { period } = useLeasingFormat();
     const [isAddingVisits, setIsAddingVisits] = useState(false);
     const listTitle = t(`amcs.services.${service}.title`);
@@ -154,11 +156,13 @@ export default function Show({ service, contract, currency, visits, visitStats, 
                 }
                 actions={
                     <>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route(amcRoute(service, 'edit'), contract.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('leasing.common.edit')}
-                        </Button>
-                        {contract.canRenew && (
+                        {can(`amc_${service}.edit`) && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route(amcRoute(service, 'edit'), contract.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('leasing.common.edit')}
+                            </Button>
+                        )}
+                        {contract.canRenew && can(`amc_${service}.create`) && (
                             <Button nativeButton={false} render={<Link href={route(amcRoute(service, 'create'), { renew: contract.id })} />}>
                                 <RefreshCwIcon data-icon="inline-start" />
                                 {t('amcs.actions.renew')}
@@ -211,7 +215,8 @@ export default function Show({ service, contract, currency, visits, visitStats, 
                         }
                         flush
                         action={
-                            contract.canSchedule && (
+                            contract.canSchedule &&
+                            can('amc_visits.manage') && (
                                 <Button variant="outline" size="sm" onClick={() => setIsAddingVisits(true)}>
                                     <CalendarPlusIcon data-icon="inline-start" />
                                     {t('amcs.schedule.add')}
@@ -222,7 +227,7 @@ export default function Show({ service, contract, currency, visits, visitStats, 
                         {visits.length === 0 ? (
                             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-5 lg:px-6">
                                 <p className="max-w-xl text-sm text-muted-foreground">{contract.canSchedule ? t('amcs.schedule.empty') : t('amcs.schedule.closed')}</p>
-                                {contract.canSchedule && (
+                                {contract.canSchedule && can('amc_visits.manage') && (
                                     <Button onClick={() => setIsAddingVisits(true)}>
                                         <CalendarPlusIcon data-icon="inline-start" />
                                         {t('amcs.schedule.add')}
@@ -244,7 +249,8 @@ export default function Show({ service, contract, currency, visits, visitStats, 
                         flush
                         action={
                             contract.paysByCheque &&
-                            cheques.length > 0 && (
+                            cheques.length > 0 &&
+                            can(`amc_${service}.edit`) && (
                                 <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route(amcRoute(service, 'edit'), contract.id)} />}>
                                     <PencilIcon data-icon="inline-start" />
                                     {t('leasing.cheques.actions.record')}
@@ -255,9 +261,11 @@ export default function Show({ service, contract, currency, visits, visitStats, 
                         {!contract.paysByCheque ? null : cheques.length === 0 ? (
                             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-5 lg:px-6">
                                 <p className="max-w-xl text-sm text-muted-foreground">{t('leasing.cheques.schedule.setUpDescription')}</p>
-                                <PostButton href={route('amcs.cheques.store', contract.id)} icon={WalletCardsIcon}>
-                                    {t('leasing.cheques.schedule.setUp')}
-                                </PostButton>
+                                {can('cheques.schedule') && (
+                                    <PostButton href={route('amcs.cheques.store', contract.id)} icon={WalletCardsIcon}>
+                                        {t('leasing.cheques.schedule.setUp')}
+                                    </PostButton>
+                                )}
                             </div>
                         ) : (
                             <ChequeSchedule cheques={cheques} currency={currency} statuses={chequeStatuses} banks={banks} />

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use App\Models\Concerns\RentedUnderContracts;
 use Database\Factories\RoomFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -30,7 +31,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Room extends Model
 {
     /** @use HasFactory<RoomFactory> */
-    use HasFactory, RentedUnderContracts, SoftDeletes;
+    use HasFactory, LimitedToCamps, RentedUnderContracts, SoftDeletes;
 
     public const STATUSES = ['active', 'inactive', 'under_maintenance'];
 

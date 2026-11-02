@@ -8,6 +8,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
@@ -19,6 +20,7 @@ import { Building2Icon, ListFilterIcon, MoreHorizontalIcon, PencilIcon, WrenchIc
  */
 export default function RoomActions({ room, onImage = false }) {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <DropdownMenu>
@@ -42,14 +44,18 @@ export default function RoomActions({ room, onImage = false }) {
                     <DropdownMenuLabel className="truncate">
                         {t('roomList.room', { number: room.number })} · {room.property.name}
                     </DropdownMenuLabel>
-                    <DropdownMenuItem render={<Link href={route('rooms.edit', room.id)} />}>
-                        <PencilIcon />
-                        {t('roomList.actions.edit')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('maintenance.create', { property: room.property.id, room: room.id })} />}>
-                        <WrenchIcon />
-                        {t('maintenance.reportProblem')}
-                    </DropdownMenuItem>
+                    {can('rooms.edit') && (
+                        <DropdownMenuItem render={<Link href={route('rooms.edit', room.id)} />}>
+                            <PencilIcon />
+                            {t('roomList.actions.edit')}
+                        </DropdownMenuItem>
+                    )}
+                    {can('maintenance.create') && (
+                        <DropdownMenuItem render={<Link href={route('maintenance.create', { property: room.property.id, room: room.id })} />}>
+                            <WrenchIcon />
+                            {t('maintenance.reportProblem')}
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -59,10 +65,12 @@ export default function RoomActions({ room, onImage = false }) {
                         <ListFilterIcon />
                         {t('roomList.actions.sameProperty')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('properties.edit', room.property.id)} />}>
-                        <Building2Icon />
-                        {t('roomList.actions.property')}
-                    </DropdownMenuItem>
+                    {can('properties.edit') && (
+                        <DropdownMenuItem render={<Link href={route('properties.edit', room.property.id)} />}>
+                            <Building2Icon />
+                            {t('roomList.actions.property')}
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuGroup>
             </DropdownMenuContent>
         </DropdownMenu>

@@ -3,6 +3,7 @@ import { analyze } from './translations-analyze';
 import { finance } from './translations-finance';
 import { leasing } from './translations-leasing';
 import { maintenance } from './translations-maintenance';
+import { permissions } from './translations-permissions';
 import { reports } from './translations-reports';
 import { staff } from './translations-staff';
 
@@ -14,7 +15,8 @@ import { staff } from './translations-staff';
  * pages' in translations-maintenance.js, the staff pages' in
  * translations-staff.js, the payments section's in translations-finance.js,
  * the reports' in translations-reports.js, the maintenance contracts'
- * in translations-amcs.js and the analyze page's in translations-analyze.js.
+ * in translations-amcs.js, the analyze page's in translations-analyze.js
+ * and the users & permissions pages' in translations-permissions.js.
  */
 export const translations = {
     en: {
@@ -22,6 +24,7 @@ export const translations = {
         finance: finance.en,
         reports: reports.en,
         analyze: analyze.en,
+        permissions: permissions.en,
         maintenance: maintenance.en,
         amcs: amcs.en,
         staff: staff.en,
@@ -34,6 +37,7 @@ export const translations = {
             rooms: { one: '{count} room', other: '{count} rooms' },
             sleeps: 'Sleeps {count}',
             members: { one: '{count} member', other: '{count} members' },
+            password: { generate: 'Generate', show: 'Show password', hide: 'Hide password' },
         },
         nav: {
             overview: 'Overview',
@@ -60,7 +64,10 @@ export const translations = {
             regionalOffices: 'Regional offices',
             mySection: 'My work',
             myPage: 'My attendance & pay',
-            users: 'Users & roles',
+            users: 'All users',
+            usersPermissions: 'Users & permissions',
+            companies: 'Companies',
+            platform: 'Platform',
             contracts: 'Client contracts',
             contractsMenu: 'Contracts',
             amcVisits: 'Visit schedule',
@@ -100,6 +107,7 @@ export const translations = {
             staffMenu: 'Staff',
             allStaff: 'All staff',
             attendance: 'Attendance',
+            myAttendance: 'My attendance',
             payroll: 'Payroll',
             settings: 'Settings',
             help: 'Help & support',
@@ -344,7 +352,7 @@ export const translations = {
             stats: {
                 label: 'Portfolio summary',
                 properties: 'Properties',
-                propertiesDetail: '{active} active · {owned} owned · {leased} leased',
+                propertiesDetail: '{active} active',
                 occupancy: 'Occupancy',
                 occupancyDetail: '{occupied} of {total} rooms in service',
                 rentRoll: 'Monthly rent roll',
@@ -450,6 +458,11 @@ export const translations = {
                 allocation: 'Room allocation',
                 tenantContracts: 'Tenant contracts',
                 payments: 'Payments',
+                short: {
+                    allocation: 'Allocation',
+                    tenantContracts: 'Contracts',
+                    payments: 'Payments',
+                },
                 copy: 'Copy property code',
                 copied: 'Copied {code}',
             },
@@ -1875,6 +1888,7 @@ export const translations = {
         finance: finance.ar,
         reports: reports.ar,
         analyze: analyze.ar,
+        permissions: permissions.ar,
         maintenance: maintenance.ar,
         amcs: amcs.ar,
         staff: staff.ar,
@@ -1894,6 +1908,7 @@ export const translations = {
                 other: 'تتسع لـ {count} شخص',
             },
             members: { zero: 'لا يوجد أعضاء', one: 'عضو واحد', two: 'عضوان', few: '{count} أعضاء', many: '{count} عضوًا', other: '{count} عضو' },
+            password: { generate: 'إنشاء', show: 'إظهار كلمة المرور', hide: 'إخفاء كلمة المرور' },
         },
         nav: {
             overview: 'نظرة عامة',
@@ -1920,7 +1935,10 @@ export const translations = {
             regionalOffices: 'المكاتب الإقليمية',
             mySection: 'عملي',
             myPage: 'حضوري وراتبي',
-            users: 'المستخدمون والأدوار',
+            users: 'جميع المستخدمين',
+            usersPermissions: 'المستخدمون والصلاحيات',
+            companies: 'الشركات',
+            platform: 'المنصة',
             contracts: 'عقود العملاء',
             contractsMenu: 'العقود',
             amcVisits: 'جدول الزيارات',
@@ -1960,6 +1978,7 @@ export const translations = {
             staffMenu: 'الموظفون',
             allStaff: 'كل الموظفين',
             attendance: 'الحضور',
+            myAttendance: 'حضوري',
             payroll: 'الرواتب',
             settings: 'الإعدادات',
             help: 'المساعدة والدعم',
@@ -3139,7 +3158,7 @@ export const translations = {
             stats: {
                 label: 'ملخص المحفظة',
                 properties: 'العقارات',
-                propertiesDetail: 'نشطة: {active} · مملوكة: {owned} · مستأجرة: {leased}',
+                propertiesDetail: 'نشطة: {active}',
                 occupancy: 'نسبة الإشغال',
                 occupancyDetail: '{occupied} من أصل {total} من الغرف العاملة',
                 rentRoll: 'الإيجارات الشهرية',
@@ -3241,9 +3260,15 @@ export const translations = {
                 call: 'الاتصال بـ {name}',
                 view: 'عرض العقار',
                 edit: 'تعديل العقار',
+                addRoom: 'إضافة غرفة',
                 allocation: 'توزيع الغرف',
                 tenantContracts: 'عقود المستأجرين',
                 payments: 'المدفوعات',
+                short: {
+                    allocation: 'التوزيع',
+                    tenantContracts: 'العقود',
+                    payments: 'المدفوعات',
+                },
                 copy: 'نسخ رمز العقار',
                 copied: 'تم نسخ {code}',
             },

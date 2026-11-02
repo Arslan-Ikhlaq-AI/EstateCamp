@@ -66,7 +66,7 @@ class HandleInertiaRequests extends Middleware
         $company = $user?->company_id ? Company::find($user->company_id) : null;
 
         $member = $user?->staffMember;
-        $canUseApp = $user?->can('use-app') ?? false;
+        $permissions = $user?->permissionKeys() ?? [];
 
         return [
             ...parent::share($request),
@@ -75,11 +75,18 @@ class HandleInertiaRequests extends Middleware
                 // A staff member's sign-in shows their job.
                 'role' => $user?->role()->value('name') ?? $member?->role()->value('name'),
                 'company' => $company?->only(['id', 'name', 'short_name', 'logo_url']),
-                // What the navigation offers: the rest of the app, the staff pages, and the user's own page.
-                'access' => $user ? ['app' => $canUseApp, 'staff' => $user->staffAccess(), 'self' => $member !== null] : null,
+                // A staff member's sign-in: whether it reaches beyond the staff pages, its staff access, and their own page.
+                'access' => $user ? ['app' => $user->canUseApp(), 'staff' => $user->staffAccess(), 'self' => $member !== null] : null,
+                // Everything the user may do (see config/permissions.php), which decides what the menus and pages offer.
+                'permissions' => $permissions,
+                // The parent super admin's company switcher: every company, and whether they are in someone else's.
+                'switcher' => $user?->is_admin ? fn () => [
+                    'companies' => Company::query()->orderBy('name')->get()->map(fn (Company $company) => $company->only(['id', 'name', 'short_name', 'logo_url'])),
+                    'isElsewhere' => $request->session()->has(ActAsChosenCompany::SESSION_KEY),
+                ] : null,
             ],
-            // The company's alerts are for those who work in the rest of the app.
-            'notifications' => fn () => $company && $canUseApp ? $this->notifications($company) : [],
+            // Each of the company's alerts goes to those who may open what it is about.
+            'notifications' => fn () => $company ? $this->notifications($company, $permissions) : [],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
             ],
@@ -203,17 +210,19 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
-     * Things in the company that need attention, most urgent first. Each entry
-     * carries data rather than a sentence so the client can word it in the
-     * user's language.
+     * Things in the company that need attention, most urgent first, of the
+     * kinds the user's `$permissions` let them open. Each entry carries data
+     * rather than a sentence so the client can word it in the user's language.
      *
+     * @param  list<string>  $permissions
      * @return array<int, array{id: string, type: string, severity: string, title: string, subject: string|null, service?: string, days: int|null, url: string}>
      */
-    private function notifications(Company $company): array
+    private function notifications(Company $company, array $permissions): array
     {
         $today = today();
+        $may = fn (string $permission) => in_array($permission, $permissions, true);
 
-        $documents = PropertyDocument::query()
+        $documents = ! $may('properties.view') ? collect() : PropertyDocument::query()
             ->whereHas('property', fn (Builder $query) => $query->whereBelongsTo($company))
             ->whereNotNull('expires_on')
             ->whereDate('expires_on', '<=', $today->copy()->addDays(self::DOCUMENT_WARNING_DAYS))
@@ -233,7 +242,7 @@ class HandleInertiaRequests extends Middleware
                 ];
             });
 
-        $leases = $company->properties()
+        $leases = ! $may('properties.view') ? collect() : $company->properties()
             ->where('ownership_type', 'leased')
             ->whereNotNull('lease_end_date')
             ->whereDate('lease_end_date', '<=', $today->copy()->addDays(self::CONTRACT_WARNING_DAYS))
@@ -253,7 +262,7 @@ class HandleInertiaRequests extends Middleware
                 ];
             });
 
-        $rooms = $company->rooms()
+        $rooms = ! $may('rooms.view') ? collect() : $company->rooms()
             ->where('status', 'under_maintenance')
             ->with('property:id,name')
             ->get()
@@ -269,7 +278,7 @@ class HandleInertiaRequests extends Middleware
 
         $license = collect();
 
-        if ($company->expiry_date?->lte($today->copy()->addDays(self::CONTRACT_WARNING_DAYS))) {
+        if ($may('company_profile.view') && $company->expiry_date?->lte($today->copy()->addDays(self::CONTRACT_WARNING_DAYS))) {
             $days = (int) $today->diffInDays($company->expiry_date, false);
 
             $license->push([
@@ -286,10 +295,10 @@ class HandleInertiaRequests extends Middleware
         $severityOrder = ['critical' => 0, 'warning' => 1, 'info' => 2];
 
         return $license
-            ->concat($this->visitNotifications($company))
-            ->concat($this->chequeNotifications($company))
+            ->concat($may('amc_visits.view') ? $this->visitNotifications($company) : [])
+            ->concat($may('cheques.view') ? $this->chequeNotifications($company) : [])
             ->concat($documents)
-            ->concat($this->staffDocumentNotifications($company))
+            ->concat($may('staff.view') ? $this->staffDocumentNotifications($company) : [])
             ->concat($leases)
             ->concat($rooms)
             ->sortBy([

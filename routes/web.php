@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\CompanyController as AdminCompanyController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\AnalyzeController;
 use App\Http\Controllers\ApartmentController;
@@ -8,6 +9,7 @@ use App\Http\Controllers\ChequeStatusController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CompanyOnboardingController;
 use App\Http\Controllers\CompanyProfileController;
+use App\Http\Controllers\CompanyUserController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExtraIncomeController;
@@ -76,192 +78,201 @@ Route::inertia('terms', 'Legal/Terms', ['version' => Company::TERMS_VERSION])->n
 // A company's own sign-in address: the sign-in page, under the company's name.
 Route::get('w/{company:slug}', fn (Company $company) => to_route('login', ['workspace' => $company->slug]))->name('workspace');
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    // Staff whose sign-in covers only the staff pages are sent on from here to their own.
+// Everything a signed-in user opens. Each route is refused to anyone without
+// a permission that opens it, as config/permissions.php lists them.
+Route::middleware(['auth', 'verified', 'permission'])->group(function () {
+    // Anyone who may not see the dashboard is sent on from here to a page they may open.
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     // Each staff member's own attendance and pay.
     Route::get('my', [StaffPortalController::class, 'index'])->name('my.index');
+    Route::get('my/attendance', [StaffPortalController::class, 'attendance'])->name('my.attendance');
     Route::post('my/check-in', [StaffPortalController::class, 'checkIn'])->name('my.check-in');
     Route::post('my/check-out', [StaffPortalController::class, 'checkOut'])->name('my.check-out');
 
-    // Staff: everyone the company employs, their daily attendance and their monthly
-    // salaries. Supervisors see them and mark attendance; staff admins change them.
-    Route::middleware('can:view-staff')->group(function () {
-        Route::resource('staff', StaffMemberController::class)->only(['index', 'show'])->parameters(['staff' => 'staffMember'])->whereNumber('staffMember');
-        Route::get('attendance', [StaffAttendanceController::class, 'index'])->name('attendance.index');
-        Route::post('attendance', [StaffAttendanceController::class, 'store'])->name('attendance.store');
-        Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
-        // Salaries across months, as payments, for the payments section.
-        Route::get('salaries', [SalaryPaymentController::class, 'index'])->name('salaries.index');
-        Route::get('reports/staff', StaffReportController::class)->name('reports.staff');
-    });
+    // Staff: everyone the company employs, their daily attendance and their monthly salaries.
+    Route::resource('staff', StaffMemberController::class)->only(['index', 'show'])->parameters(['staff' => 'staffMember'])->whereNumber('staffMember');
+    Route::get('attendance', [StaffAttendanceController::class, 'index'])->name('attendance.index');
+    Route::post('attendance', [StaffAttendanceController::class, 'store'])->name('attendance.store');
+    Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
+    // Salaries across months, as payments, for the payments section.
+    Route::get('salaries', [SalaryPaymentController::class, 'index'])->name('salaries.index');
+    Route::get('reports/staff', StaffReportController::class)->name('reports.staff');
+    Route::resource('staff', StaffMemberController::class)->only(['create', 'store', 'edit', 'update'])->parameters(['staff' => 'staffMember'])->whereNumber('staffMember');
+    Route::post('payroll', [PayrollController::class, 'store'])->name('payroll.store');
+    Route::post('payroll/pay', [PayrollController::class, 'payAll'])->name('payroll.pay-all');
+    Route::put('payroll/{salaryPayment}', [PayrollController::class, 'update'])->whereNumber('salaryPayment')->name('payroll.update');
+    Route::post('payroll/{salaryPayment}/pay', [PayrollController::class, 'pay'])->whereNumber('salaryPayment')->name('payroll.pay');
+    Route::post('payroll/{salaryPayment}/unpay', [PayrollController::class, 'unpay'])->whereNumber('salaryPayment')->name('payroll.unpay');
+    Route::post('configuration/regional-offices', [RegionalOfficeController::class, 'store'])->name('configuration.regional-offices.store');
+    Route::put('configuration/regional-offices/{regionalOffice}', [RegionalOfficeController::class, 'update'])->name('configuration.regional-offices.update');
+    Route::delete('configuration/regional-offices/{regionalOffice}', [RegionalOfficeController::class, 'destroy'])->name('configuration.regional-offices.destroy');
 
-    Route::middleware('can:manage-staff')->group(function () {
-        Route::resource('staff', StaffMemberController::class)->only(['create', 'store', 'edit', 'update'])->parameters(['staff' => 'staffMember'])->whereNumber('staffMember');
-        Route::post('payroll', [PayrollController::class, 'store'])->name('payroll.store');
-        Route::post('payroll/pay', [PayrollController::class, 'payAll'])->name('payroll.pay-all');
-        Route::put('payroll/{salaryPayment}', [PayrollController::class, 'update'])->whereNumber('salaryPayment')->name('payroll.update');
-        Route::post('payroll/{salaryPayment}/pay', [PayrollController::class, 'pay'])->whereNumber('salaryPayment')->name('payroll.pay');
-        Route::post('payroll/{salaryPayment}/unpay', [PayrollController::class, 'unpay'])->whereNumber('salaryPayment')->name('payroll.unpay');
-        Route::post('configuration/regional-offices', [RegionalOfficeController::class, 'store'])->name('configuration.regional-offices.store');
-        Route::put('configuration/regional-offices/{regionalOffice}', [RegionalOfficeController::class, 'update'])->name('configuration.regional-offices.update');
-        Route::delete('configuration/regional-offices/{regionalOffice}', [RegionalOfficeController::class, 'destroy'])->name('configuration.regional-offices.destroy');
-    });
+    // How each property earns over a period, charted.
+    Route::get('analyze', AnalyzeController::class)->name('analyze');
 
-    // The rest of the app, for everyone but staff whose sign-in covers only the staff pages.
-    Route::middleware('can:use-app')->group(function () {
-        // How each property earns over a period, charted.
-        Route::get('analyze', AnalyzeController::class)->name('analyze');
+    Route::resource('properties', PropertyController::class)->except(['destroy'])->whereNumber('property');
+    Route::get('properties/{property}/allocation', [RoomAllocationController::class, 'show'])->whereNumber('property')->name('properties.allocation');
+    Route::post('properties/{property}/billing', [PropertyBillingController::class, 'store'])->whereNumber('property')->name('properties.billing.store');
+    Route::get('properties/{property}/tenant-contracts', [TenantContractController::class, 'show'])->whereNumber('property')->name('properties.tenant-contracts');
+    Route::get('properties/{property}/payments', [PropertyPaymentController::class, 'show'])->whereNumber('property')->name('properties.payments');
+    Route::post('properties/{property}/cash-handover', [PropertyCashHandoverController::class, 'store'])->whereNumber('property')->name('properties.cash-handover.store');
 
-        Route::resource('properties', PropertyController::class)->except(['destroy'])->whereNumber('property');
-        Route::get('properties/{property}/allocation', [RoomAllocationController::class, 'show'])->whereNumber('property')->name('properties.allocation');
-        Route::post('properties/{property}/billing', [PropertyBillingController::class, 'store'])->whereNumber('property')->name('properties.billing.store');
-        Route::get('properties/{property}/tenant-contracts', [TenantContractController::class, 'show'])->whereNumber('property')->name('properties.tenant-contracts');
-        Route::get('properties/{property}/payments', [PropertyPaymentController::class, 'show'])->whereNumber('property')->name('properties.payments');
-        Route::post('properties/{property}/cash-handover', [PropertyCashHandoverController::class, 'store'])->whereNumber('property')->name('properties.cash-handover.store');
+    // One-off payments for a property, such as a permit fee, added from its payments page.
+    Route::resource('other-payments', OtherPaymentController::class)->only(['create', 'store', 'edit', 'update'])->parameters(['other-payments' => 'otherPayment'])->whereNumber('otherPayment');
+    Route::post('other-payments/{otherPayment}/status', [OtherPaymentController::class, 'changeStatus'])->whereNumber('otherPayment')->name('other-payments.status');
+    Route::get('other-payments/{otherPayment}/receipt', [OtherPaymentController::class, 'receipt'])->whereNumber('otherPayment')->name('other-payments.receipt');
 
-        // One-off payments for a property, such as a permit fee, added from its payments page.
-        Route::resource('other-payments', OtherPaymentController::class)->only(['create', 'store', 'edit', 'update'])->parameters(['other-payments' => 'otherPayment'])->whereNumber('otherPayment');
-        Route::post('other-payments/{otherPayment}/status', [OtherPaymentController::class, 'changeStatus'])->whereNumber('otherPayment')->name('other-payments.status');
-        Route::get('other-payments/{otherPayment}/receipt', [OtherPaymentController::class, 'receipt'])->whereNumber('otherPayment')->name('other-payments.receipt');
+    // Extra income for a property besides rent, such as an internet or washing machine provider's share.
+    Route::resource('extra-incomes', ExtraIncomeController::class)->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['extra-incomes' => 'extraIncome'])->whereNumber('extraIncome');
+    Route::post('extra-incomes/{extraIncome}/status', [ExtraIncomeController::class, 'changeStatus'])->whereNumber('extraIncome')->name('extra-incomes.status');
+    Route::get('extra-incomes/{extraIncome}/invoice', [ExtraIncomeController::class, 'invoice'])->whereNumber('extraIncome')->name('extra-incomes.invoice');
+    Route::resource('rooms', RoomController::class)->except(['show', 'destroy']);
+    Route::resource('apartments', ApartmentController::class)->except(['destroy']);
+    Route::resource('shops', ShopController::class)->except(['destroy']);
 
-        // Extra income for a property besides rent, such as an internet or washing machine provider's share.
-        Route::resource('extra-incomes', ExtraIncomeController::class)->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['extra-incomes' => 'extraIncome'])->whereNumber('extraIncome');
-        Route::post('extra-incomes/{extraIncome}/status', [ExtraIncomeController::class, 'changeStatus'])->whereNumber('extraIncome')->name('extra-incomes.status');
-        Route::get('extra-incomes/{extraIncome}/invoice', [ExtraIncomeController::class, 'invoice'])->whereNumber('extraIncome')->name('extra-incomes.invoice');
-        Route::resource('rooms', RoomController::class)->except(['show', 'destroy']);
-        Route::resource('apartments', ApartmentController::class)->except(['destroy']);
-        Route::resource('shops', ShopController::class)->except(['destroy']);
+    // Leasing: what the company rents from landlords, and what clients rent from it.
+    Route::resource('landlords', LandlordController::class)->except(['destroy']);
+    Route::resource('head-leases', HeadLeaseController::class)->except(['destroy']);
+    Route::post('head-leases/{head_lease}/cheques', [ChequeController::class, 'scheduleLease'])->name('head-leases.cheques.store');
+    // Landlord instalments became issued cheques; the old address opens them in the cheque register.
+    Route::redirect('landlord-payments', '/cheques?direction[]=issued')->name('landlord-payments.index');
+    Route::resource('clients', ClientController::class)->except(['destroy']);
+    // Individuals: the people who rent rooms themselves, as a list of their own beside the companies.
+    Route::get('individuals', [IndividualController::class, 'index'])->name('individuals.index');
+    Route::resource('contracts', ContractController::class)->except(['destroy']);
+    Route::post('contracts/{contract}/activate', [ContractController::class, 'activate'])->name('contracts.activate');
+    Route::post('contracts/{contract}/terminate', [ContractController::class, 'terminate'])->name('contracts.terminate');
+    Route::post('contracts/{contract}/renew', [ContractController::class, 'renew'])->name('contracts.renew');
+    Route::post('contracts/{contract}/invoices', [InvoiceController::class, 'store'])->name('contracts.invoices.store');
+    Route::post('contracts/{contract}/cheques', [ChequeController::class, 'scheduleContract'])->name('contracts.cheques.store');
+    Route::resource('occupants', OccupantController::class)->except(['destroy']);
+    Route::get('check-in', [OccupancyController::class, 'create'])->name('occupancies.create');
+    Route::post('occupancies', [OccupancyController::class, 'store'])->name('occupancies.store');
+    Route::patch('occupancies/{occupancy}/check-out', [OccupancyController::class, 'update'])->name('occupancies.check-out');
+    Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+    Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+    Route::post('invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
+    // Payments: every movement of money in one overview, then each kind on its own page.
+    Route::get('payments/overview', PaymentOverviewController::class)->name('payments.overview');
+    Route::resource('payments', PaymentController::class)->only(['index', 'create', 'store', 'show', 'update'])->whereNumber('payment');
 
-        // Leasing: what the company rents from landlords, and what clients rent from it.
-        Route::resource('landlords', LandlordController::class)->except(['destroy']);
-        Route::resource('head-leases', HeadLeaseController::class)->except(['destroy']);
-        Route::post('head-leases/{head_lease}/cheques', [ChequeController::class, 'scheduleLease'])->name('head-leases.cheques.store');
-        // Landlord instalments became issued cheques; the old address opens them in the cheque register.
-        Route::redirect('landlord-payments', '/cheques?direction[]=issued')->name('landlord-payments.index');
-        Route::resource('clients', ClientController::class)->except(['destroy']);
-        // Individuals: the people who rent rooms themselves, as a list of their own beside the companies.
-        Route::get('individuals', [IndividualController::class, 'index'])->name('individuals.index');
-        Route::resource('contracts', ContractController::class)->except(['destroy']);
-        Route::post('contracts/{contract}/activate', [ContractController::class, 'activate'])->name('contracts.activate');
-        Route::post('contracts/{contract}/terminate', [ContractController::class, 'terminate'])->name('contracts.terminate');
-        Route::post('contracts/{contract}/renew', [ContractController::class, 'renew'])->name('contracts.renew');
-        Route::post('contracts/{contract}/invoices', [InvoiceController::class, 'store'])->name('contracts.invoices.store');
-        Route::post('contracts/{contract}/cheques', [ChequeController::class, 'scheduleContract'])->name('contracts.cheques.store');
-        Route::resource('occupants', OccupantController::class)->except(['destroy']);
-        Route::get('check-in', [OccupancyController::class, 'create'])->name('occupancies.create');
-        Route::post('occupancies', [OccupancyController::class, 'store'])->name('occupancies.store');
-        Route::patch('occupancies/{occupancy}/check-out', [OccupancyController::class, 'update'])->name('occupancies.check-out');
-        Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
-        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
-        Route::post('invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
-        // Payments: every movement of money in one overview, then each kind on its own page.
-        Route::get('payments/overview', PaymentOverviewController::class)->name('payments.overview');
-        Route::resource('payments', PaymentController::class)->only(['index', 'create', 'store', 'show', 'update'])->whereNumber('payment');
+    // Short-term rentals: whole rooms rented without a contract, and their receipts.
+    Route::resource('rentals', RoomRentalController::class)->except(['destroy'])->parameters(['rentals' => 'roomRental'])->whereNumber('roomRental');
+    Route::post('rentals/{roomRental}/end', [RoomRentalController::class, 'end'])->whereNumber('roomRental')->name('rentals.end');
+    Route::post('rentals/{roomRental}/payments', [RentalPaymentController::class, 'store'])->whereNumber('roomRental')->name('rentals.payments.store');
+    Route::get('rental-payments', [RentalPaymentController::class, 'index'])->name('rental-payments.index');
+    Route::get('rental-payments/{rentalPayment}', [RentalPaymentController::class, 'show'])->whereNumber('rentalPayment')->name('rental-payments.show');
+    Route::post('rental-payments/{rentalPayment}/void', [RentalPaymentController::class, 'void'])->whereNumber('rentalPayment')->name('rental-payments.void');
 
-        // Short-term rentals: whole rooms rented without a contract, and their receipts.
-        Route::resource('rentals', RoomRentalController::class)->except(['destroy'])->parameters(['rentals' => 'roomRental'])->whereNumber('roomRental');
-        Route::post('rentals/{roomRental}/end', [RoomRentalController::class, 'end'])->whereNumber('roomRental')->name('rentals.end');
-        Route::post('rentals/{roomRental}/payments', [RentalPaymentController::class, 'store'])->whereNumber('roomRental')->name('rentals.payments.store');
-        Route::get('rental-payments', [RentalPaymentController::class, 'index'])->name('rental-payments.index');
-        Route::get('rental-payments/{rentalPayment}', [RentalPaymentController::class, 'show'])->whereNumber('rentalPayment')->name('rental-payments.show');
-        Route::post('rental-payments/{rentalPayment}/void', [RentalPaymentController::class, 'void'])->whereNumber('rentalPayment')->name('rental-payments.void');
+    // Maintenance bills: paying vendors for finished work, with a voucher for each payment.
+    Route::get('maintenance-bills', [MaintenanceBillController::class, 'index'])->name('maintenance-bills.index');
+    Route::post('maintenance-bills/{maintenanceJob}/pay', [MaintenanceBillController::class, 'pay'])->whereNumber('maintenanceJob')->name('maintenance-bills.pay');
+    Route::post('maintenance-bills/{maintenanceJob}/unpay', [MaintenanceBillController::class, 'unpay'])->whereNumber('maintenanceJob')->name('maintenance-bills.unpay');
+    Route::get('maintenance-bills/{maintenanceJob}/voucher', [MaintenanceBillController::class, 'voucher'])->whereNumber('maintenanceJob')->name('maintenance-bills.voucher');
 
-        // Maintenance bills: paying vendors for finished work, with a voucher for each payment.
-        Route::get('maintenance-bills', [MaintenanceBillController::class, 'index'])->name('maintenance-bills.index');
-        Route::post('maintenance-bills/{maintenanceJob}/pay', [MaintenanceBillController::class, 'pay'])->whereNumber('maintenanceJob')->name('maintenance-bills.pay');
-        Route::post('maintenance-bills/{maintenanceJob}/unpay', [MaintenanceBillController::class, 'unpay'])->whereNumber('maintenanceJob')->name('maintenance-bills.unpay');
-        Route::get('maintenance-bills/{maintenanceJob}/voucher', [MaintenanceBillController::class, 'voucher'])->whereNumber('maintenanceJob')->name('maintenance-bills.voucher');
+    // Cheques: the main record of money moving under contracts and head leases.
+    Route::get('cheques', [ChequeController::class, 'index'])->name('cheques.index');
+    Route::post('cheques/status', [ChequeController::class, 'bulkStatus'])->name('cheques.bulk-status');
+    Route::put('cheques/{cheque}', [ChequeController::class, 'update'])->name('cheques.update');
+    Route::post('cheques/{cheque}/status', [ChequeController::class, 'changeStatus'])->name('cheques.status');
+    Route::post('cheques/{cheque}/settle', [ChequeController::class, 'settle'])->name('cheques.settle');
+    Route::post('cheques/{cheque}/replace', [ChequeController::class, 'replace'])->name('cheques.replace');
+    Route::get('cheques/{cheque}/images/{side}', [ChequeController::class, 'image'])->whereIn('side', ['front', 'back'])->name('cheques.image');
 
-        // Cheques: the main record of money moving under contracts and head leases.
-        Route::get('cheques', [ChequeController::class, 'index'])->name('cheques.index');
-        Route::post('cheques/status', [ChequeController::class, 'bulkStatus'])->name('cheques.bulk-status');
-        Route::put('cheques/{cheque}', [ChequeController::class, 'update'])->name('cheques.update');
-        Route::post('cheques/{cheque}/status', [ChequeController::class, 'changeStatus'])->name('cheques.status');
-        Route::post('cheques/{cheque}/settle', [ChequeController::class, 'settle'])->name('cheques.settle');
-        Route::post('cheques/{cheque}/replace', [ChequeController::class, 'replace'])->name('cheques.replace');
-        Route::get('cheques/{cheque}/images/{side}', [ChequeController::class, 'image'])->whereIn('side', ['front', 'back'])->name('cheques.image');
+    // Reports: the company's figures for a period, to read, print or export.
+    Route::get('reports', ReportController::class)->name('reports.index');
+    Route::get('reports/summary', SummaryReportController::class)->name('reports.summary');
+    Route::get('reports/income', IncomeReportController::class)->name('reports.income');
+    Route::get('reports/receivables', ReceivablesReportController::class)->name('reports.receivables');
+    Route::get('reports/occupancy', OccupancyReportController::class)->name('reports.occupancy');
+    Route::get('reports/maintenance', MaintenanceReportController::class)->name('reports.maintenance');
 
-        // Reports: the company's figures for a period, to read, print or export.
-        Route::get('reports', ReportController::class)->name('reports.index');
-        Route::get('reports/summary', SummaryReportController::class)->name('reports.summary');
-        Route::get('reports/income', IncomeReportController::class)->name('reports.income');
-        Route::get('reports/receivables', ReceivablesReportController::class)->name('reports.receivables');
-        Route::get('reports/occupancy', OccupancyReportController::class)->name('reports.occupancy');
-        Route::get('reports/maintenance', MaintenanceReportController::class)->name('reports.maintenance');
+    // Maintenance: problems at the properties, tracked to completion with what each one cost.
+    Route::resource('maintenance', MaintenanceJobController::class)->except(['destroy'])->parameters(['maintenance' => 'maintenanceJob']);
+    Route::post('maintenance/{maintenanceJob}/status', [MaintenanceJobController::class, 'changeStatus'])->name('maintenance.status');
+    Route::get('maintenance/{maintenanceJob}/invoice', [MaintenanceJobController::class, 'invoice'])->name('maintenance.invoice');
 
-        // Maintenance: problems at the properties, tracked to completion with what each one cost.
-        Route::resource('maintenance', MaintenanceJobController::class)->except(['destroy'])->parameters(['maintenance' => 'maintenanceJob']);
-        Route::post('maintenance/{maintenanceJob}/status', [MaintenanceJobController::class, 'changeStatus'])->name('maintenance.status');
-        Route::get('maintenance/{maintenanceJob}/invoice', [MaintenanceJobController::class, 'invoice'])->name('maintenance.invoice');
+    Route::get('configuration/company', [CompanyProfileController::class, 'edit'])->name('configuration.company');
+    Route::put('configuration/company', [CompanyProfileController::class, 'update'])->name('configuration.company.update');
+    Route::get('configuration/property-types', [PropertyTypeController::class, 'index'])->name('configuration.property-types');
+    Route::post('configuration/property-types', [PropertyTypeController::class, 'store'])->name('configuration.property-types.store');
+    Route::put('configuration/property-types/{propertyType}', [PropertyTypeController::class, 'updateType'])->name('configuration.property-types.update');
+    Route::delete('configuration/property-types/{propertyType}', [PropertyTypeController::class, 'destroyType'])->name('configuration.property-types.destroy');
+    Route::get('configuration/room-types', [RoomTypeController::class, 'index'])->name('configuration.room-types');
+    Route::post('configuration/room-types', [RoomTypeController::class, 'store'])->name('configuration.room-types.store');
+    Route::put('configuration/room-types/{roomType}', [RoomTypeController::class, 'updateType'])->name('configuration.room-types.update');
+    Route::delete('configuration/room-types/{roomType}', [RoomTypeController::class, 'destroyType'])->name('configuration.room-types.destroy');
+    Route::get('configuration/maintenance-statuses', [MaintenanceStatusController::class, 'index'])->name('configuration.maintenance-statuses');
+    Route::post('configuration/maintenance-statuses', [MaintenanceStatusController::class, 'store'])->name('configuration.maintenance-statuses.store');
+    Route::put('configuration/maintenance-statuses/{maintenanceStatus}', [MaintenanceStatusController::class, 'updateType'])->name('configuration.maintenance-statuses.update');
+    Route::delete('configuration/maintenance-statuses/{maintenanceStatus}', [MaintenanceStatusController::class, 'destroyType'])->name('configuration.maintenance-statuses.destroy');
+    Route::get('configuration/maintenance-categories', [MaintenanceCategoryController::class, 'index'])->name('configuration.maintenance-categories');
+    Route::post('configuration/maintenance-categories', [MaintenanceCategoryController::class, 'store'])->name('configuration.maintenance-categories.store');
+    Route::put('configuration/maintenance-categories/{maintenanceCategory}', [MaintenanceCategoryController::class, 'updateType'])->name('configuration.maintenance-categories.update');
+    Route::delete('configuration/maintenance-categories/{maintenanceCategory}', [MaintenanceCategoryController::class, 'destroyType'])->name('configuration.maintenance-categories.destroy');
+    Route::get('configuration/cheque-statuses', [ChequeStatusController::class, 'index'])->name('configuration.cheque-statuses');
+    Route::post('configuration/cheque-statuses', [ChequeStatusController::class, 'store'])->name('configuration.cheque-statuses.store');
+    Route::put('configuration/cheque-statuses/{chequeStatus}', [ChequeStatusController::class, 'updateType'])->name('configuration.cheque-statuses.update');
+    Route::delete('configuration/cheque-statuses/{chequeStatus}', [ChequeStatusController::class, 'destroyType'])->name('configuration.cheque-statuses.destroy');
+    Route::get('configuration/staff-roles', [StaffRoleController::class, 'index'])->name('configuration.staff-roles');
+    Route::post('configuration/staff-roles', [StaffRoleController::class, 'store'])->name('configuration.staff-roles.store');
+    Route::put('configuration/staff-roles/{staffRole}', [StaffRoleController::class, 'updateType'])->name('configuration.staff-roles.update');
+    Route::delete('configuration/staff-roles/{staffRole}', [StaffRoleController::class, 'destroyType'])->name('configuration.staff-roles.destroy');
+    Route::get('configuration/regional-offices', [RegionalOfficeController::class, 'index'])->name('configuration.regional-offices');
 
-        Route::get('configuration/company', [CompanyProfileController::class, 'edit'])->name('configuration.company');
-        Route::put('configuration/company', [CompanyProfileController::class, 'update'])->name('configuration.company.update');
-        Route::get('configuration/property-types', [PropertyTypeController::class, 'index'])->name('configuration.property-types');
-        Route::post('configuration/property-types', [PropertyTypeController::class, 'store'])->name('configuration.property-types.store');
-        Route::put('configuration/property-types/{propertyType}', [PropertyTypeController::class, 'updateType'])->name('configuration.property-types.update');
-        Route::delete('configuration/property-types/{propertyType}', [PropertyTypeController::class, 'destroyType'])->name('configuration.property-types.destroy');
-        Route::get('configuration/room-types', [RoomTypeController::class, 'index'])->name('configuration.room-types');
-        Route::post('configuration/room-types', [RoomTypeController::class, 'store'])->name('configuration.room-types.store');
-        Route::put('configuration/room-types/{roomType}', [RoomTypeController::class, 'updateType'])->name('configuration.room-types.update');
-        Route::delete('configuration/room-types/{roomType}', [RoomTypeController::class, 'destroyType'])->name('configuration.room-types.destroy');
-        Route::get('configuration/maintenance-statuses', [MaintenanceStatusController::class, 'index'])->name('configuration.maintenance-statuses');
-        Route::post('configuration/maintenance-statuses', [MaintenanceStatusController::class, 'store'])->name('configuration.maintenance-statuses.store');
-        Route::put('configuration/maintenance-statuses/{maintenanceStatus}', [MaintenanceStatusController::class, 'updateType'])->name('configuration.maintenance-statuses.update');
-        Route::delete('configuration/maintenance-statuses/{maintenanceStatus}', [MaintenanceStatusController::class, 'destroyType'])->name('configuration.maintenance-statuses.destroy');
-        Route::get('configuration/maintenance-categories', [MaintenanceCategoryController::class, 'index'])->name('configuration.maintenance-categories');
-        Route::post('configuration/maintenance-categories', [MaintenanceCategoryController::class, 'store'])->name('configuration.maintenance-categories.store');
-        Route::put('configuration/maintenance-categories/{maintenanceCategory}', [MaintenanceCategoryController::class, 'updateType'])->name('configuration.maintenance-categories.update');
-        Route::delete('configuration/maintenance-categories/{maintenanceCategory}', [MaintenanceCategoryController::class, 'destroyType'])->name('configuration.maintenance-categories.destroy');
-        Route::get('configuration/cheque-statuses', [ChequeStatusController::class, 'index'])->name('configuration.cheque-statuses');
-        Route::post('configuration/cheque-statuses', [ChequeStatusController::class, 'store'])->name('configuration.cheque-statuses.store');
-        Route::put('configuration/cheque-statuses/{chequeStatus}', [ChequeStatusController::class, 'updateType'])->name('configuration.cheque-statuses.update');
-        Route::delete('configuration/cheque-statuses/{chequeStatus}', [ChequeStatusController::class, 'destroyType'])->name('configuration.cheque-statuses.destroy');
-        Route::get('configuration/staff-roles', [StaffRoleController::class, 'index'])->name('configuration.staff-roles');
-        Route::post('configuration/staff-roles', [StaffRoleController::class, 'store'])->name('configuration.staff-roles.store');
-        Route::put('configuration/staff-roles/{staffRole}', [StaffRoleController::class, 'updateType'])->name('configuration.staff-roles.update');
-        Route::delete('configuration/staff-roles/{staffRole}', [StaffRoleController::class, 'destroyType'])->name('configuration.staff-roles.destroy');
-        Route::get('configuration/regional-offices', [RegionalOfficeController::class, 'index'])->name('configuration.regional-offices');
+    // The company's users: adding them, their roles and what each may do.
+    Route::get('configuration/users', [CompanyUserController::class, 'index'])->name('configuration.users');
+    Route::post('configuration/users', [CompanyUserController::class, 'store'])->name('configuration.users.store');
+    Route::get('configuration/users/{user}', [CompanyUserController::class, 'edit'])->whereNumber('user')->name('configuration.users.edit');
+    Route::put('configuration/users/{user}', [CompanyUserController::class, 'update'])->whereNumber('user')->name('configuration.users.update');
 
-        // Annual maintenance contracts (fire safety, lifts, garbage and the rest):
-        // one list per kind of service, named after its sidebar link
-        // (amcs.fire-safety, amcs.fire-safety.show, ...). The `service`
-        // default tells the controller which kind the page is for.
-        foreach (MaintenanceContract::SERVICES as $service) {
-            $uri = 'amcs/'.str_replace('_', '-', $service);
-            $name = MaintenanceContractController::routeName($service);
+    // Annual maintenance contracts (fire safety, lifts, garbage and the rest):
+    // one list per kind of service, named after its sidebar link
+    // (amcs.fire-safety, amcs.fire-safety.show, ...). The `service`
+    // default tells the controller which kind the page is for.
+    foreach (MaintenanceContract::SERVICES as $service) {
+        $uri = 'amcs/'.str_replace('_', '-', $service);
+        $name = MaintenanceContractController::routeName($service);
 
-            Route::controller(MaintenanceContractController::class)->group(function () use ($service, $uri, $name) {
-                Route::get($uri, 'index')->defaults('service', $service)->name($name);
-                Route::get("{$uri}/create", 'create')->defaults('service', $service)->name("{$name}.create");
-                Route::post($uri, 'store')->defaults('service', $service)->name("{$name}.store");
-                Route::get("{$uri}/{maintenanceContract}", 'show')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.show");
-                Route::get("{$uri}/{maintenanceContract}/edit", 'edit')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.edit");
-                Route::put("{$uri}/{maintenanceContract}", 'update')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.update");
-                Route::get("{$uri}/{maintenanceContract}/document", 'document')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.document");
-            });
-        }
-
-        // The contractors' visit schedules and the cheques paying them, for every kind of contract.
-        Route::controller(MaintenanceVisitController::class)->group(function () {
-            Route::get('amcs/visits', 'index')->name('amc-visits.index');
-            Route::get('amcs/contracts/{maintenanceContract}', 'contract')->name('amcs.contract');
-            Route::post('amcs/contracts/{maintenanceContract}/visits', 'store')->name('amc-visits.store');
-            Route::put('amcs/visits/{maintenanceVisit}', 'reschedule')->name('amc-visits.reschedule');
-            Route::post('amcs/visits/{maintenanceVisit}/status', 'changeStatus')->name('amc-visits.status');
-            Route::delete('amcs/visits/{maintenanceVisit}', 'destroy')->name('amc-visits.destroy');
-            Route::get('amcs/visits/{maintenanceVisit}/report', 'report')->name('amc-visits.report');
+        Route::controller(MaintenanceContractController::class)->group(function () use ($service, $uri, $name) {
+            Route::get($uri, 'index')->defaults('service', $service)->name($name);
+            Route::get("{$uri}/create", 'create')->defaults('service', $service)->name("{$name}.create");
+            Route::post($uri, 'store')->defaults('service', $service)->name("{$name}.store");
+            Route::get("{$uri}/{maintenanceContract}", 'show')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.show");
+            Route::get("{$uri}/{maintenanceContract}/edit", 'edit')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.edit");
+            Route::put("{$uri}/{maintenanceContract}", 'update')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.update");
+            Route::get("{$uri}/{maintenanceContract}/document", 'document')->defaults('service', $service)->whereNumber('maintenanceContract')->name("{$name}.document");
         });
-        Route::post('amcs/contracts/{maintenanceContract}/cheques', [ChequeController::class, 'scheduleMaintenanceContract'])->name('amcs.cheques.store');
+    }
+
+    // The contractors' visit schedules and the cheques paying them, for every kind of contract.
+    Route::controller(MaintenanceVisitController::class)->group(function () {
+        Route::get('amcs/visits', 'index')->name('amc-visits.index');
+        Route::get('amcs/contracts/{maintenanceContract}', 'contract')->name('amcs.contract');
+        Route::post('amcs/contracts/{maintenanceContract}/visits', 'store')->name('amc-visits.store');
+        Route::put('amcs/visits/{maintenanceVisit}', 'reschedule')->name('amc-visits.reschedule');
+        Route::post('amcs/visits/{maintenanceVisit}/status', 'changeStatus')->name('amc-visits.status');
+        Route::delete('amcs/visits/{maintenanceVisit}', 'destroy')->name('amc-visits.destroy');
+        Route::get('amcs/visits/{maintenanceVisit}/report', 'report')->name('amc-visits.report');
     });
+    Route::post('amcs/contracts/{maintenanceContract}/cheques', [ChequeController::class, 'scheduleMaintenanceContract'])->name('amcs.cheques.store');
 
     Route::inertia('help', 'ComingSoon', ['section' => 'help'])->name('help');
 });
 
-Route::get('/admin', AdminDashboardController::class)
-    ->middleware(['auth', 'verified', 'can:view-admin-dashboard'])
-    ->name('admin.dashboard');
+Route::middleware(['auth', 'verified', 'can:view-admin-dashboard'])->group(function () {
+    Route::get('/admin', AdminDashboardController::class)->name('admin.dashboard');
+
+    // Which pages each company may use, whatever its users' own permissions say.
+    Route::get('/admin/companies', [AdminCompanyController::class, 'index'])->name('admin.companies.index');
+    Route::get('/admin/companies/{company}', [AdminCompanyController::class, 'edit'])->whereNumber('company')->name('admin.companies.edit');
+    Route::put('/admin/companies/{company}', [AdminCompanyController::class, 'update'])->whereNumber('company')->name('admin.companies.update');
+
+    // The parent super admin working inside any company, and back in their own.
+    Route::post('/admin/companies/{company}/open', [AdminCompanyController::class, 'open'])->whereNumber('company')->name('admin.companies.open');
+    Route::delete('/admin/companies/open', [AdminCompanyController::class, 'leave'])->name('admin.companies.leave');
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

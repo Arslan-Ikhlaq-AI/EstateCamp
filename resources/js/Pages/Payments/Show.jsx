@@ -5,6 +5,7 @@ import { InvoiceStatusBadge, PaymentStatusBadge } from '@/Components/LeasingBadg
 import PageHeader from '@/Components/PageHeader';
 import PostButton from '@/Components/PostButton';
 import DashboardLayout from '@/Layouts/DashboardLayout';
+import { useCan } from '@/hooks/use-can';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
@@ -12,6 +13,7 @@ import { CircleCheckIcon, UndoIcon } from 'lucide-react';
 
 export default function Show({ payment, allocations, currency }) {
     const { t, formatMoney, formatDate } = useTranslation();
+    const can = useCan();
     const { period } = useLeasingFormat();
     const isCheque = payment.method === 'cheque';
     const unallocated = Math.max(0, Math.round((payment.amount - payment.allocated) * 100) / 100);
@@ -33,7 +35,8 @@ export default function Show({ payment, allocations, currency }) {
                     </span>
                 }
                 actions={
-                    isCheque && (
+                    isCheque &&
+                    can('payments_received.status') && (
                         <>
                             {payment.status !== 'bounced' && (
                                 <PostButton variant="outline" method="patch" href={route('payments.update', payment.id)} data={{ status: 'bounced' }} icon={UndoIcon}>

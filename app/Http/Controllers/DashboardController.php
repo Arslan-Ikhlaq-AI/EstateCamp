@@ -57,13 +57,16 @@ class DashboardController extends Controller
     public const CHEQUE_LOOKAHEAD_DAYS = 14;
 
     /**
-     * Show the operations overview for the signed-in user's company. Staff
-     * whose sign-in covers only the staff pages go to their own page instead.
+     * Show the operations overview for the signed-in user's company, with
+     * the money in it only for those who may see invoices and cheques.
+     * Anyone who may not see the dashboard opens another page instead.
      */
     public function __invoke(Request $request): Response|RedirectResponse
     {
-        if (Gate::denies('use-app')) {
-            return to_route('my.index');
+        $user = $request->user();
+
+        if (Gate::denies('dashboard.view')) {
+            return to_route($user->homeRoute());
         }
 
         // Queried directly so the company is not cached on the shared `auth.user` prop.
@@ -124,12 +127,13 @@ class DashboardController extends Controller
                 ])
                 ->sortByDesc('rooms')
                 ->values(),
-            'finance' => $this->finance($company),
-            'cheques' => $this->cheques($company),
-            'visitAlerts' => MaintenanceVisitController::needingAttention($company)
-                ->map(fn (MaintenanceVisit $visit) => MaintenanceVisitController::details($visit, withContract: true)),
+            'finance' => $user->can('invoices.view') ? $this->finance($company) : null,
+            'cheques' => $user->can('cheques.view') ? $this->cheques($company) : null,
+            'visitAlerts' => $user->can('amc_visits.view')
+                ? MaintenanceVisitController::needingAttention($company)->map(fn (MaintenanceVisit $visit) => MaintenanceVisitController::details($visit, withContract: true))
+                : [],
             'occupancyTrend' => $this->stayingTrend($company, today(), self::TREND_MONTHS),
-            'activity' => $this->recentActivity($company),
+            'activity' => $this->recentActivity($company, $user),
             'rooms' => $rooms->map(fn (Room $room) => $this->roomDetails($room)),
             'documents' => $documents->map(fn (PropertyDocument $document) => $this->documentDetails($document)),
             'team' => $company->users()
@@ -304,12 +308,13 @@ class DashboardController extends Controller
 
     /**
      * The latest things that happened, newest first: payments received,
-     * invoices issued, check-ins, check-outs and contracts signed. Events
-     * dated in the future (such as a booked check-in) wait until their day.
+     * invoices issued, check-ins, check-outs and contracts signed, each kind
+     * only for a user who may see it. Events dated in the future (such as a
+     * booked check-in) wait until their day.
      *
      * @return list<array{id: string, type: string, date: string, subject: string, reference: string|null, room: string|null, amount: float|null, status: string|null, url: string}>
      */
-    private function recentActivity(Company $company): array
+    private function recentActivity(Company $company, User $user): array
     {
         $event = fn (array $values) => [
             'reference' => null,
@@ -389,11 +394,11 @@ class DashboardController extends Controller
                 'url' => route('contracts.show', $contract),
             ]));
 
-        return $payments
-            ->concat($invoices)
-            ->concat($stays('check_in_date', 'check_in'))
-            ->concat($stays('check_out_date', 'check_out'))
-            ->concat($contracts)
+        return collect()
+            ->concat($user->can('payments_received.view') ? $payments : [])
+            ->concat($user->can('invoices.view') ? $invoices : [])
+            ->concat($user->can('occupants.view') ? $stays('check_in_date', 'check_in')->concat($stays('check_out_date', 'check_out')) : [])
+            ->concat($user->can('contracts.view') ? $contracts : [])
             ->sort(fn (array $first, array $second) => strcmp($second['date'], $first['date']))
             ->take(self::ACTIVITY_ITEMS)
             ->values()

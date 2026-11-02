@@ -2,6 +2,7 @@ import DataTable from '@/Components/DataTable';
 import { ContractStatusBadge, LeaseStatusBadge } from '@/Components/LeasingBadges';
 import { Button } from '@/components/ui/button';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Link } from '@inertiajs/react';
 import { FileSignatureIcon } from 'lucide-react';
@@ -99,15 +100,18 @@ export function ClientContracts({ contracts, currency }) {
  */
 export function HeadLeases({ leases, currency, propertyId }) {
     const { t, formatDate, formatCurrency } = useTranslation();
+    const can = useCan();
 
     if (leases.length === 0) {
         return (
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-5 lg:px-6">
                 <p className="text-sm text-muted-foreground">{t('propertyShow.leases.empty')}</p>
-                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('head-leases.create', { property: propertyId })} />}>
-                    <FileSignatureIcon data-icon="inline-start" />
-                    {t('propertyShow.leases.add')}
-                </Button>
+                {can('head_leases.create') && (
+                    <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('head-leases.create', { property: propertyId })} />}>
+                        <FileSignatureIcon data-icon="inline-start" />
+                        {t('propertyShow.leases.add')}
+                    </Button>
+                )}
             </div>
         );
     }

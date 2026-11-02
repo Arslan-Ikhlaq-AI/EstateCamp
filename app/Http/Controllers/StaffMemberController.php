@@ -74,7 +74,7 @@ class StaffMemberController extends Controller
                 ],
             ],
             'summary' => $this->summary($company),
-            'canManage' => Gate::allows('manage-staff'),
+            'canManage' => Gate::allows('staff.edit'),
             'staff' => $this->inStaffOrder($query()->orderByRaw("case status when 'active' then 0 when 'on_leave' then 1 else 2 end"))
                 ->with(self::staffRelations())
                 ->paginate($filters['perPage'])
@@ -167,7 +167,7 @@ class StaffMemberController extends Controller
                     'hasEnded' => $staffMember->signInHasEnded(),
                 ] : null,
             ],
-            'canManage' => Gate::allows('manage-staff'),
+            'canManage' => Gate::allows('staff.edit'),
             'attendance' => [
                 'month' => $monthStart->format('Y-m'),
                 'days' => $monthStart->daysInMonth,

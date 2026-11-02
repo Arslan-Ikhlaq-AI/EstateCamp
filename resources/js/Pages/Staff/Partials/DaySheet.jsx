@@ -8,6 +8,7 @@ import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/comp
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link, router, usePage } from '@inertiajs/react';
@@ -37,9 +38,10 @@ const isSame = (a, b) => a.status === b.status && a.check_in === b.check_in && a
 
 /**
  * One person on the sheet: who they are, their attendance, and the times
- * and a note when they were at work.
+ * and a note when they were at work. Read only for someone who may not
+ * mark attendance.
  */
-function SheetRow({ person, entry, error, statuses, onChange }) {
+function SheetRow({ person, entry, error, statuses, readOnly, onChange }) {
     const { t } = useTranslation();
     const { roleName } = useStaffNames();
     const isAtWork = AT_WORK.includes(entry.status);
@@ -77,6 +79,7 @@ function SheetRow({ person, entry, error, statuses, onChange }) {
                     size="sm"
                     value={entry.status ? [entry.status] : []}
                     onValueChange={([next]) => next !== undefined && chooseStatus(next)}
+                    disabled={readOnly}
                     className="flex-wrap"
                 >
                     {statuses.map((status) => {
@@ -98,7 +101,7 @@ function SheetRow({ person, entry, error, statuses, onChange }) {
                         title={t('staff.attendance.checkIn')}
                         value={entry.check_in}
                         onChange={(event) => onChange({ check_in: event.target.value })}
-                        disabled={!isAtWork}
+                        disabled={readOnly || !isAtWork}
                         className="h-8 w-28 tabular-nums"
                     />
                     <span aria-hidden="true" className="text-muted-foreground">
@@ -110,7 +113,7 @@ function SheetRow({ person, entry, error, statuses, onChange }) {
                         title={t('staff.attendance.checkOut')}
                         value={entry.check_out}
                         onChange={(event) => onChange({ check_out: event.target.value })}
-                        disabled={!isAtWork}
+                        disabled={readOnly || !isAtWork}
                         className="h-8 w-28 tabular-nums"
                     />
                     <Input
@@ -119,6 +122,7 @@ function SheetRow({ person, entry, error, statuses, onChange }) {
                         value={entry.note}
                         onChange={(event) => onChange({ note: event.target.value })}
                         maxLength={255}
+                        disabled={readOnly}
                         dir="auto"
                         className="h-8 w-full sm:w-44"
                     />
@@ -131,10 +135,12 @@ function SheetRow({ person, entry, error, statuses, onChange }) {
 /**
  * The sheet for one day: the day's figures, everyone employed with their
  * attendance, and the bar to save what changed. Only people whose
- * attendance changed are sent.
+ * attendance changed are sent. Someone who may only see attendance gets
+ * the sheet without the means to change it.
  */
 export default function DaySheet({ date, sheet, statuses }) {
     const { t, formatNumber } = useTranslation();
+    const canMark = useCan()('attendance.mark');
     const { errors } = usePage().props;
     const [entries, setEntries] = useState(() => Object.fromEntries(sheet.map((person) => [person.id, entryFrom(person)])));
     const [sentIds, setSentIds] = useState([]);
@@ -233,12 +239,14 @@ export default function DaySheet({ date, sheet, statuses }) {
                 <CardHeader className="border-b py-4">
                     <CardTitle>{t('staff.attendance.sheet')}</CardTitle>
                     <CardDescription>{t('staff.attendance.sheetDescription')}</CardDescription>
-                    <CardAction>
-                        <Button type="button" variant="outline" size="sm" onClick={markRestPresent} disabled={unmarked === 0}>
-                            <CheckCheckIcon data-icon="inline-start" />
-                            {t('staff.attendance.markAll')}
-                        </Button>
-                    </CardAction>
+                    {canMark && (
+                        <CardAction>
+                            <Button type="button" variant="outline" size="sm" onClick={markRestPresent} disabled={unmarked === 0}>
+                                <CheckCheckIcon data-icon="inline-start" />
+                                {t('staff.attendance.markAll')}
+                            </Button>
+                        </CardAction>
+                    )}
                 </CardHeader>
                 <ul className="flex flex-col divide-y">
                     {sheet.map((person) => (
@@ -248,21 +256,24 @@ export default function DaySheet({ date, sheet, statuses }) {
                             entry={entries[person.id]}
                             error={errorFor(person.id)}
                             statuses={statuses}
+                            readOnly={!canMark}
                             onChange={(changes) => update(person.id, changes)}
                         />
                     ))}
                 </ul>
             </Card>
 
-            <FormActions>
-                <span className="me-auto text-sm text-muted-foreground tabular-nums">
-                    {changed.length > 0 ? t('staff.attendance.changes', { count: changed.length }) : t('staff.attendance.noChanges')}
-                </span>
-                <Button type="submit" disabled={processing || changed.length === 0}>
-                    {processing && <Spinner data-icon="inline-start" />}
-                    {t('staff.attendance.save')}
-                </Button>
-            </FormActions>
+            {canMark && (
+                <FormActions>
+                    <span className="me-auto text-sm text-muted-foreground tabular-nums">
+                        {changed.length > 0 ? t('staff.attendance.changes', { count: changed.length }) : t('staff.attendance.noChanges')}
+                    </span>
+                    <Button type="submit" disabled={processing || changed.length === 0}>
+                        {processing && <Spinner data-icon="inline-start" />}
+                        {t('staff.attendance.save')}
+                    </Button>
+                </FormActions>
+            )}
         </form>
     );
 }

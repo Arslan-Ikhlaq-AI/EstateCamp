@@ -8,6 +8,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
@@ -32,8 +33,9 @@ import { useState } from 'react';
  * The "more" menu for one property. `onImage` styles the trigger for use on
  * top of a cover picture.
  */
-export default function PropertyActions({ property, onImage = false }) {
+export default function PropertyActions({ property, onImage = false, size = 'icon-sm' }) {
     const { t } = useTranslation();
+    const can = useCan();
     const [hasCopied, setHasCopied] = useState(false);
 
     const copyCode = async () => {
@@ -51,7 +53,7 @@ export default function PropertyActions({ property, onImage = false }) {
                 render={
                     <Button
                         variant={onImage ? 'secondary' : 'ghost'}
-                        size="icon-sm"
+                        size={size}
                         aria-label={t('properties.actions.menu', { name: property.name })}
                         className={cn(
                             onImage &&
@@ -70,32 +72,42 @@ export default function PropertyActions({ property, onImage = false }) {
                         <EyeIcon />
                         {t('properties.actions.view')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('properties.edit', property.id)} />}>
-                        <PencilIcon />
-                        {t('properties.actions.edit')}
-                    </DropdownMenuItem>
+                    {can('properties.edit') && (
+                        <DropdownMenuItem render={<Link href={route('properties.edit', property.id)} />}>
+                            <PencilIcon />
+                            {t('properties.actions.edit')}
+                        </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem render={<Link href={route('properties.allocation', property.id)} />}>
                         <LayoutPanelLeftIcon />
                         {t('properties.actions.allocation')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('properties.tenant-contracts', property.id)} />}>
-                        <FileSignatureIcon />
-                        {t('properties.actions.tenantContracts')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('properties.payments', property.id)} />}>
-                        <WalletIcon />
-                        {t('properties.actions.payments')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                        render={<Link href={route('rooms.index', { properties: [property.code] })} />}
-                    >
-                        <DoorOpenIcon />
-                        {t('properties.actions.rooms')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('rooms.create', { property: property.id })} />}>
-                        <PlusIcon />
-                        {t('properties.actions.addRoom')}
-                    </DropdownMenuItem>
+                    {can('contracts.view') && (
+                        <DropdownMenuItem render={<Link href={route('properties.tenant-contracts', property.id)} />}>
+                            <FileSignatureIcon />
+                            {t('properties.actions.tenantContracts')}
+                        </DropdownMenuItem>
+                    )}
+                    {can('property_payments.view') && (
+                        <DropdownMenuItem render={<Link href={route('properties.payments', property.id)} />}>
+                            <WalletIcon />
+                            {t('properties.actions.payments')}
+                        </DropdownMenuItem>
+                    )}
+                    {can('rooms.view') && (
+                        <DropdownMenuItem
+                            render={<Link href={route('rooms.index', { properties: [property.code] })} />}
+                        >
+                            <DoorOpenIcon />
+                            {t('properties.actions.rooms')}
+                        </DropdownMenuItem>
+                    )}
+                    {can('rooms.create') && (
+                        <DropdownMenuItem render={<Link href={route('rooms.create', { property: property.id })} />}>
+                            <PlusIcon />
+                            {t('properties.actions.addRoom')}
+                        </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                         render={<Link href={route('properties.show', property.id)} />}
                     >

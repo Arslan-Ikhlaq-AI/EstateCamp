@@ -8,6 +8,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
@@ -19,6 +20,7 @@ import { Building2Icon, EyeIcon, ListFilterIcon, MoreHorizontalIcon, PencilIcon 
  */
 export default function ApartmentActions({ apartment, onImage = false }) {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <DropdownMenu>
@@ -46,10 +48,12 @@ export default function ApartmentActions({ apartment, onImage = false }) {
                         <EyeIcon />
                         {t('apartmentList.actions.view')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('apartments.edit', apartment.id)} />}>
-                        <PencilIcon />
-                        {t('apartmentList.actions.edit')}
-                    </DropdownMenuItem>
+                    {can('apartments.edit') && (
+                        <DropdownMenuItem render={<Link href={route('apartments.edit', apartment.id)} />}>
+                            <PencilIcon />
+                            {t('apartmentList.actions.edit')}
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -59,10 +63,12 @@ export default function ApartmentActions({ apartment, onImage = false }) {
                         <ListFilterIcon />
                         {t('apartmentList.actions.sameProperty')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('properties.edit', apartment.property.id)} />}>
-                        <Building2Icon />
-                        {t('apartmentList.actions.property')}
-                    </DropdownMenuItem>
+                    {can('properties.edit') && (
+                        <DropdownMenuItem render={<Link href={route('properties.edit', apartment.property.id)} />}>
+                            <Building2Icon />
+                            {t('apartmentList.actions.property')}
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuGroup>
             </DropdownMenuContent>
         </DropdownMenu>

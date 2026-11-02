@@ -14,6 +14,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from '@/components/ui/empty';
+import { useCan } from '@/hooks/use-can';
 import { useListQuery } from '@/hooks/use-list-query';
 import { useStoredState } from '@/hooks/use-stored-state';
 import { useTranslation } from '@/hooks/use-translation';
@@ -23,6 +24,7 @@ import { Building2Icon, PlusIcon, SearchXIcon } from 'lucide-react';
 import { FACET_KEYS, useFacetOptions } from './Partials/facets';
 import PortfolioStats from './Partials/PortfolioStats';
 import PropertiesGrid from './Partials/PropertiesGrid';
+import PropertiesList from './Partials/PropertiesList';
 import PropertiesTable, { DEFAULT_HIDDEN_COLUMNS, TABLE_COLUMNS } from './Partials/PropertiesTable';
 import PropertyToolbar, { SEARCH_INPUT_ID } from './Partials/PropertyToolbar';
 
@@ -46,11 +48,9 @@ const FIRST_DIRECTION = { name: 'asc', code: 'asc', lease_end: 'asc' };
 const LAYOUTS = ['list', 'grid'];
 const columnIds = TABLE_COLUMNS.map((column) => column.id);
 
-// Phones start on cards, where a wide table would need sideways scrolling.
-const defaultLayout = () => (window.matchMedia('(max-width: 767px)').matches ? 'grid' : 'list');
-
 function NoProperties() {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <Empty className="py-16">
@@ -62,10 +62,12 @@ function NoProperties() {
                 <EmptyDescription>{t('properties.empty.description')}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-                <Button nativeButton={false} render={<Link href={route('properties.create')} />}>
-                    <PlusIcon data-icon="inline-start" />
-                    {t('properties.add')}
-                </Button>
+                {can('properties.create') && (
+                    <Button nativeButton={false} render={<Link href={route('properties.create')} />}>
+                        <PlusIcon data-icon="inline-start" />
+                        {t('properties.add')}
+                    </Button>
+                )}
             </EmptyContent>
         </Empty>
     );
@@ -103,11 +105,11 @@ function PropertyList({ company, filters, facets, summary, properties }) {
     });
     const facetOptions = useFacetOptions(facets);
 
-    const [layout, setLayout] = useStoredState('estatecamp.properties.layout', defaultLayout, (value) =>
+    const [layout, setLayout] = useStoredState('estatecamp.properties.layout', 'list', (value) =>
         LAYOUTS.includes(value),
     );
     const [hiddenColumns, setHiddenColumns] = useStoredState(
-        'estatecamp.properties.hiddenColumns',
+        'estatecamp.properties.hiddenColumns.v2',
         DEFAULT_HIDDEN_COLUMNS,
         (value) => Array.isArray(value) && value.every((id) => columnIds.includes(id)),
     );
@@ -116,7 +118,6 @@ function PropertyList({ company, filters, facets, summary, properties }) {
         reset();
         document.getElementById(SEARCH_INPUT_ID)?.focus();
     };
-
 
     let content;
 
@@ -128,13 +129,17 @@ function PropertyList({ company, filters, facets, summary, properties }) {
         content = <PropertiesGrid properties={properties.data} currency={company.currency} />;
     } else {
         content = (
-            <PropertiesTable
-                properties={properties.data}
-                currency={company.currency}
-                query={query}
-                onSort={(sort) => sortBy(sort, FIRST_DIRECTION[sort])}
-                hiddenColumns={hiddenColumns}
-            />
+            <>
+                <PropertiesTable
+                    properties={properties.data}
+                    currency={company.currency}
+                    query={query}
+                    onSort={(sort) => sortBy(sort, FIRST_DIRECTION[sort])}
+                    hiddenColumns={hiddenColumns}
+                    className="hidden lg:block"
+                />
+                <PropertiesList properties={properties.data} currency={company.currency} className="lg:hidden" />
+            </>
         );
     }
 
@@ -192,6 +197,7 @@ function PropertyList({ company, filters, facets, summary, properties }) {
 
 export default function Index({ company, filters, facets, summary, properties }) {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <DashboardLayout>
@@ -202,7 +208,8 @@ export default function Index({ company, filters, facets, summary, properties })
                 title={t('properties.title')}
                 description={t('properties.description')}
                 actions={
-                    company !== null && (
+                    company !== null &&
+                    can('properties.create') && (
                         <Button nativeButton={false} render={<Link href={route('properties.create')} />}>
                             <PlusIcon data-icon="inline-start" />
                             {t('properties.add')}

@@ -12,6 +12,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { todayIso } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link, useForm } from '@inertiajs/react';
@@ -541,6 +542,7 @@ function Statement({ account, currency }) {
  */
 function AccountRow({ account, currency, propertyId, through, periodLabel, methods, isOpen, onOpenChange }) {
     const { t, formatDate } = useTranslation();
+    const can = useCan();
     const unitsSummary = useUnitsSummary();
     const style = ACCOUNT_STYLES[account.kind];
     const summary = [
@@ -573,9 +575,11 @@ function AccountRow({ account, currency, propertyId, through, periodLabel, metho
                             <span className="truncate text-xs text-muted-foreground">{summary}</span>
                         </span>
                     </CollapsibleTrigger>
-                    <div className="md:shrink-0">
-                        <CollectForm account={account} currency={currency} propertyId={propertyId} through={through} methods={methods} />
-                    </div>
+                    {can('payments_received.create') && (
+                        <div className="md:shrink-0">
+                            <CollectForm account={account} currency={currency} propertyId={propertyId} through={through} methods={methods} />
+                        </div>
+                    )}
                 </div>
                 <div className="md:ps-20">
                     <BillFigures figures={billFigures(account.statement)} currency={currency} />

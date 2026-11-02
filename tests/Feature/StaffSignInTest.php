@@ -211,6 +211,58 @@ test('shows a staff member their own month of attendance and only their own sala
         ->assertInertia(fn (Assert $page) => $page->where('attendance.month', '2025-01'));
 });
 
+test('lists a staff member\'s days of the month so far with their totals and hours worked', function () {
+    $user = staffSignIn('self', attributes: ['joined_on' => '2026-10-10']);
+    $member = $user->staffMember;
+    $mark = fn (string $date, array $attributes) => StaffAttendance::factory()->for($member)->create(['company_id' => $this->company->id, 'work_date' => $date, ...$attributes]);
+    $mark('2026-10-12', ['status' => 'present', 'check_in' => '08:00', 'check_out' => '16:30']);
+    $mark('2026-10-13', ['status' => 'present', 'check_in' => '22:00', 'check_out' => '06:00']);
+    $mark('2026-10-14', ['status' => 'absent', 'check_in' => null, 'check_out' => null]);
+    $mark('2026-10-15', ['status' => 'leave', 'check_in' => null, 'check_out' => null, 'note' => 'Eid']);
+
+    $this->actingAs($user)
+        ->get(route('my.attendance'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Staff/MyAttendance')
+            ->where('today.canCheckIn', true)
+            ->where('attendance.month', '2026-10')
+            // From the day they joined to today, newest first.
+            ->has('attendance.days', 13)
+            ->where('attendance.days.0.date', '2026-10-22')
+            ->where('attendance.days.0.status', null)
+            ->where('attendance.days.12.date', '2026-10-10')
+            ->where('attendance.days.7', ['date' => '2026-10-15', 'status' => 'leave', 'checkIn' => null, 'checkOut' => null, 'minutes' => null, 'note' => 'Eid'])
+            ->where('attendance.days.9.minutes', 480)
+            ->where('attendance.counts', ['present' => 2, 'half_day' => 0, 'absent' => 1, 'leave' => 1, 'day_off' => 0, 'unmarked' => 9])
+            ->where('attendance.minutes', 990)
+            ->where('attendance.timedDays', 2)
+        );
+
+    $this->actingAs($user)->post(route('my.check-in'))->assertSessionHasNoErrors();
+
+    $this->actingAs($user)
+        ->get(route('my.attendance'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('today.attendance.checkIn', '14:00')
+            ->where('today.canCheckIn', false)
+            ->where('attendance.days.0.status', 'present')
+            ->where('attendance.counts.present', 3)
+        );
+
+    // A month before they joined opens on the month they joined.
+    $this->actingAs($user)
+        ->get(route('my.attendance', ['month' => '2026-09']))
+        ->assertInertia(fn (Assert $page) => $page->where('attendance.month', '2026-10'));
+});
+
+test('the attendance page has nothing to mark for a sign-in that is not a staff member', function () {
+    $this->actingAs($this->admin)
+        ->get(route('my.attendance'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('Staff/MyAttendance')->where('staff', null)->missing('today'));
+});
+
 test('a staff member who has left is signed out', function () {
     $user = staffSignIn('self', attributes: ['status' => 'resigned', 'left_on' => '2026-10-21']);
 

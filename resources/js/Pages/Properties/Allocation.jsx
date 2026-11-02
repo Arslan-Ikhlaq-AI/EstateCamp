@@ -14,6 +14,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { downloadCsv } from '@/lib/csv';
 import { Head, Link, router } from '@inertiajs/react';
@@ -100,6 +101,7 @@ function ExportMenu({ property, rows, summaries, currency, period, periodLabel, 
  */
 export default function Allocation({ property, period, includesToday, rooms, shops, apartments, summaries, accounts, collectionMethods, currency }) {
     const { t, tOr, formatNumber, formatCurrency } = useTranslation();
+    const can = useCan();
     const { range } = usePeriodLabel();
     const periodLabel = range(period);
     const changePeriod = (value) =>
@@ -131,14 +133,18 @@ export default function Allocation({ property, period, includesToday, rooms, sho
                             <EyeIcon data-icon="inline-start" />
                             {t('propertyAllocation.viewProperty')}
                         </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { property: property.id })} />}>
-                            <KeyRoundIcon data-icon="inline-start" />
-                            {t('propertyAllocation.rentShortTerm')}
-                        </Button>
-                        <Button variant="brand" nativeButton={false} render={<Link href={route('contracts.create')} />}>
-                            <FilePlusIcon data-icon="inline-start" />
-                            {t('propertyShow.newContract')}
-                        </Button>
+                        {can('rentals.create') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { property: property.id })} />}>
+                                <KeyRoundIcon data-icon="inline-start" />
+                                {t('propertyAllocation.rentShortTerm')}
+                            </Button>
+                        )}
+                        {can('contracts.create') && (
+                            <Button variant="brand" nativeButton={false} render={<Link href={route('contracts.create')} />}>
+                                <FilePlusIcon data-icon="inline-start" />
+                                {t('propertyShow.newContract')}
+                            </Button>
+                        )}
                     </>
                 }
             />

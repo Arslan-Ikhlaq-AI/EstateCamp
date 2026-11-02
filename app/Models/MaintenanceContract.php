@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasCheques;
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\MaintenanceContractFactory;
@@ -62,7 +63,7 @@ use Illuminate\Support\Str;
 class MaintenanceContract extends Model
 {
     /** @use HasFactory<MaintenanceContractFactory> */
-    use HasCheques, HasDocumentNumber, HasFactory, SoftDeletes;
+    use HasCheques, HasDocumentNumber, HasFactory, LimitedToCamps, SoftDeletes;
 
     public const NUMBER_PREFIX = 'AMC';
 

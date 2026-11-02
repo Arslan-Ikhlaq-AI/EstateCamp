@@ -11,6 +11,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
@@ -59,6 +60,7 @@ function Section({ title, description, children }) {
 
 export default function Show({ apartment, currency }) {
     const { t, formatCurrency, formatNumber, formatDate } = useTranslation();
+    const can = useCan();
     const placement = useApartmentPlacement();
     const layout = useApartmentLayout();
     const title = t('apartmentList.apartment', { number: apartment.number });
@@ -93,10 +95,12 @@ export default function Show({ apartment, currency }) {
                             <ArrowLeftIcon data-icon="inline-start" className="rtl:rotate-180" />
                             {t('apartmentShow.back')}
                         </Button>
-                        <Button nativeButton={false} render={<Link href={route('apartments.edit', apartment.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('apartmentShow.edit')}
-                        </Button>
+                        {can('apartments.edit') && (
+                            <Button nativeButton={false} render={<Link href={route('apartments.edit', apartment.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('apartmentShow.edit')}
+                            </Button>
+                        )}
                     </>
                 }
             />

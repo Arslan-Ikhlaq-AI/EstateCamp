@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -17,6 +18,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['check_in_date', 'check_out_date', 'notes'])]
 class Occupancy extends Model
 {
+    use LimitedToCamps;
+
     /**
      * Get the attributes that should be cast.
      *
@@ -93,5 +96,26 @@ class Occupancy extends Model
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class);
+    }
+
+    /**
+     * Stays in the camps' rooms.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->whereHas('room');
+    }
+
+    /**
+     * In a room at the camps.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return $this->room()->exists();
     }
 }

@@ -6,6 +6,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import { ArrowDownIcon, ArrowUpIcon, BanknoteIcon, Building2Icon, CircleCheckIcon, EyeIcon, FileTextIcon, HourglassIcon, PencilIcon, PlusIcon, SirenIcon, WrenchIcon } from 'lucide-react';
@@ -15,11 +16,12 @@ const PRIORITY_ICONS = { low: ArrowDownIcon, high: ArrowUpIcon, urgent: SirenIco
 
 export default function Index({ company, filters, facets, summary, jobs }) {
     const { t, formatNumber, formatMoney, formatCurrency, formatDate, tOr } = useTranslation();
+    const can = useCan();
     const { categoryName } = useLookupNames();
     const unitLabel = useUnitLabel();
     const title = t('maintenance.title');
 
-    const addButton = (
+    const addButton = can('maintenance.create') && (
         <Button nativeButton={false} render={<Link href={route('maintenance.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('maintenance.add')}
@@ -151,8 +153,8 @@ export default function Index({ company, filters, facets, summary, jobs }) {
                                 <RowActions
                                     label={t('maintenance.actions.menu', { number: job.number })}
                                     items={[
-                                        { label: t('maintenance.actions.view'), href: route('maintenance.show', job.id), icon: EyeIcon },
-                                        { label: t('maintenance.actions.edit'), href: route('maintenance.edit', job.id), icon: PencilIcon },
+                                        { label: t('maintenance.actions.view'), href: route('maintenance.show', job.id), icon: EyeIcon, permission: 'maintenance.view' },
+                                        { label: t('maintenance.actions.edit'), href: route('maintenance.edit', job.id), icon: PencilIcon, permission: 'maintenance.edit' },
                                     ]}
                                 />
                             )}

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { todayIso } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link, useForm } from '@inertiajs/react';
@@ -141,6 +142,7 @@ function PaidBill({ bill, currency }) {
  */
 export default function MaintenanceBillsPanel({ bills, currency, methods, showHandover = false }) {
     const { t, formatDate } = useTranslation();
+    const can = useCan();
     const unitLabel = useUnitLabel();
 
     if (bills.length === 0) {
@@ -197,7 +199,7 @@ export default function MaintenanceBillsPanel({ bills, currency, methods, showHa
                             </div>
                         </div>
                         <div className="md:shrink-0">
-                            {bill.isPaid ? <PaidBill bill={bill} currency={currency} /> : <PayBillForm bill={bill} currency={currency} methods={methods} />}
+                            {bill.isPaid ? <PaidBill bill={bill} currency={currency} /> : can('maintenance_bills.pay') && <PayBillForm bill={bill} currency={currency} methods={methods} />}
                         </div>
                     </li>
                 );

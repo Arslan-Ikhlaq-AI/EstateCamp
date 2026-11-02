@@ -11,6 +11,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
@@ -55,6 +56,7 @@ function Section({ title, description, children }) {
 
 export default function Show({ shop, currency }) {
     const { t, formatCurrency, formatNumber, formatDate } = useTranslation();
+    const can = useCan();
     const placement = useShopPlacement();
     const typeLabel = useShopTypeLabel();
     const title = t('shopList.shop', { number: shop.number });
@@ -88,10 +90,12 @@ export default function Show({ shop, currency }) {
                             <ArrowLeftIcon data-icon="inline-start" className="rtl:rotate-180" />
                             {t('shopShow.back')}
                         </Button>
-                        <Button nativeButton={false} render={<Link href={route('shops.edit', shop.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('shopShow.edit')}
-                        </Button>
+                        {can('shops.edit') && (
+                            <Button nativeButton={false} render={<Link href={route('shops.edit', shop.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('shopShow.edit')}
+                            </Button>
+                        )}
                     </>
                 }
             />

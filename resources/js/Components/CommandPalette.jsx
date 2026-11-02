@@ -83,8 +83,8 @@ function useCommandGroups() {
             { value: t('command.groups.create'), items: creates },
             { value: t('command.groups.preferences'), items: preferences },
         ].filter((group) => group.items.length > 0);
-        // canOpenLink follows auth.access and the admin flag.
-    }, [t, auth.user.is_admin, auth.company, auth.access]);
+        // canOpenLink follows auth.permissions, auth.access and the admin flag.
+    }, [t, auth.user.is_admin, auth.company, auth.access, auth.permissions]);
 }
 
 const matches = (item, query) => query.trim().toLowerCase().split(/\s+/).every((word) => item.search.includes(word));

@@ -10,6 +10,9 @@ const SORT_OPTIONS = ['name', 'occupancy', 'rooms', 'rent_roll', 'lease_end', 'c
 
 /**
  * Search, filters, sorting and layout controls above the property list.
+ * Below `xl` the search shares the first row with the layout switch, and
+ * sorting and the filters scroll sideways in one row below; from `xl` they
+ * all sit in one line, with sorting and layout at the end.
  */
 export default function PropertyToolbar({
     search,
@@ -27,16 +30,42 @@ export default function PropertyToolbar({
     const { t } = useTranslation();
 
     return (
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex flex-1 flex-wrap items-center gap-2">
-                <ListSearch
-                    id={SEARCH_INPUT_ID}
-                    value={search}
-                    onChange={onSearchChange}
-                    placeholder={t('properties.toolbar.search')}
-                    label={t('properties.toolbar.searchLabel')}
-                    isLoading={isLoading}
-                />
+        <div className="flex flex-wrap items-center gap-2">
+            <ListSearch
+                id={SEARCH_INPUT_ID}
+                value={search}
+                onChange={onSearchChange}
+                placeholder={t('properties.toolbar.search')}
+                label={t('properties.toolbar.searchLabel')}
+                isLoading={isLoading}
+                className="min-w-0 flex-1 xl:w-64 xl:flex-none 2xl:w-80"
+            />
+
+            <div className="flex items-center gap-2 xl:order-last">
+                {layout === 'list' && (
+                    <div className="hidden lg:contents">
+                        <ColumnsMenu
+                            columns={TABLE_COLUMNS.filter((column) => column.hideable !== false).map((column) => ({
+                                id: column.id,
+                                label: t(`properties.columns.${column.id}`),
+                            }))}
+                            hiddenColumns={hiddenColumns}
+                            onHiddenColumnsChange={onHiddenColumnsChange}
+                        />
+                    </div>
+                )}
+                <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />
+            </div>
+
+            <div className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] xl:contents [&::-webkit-scrollbar]:hidden">
+                <div className="flex shrink-0 xl:order-1 xl:ms-auto">
+                    <SortMenu
+                        options={SORT_OPTIONS.map((value) => ({ value, label: t(`properties.sort.${value}`) }))}
+                        sort={query.sort}
+                        direction={query.direction}
+                        onSortChange={onSortChange}
+                    />
+                </div>
 
                 {FACET_KEYS.filter((key) => facetOptions[key].length > 0).map((key) => (
                     <FacetFilter
@@ -47,26 +76,6 @@ export default function PropertyToolbar({
                         onChange={(values) => onFilterChange(key, values)}
                     />
                 ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-                <SortMenu
-                    options={SORT_OPTIONS.map((value) => ({ value, label: t(`properties.sort.${value}`) }))}
-                    sort={query.sort}
-                    direction={query.direction}
-                    onSortChange={onSortChange}
-                />
-                {layout === 'list' && (
-                    <ColumnsMenu
-                        columns={TABLE_COLUMNS.filter((column) => column.hideable !== false).map((column) => ({
-                            id: column.id,
-                            label: t(`properties.columns.${column.id}`),
-                        }))}
-                        hiddenColumns={hiddenColumns}
-                        onHiddenColumnsChange={onHiddenColumnsChange}
-                    />
-                )}
-                <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />
             </div>
         </div>
     );

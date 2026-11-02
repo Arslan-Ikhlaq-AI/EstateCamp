@@ -7,6 +7,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
@@ -26,9 +27,10 @@ const TYPE_ICONS = { company: Building2Icon, individual: UserIcon };
 
 export default function Index({ company, filters, facets, summary, landlords }) {
     const { t, formatNumber, formatCurrency, formatDate } = useTranslation();
+    const can = useCan();
     const title = t('leasing.landlords.title');
 
-    const addButton = (
+    const addButton = can('landlords.create') && (
         <Button nativeButton={false} render={<Link href={route('landlords.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('leasing.landlords.add')}
@@ -154,12 +156,13 @@ export default function Index({ company, filters, facets, summary, landlords }) 
                                 <RowActions
                                     label={landlord.name}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('landlords.show', landlord.id), icon: EyeIcon },
-                                        { label: t('leasing.common.edit'), href: route('landlords.edit', landlord.id), icon: PencilIcon },
+                                        { label: t('leasing.common.view'), href: route('landlords.show', landlord.id), icon: EyeIcon, permission: 'landlords.view' },
+                                        { label: t('leasing.common.edit'), href: route('landlords.edit', landlord.id), icon: PencilIcon, permission: 'landlords.edit' },
                                         {
                                             label: t('leasing.landlords.newLease'),
                                             href: route('head-leases.create', { landlord: landlord.id }),
                                             icon: FileSignatureIcon,
+                                            permission: 'head_leases.create',
                                         },
                                     ]}
                                 />

@@ -7,6 +7,9 @@ use App\Models\SalaryPayment;
 use App\Models\StaffAttendance;
 use App\Models\StaffMember;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
+use Carbon\CarbonPeriod;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -14,7 +17,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * A staff member's own page: today's attendance, which they mark by
+ * A staff member's own pages: today's attendance, which they mark by
  * checking in and out, each month of their attendance, and their salaries
  * with whether each has been paid. Times are the company's local time.
  */
@@ -35,19 +38,10 @@ class StaffPortalController extends Controller
         }
 
         $member->load(self::staffRelations());
-        $now = $member->company->localNow();
-        $today = $now->startOfDay();
-        $currentMonth = $today->format('Y-m');
-        $firstMonth = min($member->joined_on->format('Y-m'), $currentMonth);
-        $month = max($firstMonth, min($currentMonth, $this->queryDate($request->query('month'), 'Y-m')?->format('Y-m') ?? $currentMonth));
-        $monthStart = CarbonImmutable::createFromFormat('!Y-m', $month);
-        $todayMark = $member->attendances()->whereDate('work_date', $today->toDateString())->first();
-        $openShift = $member->openShift($today);
-        $marks = $member->attendances()
-            ->whereDate('work_date', '>=', $monthStart->toDateString())
-            ->whereDate('work_date', '<=', $monthStart->endOfMonth()->toDateString())
-            ->orderBy('work_date')
-            ->get();
+        $today = $member->company->localNow()->startOfDay();
+        $months = $this->attendanceMonths($member, $today, $request->query('month'));
+        $monthStart = CarbonImmutable::createFromFormat('!Y-m', $months['month']);
+        $marks = $this->marksIn($member, $monthStart);
 
         return Inertia::render('Staff/Me', [
             'currency' => $member->company->default_currency,
@@ -56,17 +50,9 @@ class StaffPortalController extends Controller
                 'documents' => $member->identityDocuments(),
                 'salary' => StaffMemberController::salaryStructure($member),
             ],
-            'today' => [
-                'date' => $today->toDateString(),
-                'isEmployed' => $member->isEmployedOn($today),
-                'attendance' => $todayMark ? self::markDetails($todayMark) : null,
-                'openShift' => $openShift ? ['date' => $openShift->work_date->toDateString(), 'checkIn' => StaffAttendance::shortTime($openShift->check_in)] : null,
-                'canCheckIn' => $this->canCheckIn($member, $today, $todayMark, $openShift),
-            ],
+            'today' => $this->todayDetails($member, $today),
             'attendance' => [
-                'month' => $month,
-                'firstMonth' => $firstMonth,
-                'currentMonth' => $currentMonth,
+                ...$months,
                 'days' => $monthStart->daysInMonth,
                 'marks' => $marks->map(fn (StaffAttendance $mark) => ['day' => $mark->work_date->day, ...self::markDetails($mark)]),
                 'counts' => collect(StaffAttendance::STATUSES)->mapWithKeys(fn (string $status) => [$status => $marks->where('status', $status)->count()]),
@@ -76,6 +62,59 @@ class StaffPortalController extends Controller
                 ->limit(12)
                 ->get()
                 ->map(fn (SalaryPayment $salary) => PayrollController::salaryDetails($salary)),
+        ]);
+    }
+
+    /**
+     * Show the signed-in staff member's attendance: today's mark (made with
+     * the check-in and check-out buttons), the totals of `month` (YYYY-MM;
+     * this month by default, never before they joined) and each of its days
+     * they were employed so far, newest first.
+     */
+    public function attendance(Request $request): Response
+    {
+        $member = $request->user()->staffMember;
+
+        if (! $member) {
+            return Inertia::render('Staff/MyAttendance', ['staff' => null]);
+        }
+
+        $member->load(self::staffRelations());
+        $today = $member->company->localNow()->startOfDay();
+        $months = $this->attendanceMonths($member, $today, $request->query('month'));
+        $monthStart = CarbonImmutable::createFromFormat('!Y-m', $months['month']);
+        $marks = $this->marksIn($member, $monthStart)->keyBy(fn (StaffAttendance $mark) => $mark->work_date->toDateString());
+        $firstDay = max($monthStart->toDateString(), $member->joined_on->toDateString());
+        $lastDay = min($monthStart->endOfMonth()->toDateString(), $today->toDateString(), $member->left_on?->toDateString() ?? $today->toDateString());
+
+        $days = collect($firstDay <= $lastDay ? CarbonPeriod::create($firstDay, $lastDay)->toArray() : [])
+            ->map(function (CarbonInterface $day) use ($marks) {
+                $mark = $marks->get($day->toDateString());
+
+                return [
+                    'date' => $day->toDateString(),
+                    'status' => $mark?->status,
+                    'checkIn' => StaffAttendance::shortTime($mark?->check_in),
+                    'checkOut' => StaffAttendance::shortTime($mark?->check_out),
+                    'minutes' => $mark?->minutesWorked(),
+                    'note' => $mark?->note,
+                ];
+            })
+            ->reverse()
+            ->values();
+
+        return Inertia::render('Staff/MyAttendance', [
+            'staff' => StaffMemberController::summaryDetails($member),
+            'today' => $this->todayDetails($member, $today),
+            'attendance' => [
+                ...$months,
+                'days' => $days,
+                'counts' => collect(StaffAttendance::STATUSES)
+                    ->mapWithKeys(fn (string $status) => [$status => $days->where('status', $status)->count()])
+                    ->put('unmarked', $days->whereNull('status')->count()),
+                'minutes' => $days->sum('minutes'),
+                'timedDays' => $days->whereNotNull('minutes')->count(),
+            ],
         ]);
     }
 
@@ -123,6 +162,58 @@ class StaffPortalController extends Controller
         $shift->forceFill(['check_out' => $now->format('H:i'), 'recorded_by' => $request->user()->id])->save();
 
         return back()->with('success', "You checked out at {$now->format('H:i')}.");
+    }
+
+    /**
+     * Today on the staff member's own pages: what is marked, any shift still
+     * open, and whether they can check in.
+     *
+     * @return array{date: string, isEmployed: bool, attendance: ?array<string, ?string>, openShift: ?array{date: string, checkIn: ?string}, canCheckIn: bool}
+     */
+    private function todayDetails(StaffMember $member, CarbonImmutable $today): array
+    {
+        $mark = $member->attendances()->whereDate('work_date', $today->toDateString())->first();
+        $openShift = $member->openShift($today);
+
+        return [
+            'date' => $today->toDateString(),
+            'isEmployed' => $member->isEmployedOn($today),
+            'attendance' => $mark ? self::markDetails($mark) : null,
+            'openShift' => $openShift ? ['date' => $openShift->work_date->toDateString(), 'checkIn' => StaffAttendance::shortTime($openShift->check_in)] : null,
+            'canCheckIn' => $this->canCheckIn($member, $today, $mark, $openShift),
+        ];
+    }
+
+    /**
+     * The month of attendance to show from `$requested` (YYYY-MM): this month
+     * when it is missing, and never before the month they joined or after this one.
+     *
+     * @return array{month: string, firstMonth: string, currentMonth: string}
+     */
+    private function attendanceMonths(StaffMember $member, CarbonImmutable $today, mixed $requested): array
+    {
+        $currentMonth = $today->format('Y-m');
+        $firstMonth = min($member->joined_on->format('Y-m'), $currentMonth);
+
+        return [
+            'month' => max($firstMonth, min($currentMonth, $this->queryDate($requested, 'Y-m')?->format('Y-m') ?? $currentMonth)),
+            'firstMonth' => $firstMonth,
+            'currentMonth' => $currentMonth,
+        ];
+    }
+
+    /**
+     * Their attendance marks in the month starting `$monthStart`, by day.
+     *
+     * @return Collection<int, StaffAttendance>
+     */
+    private function marksIn(StaffMember $member, CarbonImmutable $monthStart): Collection
+    {
+        return $member->attendances()
+            ->whereDate('work_date', '>=', $monthStart->toDateString())
+            ->whereDate('work_date', '<=', $monthStart->endOfMonth()->toDateString())
+            ->orderBy('work_date')
+            ->get();
     }
 
     /**

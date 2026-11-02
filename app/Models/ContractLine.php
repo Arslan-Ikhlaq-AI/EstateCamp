@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonInterface;
 use Database\Factories\ContractLineFactory;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -38,6 +39,22 @@ class ContractLine extends Model
      * VAT on a shop's rent: shops are let commercially, homes are exempt.
      */
     public const SHOP_VAT_RATE = 5;
+
+    /**
+     * Refuse an area manager or camp boss a line at a camp not theirs.
+     * Lines are not narrowed when read, so a contract renting at several
+     * camps still shows whole to someone who looks after one of them.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (ContractLine $line): void {
+            $propertyIds = User::signedInCampIds();
+
+            if ($propertyIds !== null && ! in_array((int) $line->property_id, $propertyIds, true)) {
+                throw new AuthorizationException('This belongs to a camp you do not look after.');
+            }
+        });
+    }
 
     /**
      * Get the attributes that should be cast.

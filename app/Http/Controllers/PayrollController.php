@@ -80,7 +80,7 @@ class PayrollController extends Controller
                 ->count(),
             'paymentMethods' => SalaryPayment::PAYMENT_METHODS,
             // Supervisors see the payroll; staff admins prepare and pay it.
-            'canManage' => Gate::allows('manage-staff'),
+            'canManage' => Gate::allows('payroll.manage'),
         ]);
     }
 

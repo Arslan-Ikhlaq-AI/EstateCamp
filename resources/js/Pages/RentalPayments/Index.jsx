@@ -163,8 +163,8 @@ export default function Index({ company, filters, period, facets, summary, payme
                                 <RowActions
                                     label={payment.number}
                                     items={[
-                                        { label: t('finance.receipts.actions.open'), href: route('rental-payments.show', payment.id), icon: PrinterIcon },
-                                        ...(payment.rental ? [{ label: t('finance.receipts.actions.rental'), href: route('rentals.show', payment.rental.id), icon: EyeIcon }] : []),
+                                        { label: t('finance.receipts.actions.open'), href: route('rental-payments.show', payment.id), icon: PrinterIcon, permission: 'rent_collections.view' },
+                                        ...(payment.rental ? [{ label: t('finance.receipts.actions.rental'), href: route('rentals.show', payment.rental.id), icon: EyeIcon, permission: 'rentals.view' }] : []),
                                     ]}
                                 />
                             )}

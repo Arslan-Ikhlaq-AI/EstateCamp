@@ -10,6 +10,7 @@ import {
     Building2Icon,
     CalendarCheck2Icon,
     CalendarCheckIcon,
+    CalendarClockIcon,
     ChartColumnBigIcon,
     ChartNoAxesCombinedIcon,
     ChartPieIcon,
@@ -41,6 +42,7 @@ import {
     ScaleIcon,
     SettingsIcon,
     ShapesIcon,
+    ShieldCheckIcon,
     SlidersHorizontalIcon,
     StampIcon,
     StoreIcon,
@@ -57,15 +59,23 @@ import {
     WavesIcon,
     WrenchIcon,
 } from 'lucide-react';
+import { useCan } from '@/hooks/use-can';
 import { usePage } from '@inertiajs/react';
+
+/**
+ * Every report's permission: the list of reports opens with any of them.
+ */
+const REPORT_PERMISSIONS = ['summary', 'income', 'receivables', 'occupancy', 'maintenance', 'staff'].map((report) => `report_${report}.view`);
 
 /**
  * The app's sections, shared by the sidebar, the command menu and page
  * headers (which show the current page's icon). A link is current on its own
- * route or on any route in `activeFor` (such as its add and edit pages);
- * `adminOnly` links show only to admins, and `ability` says who else may
- * open it (see canOpen). Links sharing a `heading` are grouped under it in
- * the sidebar.
+ * route or on any route in `activeFor` (such as its add and edit pages). It
+ * shows to users with its `permission` (one of them, when a list), the
+ * permission the server asks for on its route (see config/permissions.php);
+ * `adminOnly` links show only to platform admins and `ability` marks the
+ * links that need no permission (see canOpen). Links sharing a `heading` are
+ * grouped under it in the sidebar.
  */
 export const navigation = [
     {
@@ -79,11 +89,13 @@ export const navigation = [
                 title: 'nav.dashboard',
                 icon: LayoutDashboardIcon,
                 routeName: 'dashboard',
+                permission: 'dashboard.view',
             },
             {
                 title: 'nav.analyze',
                 icon: ChartNoAxesCombinedIcon,
                 routeName: 'analyze',
+                permission: 'analyze.view',
             },
         ],
     },
@@ -94,82 +106,85 @@ export const navigation = [
                 title: 'nav.properties',
                 icon: Building2Icon,
                 children: [
-                    { title: 'nav.allProperties', icon: Building2Icon, routeName: 'properties.index', activeFor: ['properties.index', 'properties.show', 'properties.create', 'properties.edit'] },
-                    { title: 'nav.rooms', icon: DoorOpenIcon, routeName: 'rooms.index', activeFor: ['rooms.*'] },
-                    { title: 'nav.shops', icon: StoreIcon, routeName: 'shops.index', activeFor: ['shops.*'] },
-                    { title: 'nav.apartments', icon: HouseIcon, routeName: 'apartments.index', activeFor: ['apartments.*'] },
+                    { title: 'nav.allProperties', icon: Building2Icon, routeName: 'properties.index', activeFor: ['properties.index', 'properties.show', 'properties.create', 'properties.edit'], permission: 'properties.view' },
+                    { title: 'nav.rooms', icon: DoorOpenIcon, routeName: 'rooms.index', activeFor: ['rooms.*'], permission: 'rooms.view' },
+                    { title: 'nav.shops', icon: StoreIcon, routeName: 'shops.index', activeFor: ['shops.*'], permission: 'shops.view' },
+                    { title: 'nav.apartments', icon: HouseIcon, routeName: 'apartments.index', activeFor: ['apartments.*'], permission: 'apartments.view' },
                 ],
             },
             {
                 title: 'nav.tenants',
                 icon: UsersIcon,
                 children: [
-                    { title: 'nav.clients', icon: UsersIcon, routeName: 'clients.index', activeFor: ['clients.*'] },
-                    { title: 'nav.individuals', icon: UserRoundIcon, routeName: 'individuals.index', activeFor: ['individuals.*'] },
-                    { title: 'nav.occupants', icon: IdCardIcon, routeName: 'occupants.index', activeFor: ['occupants.*', 'occupancies.*'] },
-                    { title: 'nav.contracts', icon: FileSignatureIcon, routeName: 'contracts.index', activeFor: ['contracts.*'] },
-                    { title: 'nav.rentals', icon: KeyRoundIcon, routeName: 'rentals.index', activeFor: ['rentals.*'] },
+                    { title: 'nav.clients', icon: UsersIcon, routeName: 'clients.index', activeFor: ['clients.*'], permission: 'clients.view' },
+                    { title: 'nav.individuals', icon: UserRoundIcon, routeName: 'individuals.index', activeFor: ['individuals.*'], permission: 'individuals.view' },
+                    { title: 'nav.occupants', icon: IdCardIcon, routeName: 'occupants.index', activeFor: ['occupants.*', 'occupancies.*'], permission: 'occupants.view' },
+                    { title: 'nav.contracts', icon: FileSignatureIcon, routeName: 'contracts.index', activeFor: ['contracts.*'], permission: 'contracts.view' },
+                    { title: 'nav.rentals', icon: KeyRoundIcon, routeName: 'rentals.index', activeFor: ['rentals.*'], permission: 'rentals.view' },
                 ],
             },
             {
                 title: 'nav.landlordsMenu',
                 icon: LandmarkIcon,
                 children: [
-                    { title: 'nav.allLandlords', icon: LandmarkIcon, routeName: 'landlords.index', activeFor: ['landlords.*'] },
-                    { title: 'nav.headLeases', icon: FileKeyIcon, routeName: 'head-leases.index', activeFor: ['head-leases.*'] },
+                    { title: 'nav.allLandlords', icon: LandmarkIcon, routeName: 'landlords.index', activeFor: ['landlords.*'], permission: 'landlords.view' },
+                    { title: 'nav.headLeases', icon: FileKeyIcon, routeName: 'head-leases.index', activeFor: ['head-leases.*'], permission: 'head_leases.view' },
                 ],
             },
             {
                 title: 'nav.contractsMenu',
                 icon: FileStackIcon,
                 children: [
-                    { title: 'nav.amcVisits', icon: CalendarCheckIcon, routeName: 'amc-visits.index', activeFor: ['amc-visits.*'] },
-                    { title: 'nav.amcFireSafety', icon: FlameIcon, routeName: 'amcs.fire-safety', activeFor: ['amcs.fire-safety', 'amcs.fire-safety.*'] },
-                    { title: 'nav.amcLifts', icon: ArrowUpDownIcon, routeName: 'amcs.lifts', activeFor: ['amcs.lifts', 'amcs.lifts.*'] },
-                    { title: 'nav.amcGarbage', icon: Trash2Icon, routeName: 'amcs.garbage', activeFor: ['amcs.garbage', 'amcs.garbage.*'] },
-                    { title: 'nav.amcGreaseTraps', icon: FilterIcon, routeName: 'amcs.grease-traps', activeFor: ['amcs.grease-traps', 'amcs.grease-traps.*'] },
-                    { title: 'nav.amcDrainage', icon: WavesIcon, routeName: 'amcs.drainage', activeFor: ['amcs.drainage', 'amcs.drainage.*'] },
-                    { title: 'nav.amcPestControl', icon: BugIcon, routeName: 'amcs.pest-control', activeFor: ['amcs.pest-control', 'amcs.pest-control.*'] },
-                    { title: 'nav.amcAirConditioning', icon: AirVentIcon, routeName: 'amcs.air-conditioning', activeFor: ['amcs.air-conditioning', 'amcs.air-conditioning.*'] },
-                    { title: 'nav.amcWaterTanks', icon: DropletsIcon, routeName: 'amcs.water-tanks', activeFor: ['amcs.water-tanks', 'amcs.water-tanks.*'] },
+                    { title: 'nav.amcVisits', icon: CalendarCheckIcon, routeName: 'amc-visits.index', activeFor: ['amc-visits.*'], permission: 'amc_visits.view' },
+                    { title: 'nav.amcFireSafety', icon: FlameIcon, routeName: 'amcs.fire-safety', activeFor: ['amcs.fire-safety', 'amcs.fire-safety.*'], permission: 'amc_fire_safety.view' },
+                    { title: 'nav.amcLifts', icon: ArrowUpDownIcon, routeName: 'amcs.lifts', activeFor: ['amcs.lifts', 'amcs.lifts.*'], permission: 'amc_lifts.view' },
+                    { title: 'nav.amcGarbage', icon: Trash2Icon, routeName: 'amcs.garbage', activeFor: ['amcs.garbage', 'amcs.garbage.*'], permission: 'amc_garbage.view' },
+                    { title: 'nav.amcGreaseTraps', icon: FilterIcon, routeName: 'amcs.grease-traps', activeFor: ['amcs.grease-traps', 'amcs.grease-traps.*'], permission: 'amc_grease_traps.view' },
+                    { title: 'nav.amcDrainage', icon: WavesIcon, routeName: 'amcs.drainage', activeFor: ['amcs.drainage', 'amcs.drainage.*'], permission: 'amc_drainage.view' },
+                    { title: 'nav.amcPestControl', icon: BugIcon, routeName: 'amcs.pest-control', activeFor: ['amcs.pest-control', 'amcs.pest-control.*'], permission: 'amc_pest_control.view' },
+                    { title: 'nav.amcAirConditioning', icon: AirVentIcon, routeName: 'amcs.air-conditioning', activeFor: ['amcs.air-conditioning', 'amcs.air-conditioning.*'], permission: 'amc_air_conditioning.view' },
+                    { title: 'nav.amcWaterTanks', icon: DropletsIcon, routeName: 'amcs.water-tanks', activeFor: ['amcs.water-tanks', 'amcs.water-tanks.*'], permission: 'amc_water_tanks.view' },
                 ],
             },
             {
                 title: 'nav.payments',
                 icon: WalletIcon,
                 children: [
-                    { title: 'nav.paymentsOverview', icon: ChartPieIcon, routeName: 'payments.overview' },
-                    { title: 'nav.invoices', icon: ReceiptTextIcon, routeName: 'invoices.index', activeFor: ['invoices.*'] },
-                    { title: 'nav.paymentsReceived', icon: HandCoinsIcon, routeName: 'payments.index', activeFor: ['payments.index', 'payments.create', 'payments.show'] },
-                    { title: 'nav.rentCollections', icon: ReceiptIcon, routeName: 'rental-payments.index', activeFor: ['rental-payments.*'] },
-                    { title: 'nav.extraIncome', icon: BadgePercentIcon, routeName: 'extra-incomes.index', activeFor: ['extra-incomes.*'] },
-                    { title: 'nav.cheques', icon: WalletCardsIcon, routeName: 'cheques.index', activeFor: ['cheques.*'] },
-                    { title: 'nav.maintenanceBills', icon: StampIcon, routeName: 'maintenance-bills.index', activeFor: ['maintenance-bills.*'] },
-                    { title: 'nav.salaries', icon: CoinsIcon, routeName: 'salaries.index', activeFor: ['salaries.*'], ability: 'viewStaff' },
+                    { title: 'nav.paymentsOverview', icon: ChartPieIcon, routeName: 'payments.overview', permission: 'payments_overview.view' },
+                    { title: 'nav.invoices', icon: ReceiptTextIcon, routeName: 'invoices.index', activeFor: ['invoices.*'], permission: 'invoices.view' },
+                    { title: 'nav.paymentsReceived', icon: HandCoinsIcon, routeName: 'payments.index', activeFor: ['payments.index', 'payments.create', 'payments.show'], permission: 'payments_received.view' },
+                    { title: 'nav.rentCollections', icon: ReceiptIcon, routeName: 'rental-payments.index', activeFor: ['rental-payments.*'], permission: 'rent_collections.view' },
+                    { title: 'nav.extraIncome', icon: BadgePercentIcon, routeName: 'extra-incomes.index', activeFor: ['extra-incomes.*'], permission: 'extra_income.view' },
+                    { title: 'nav.cheques', icon: WalletCardsIcon, routeName: 'cheques.index', activeFor: ['cheques.*'], permission: 'cheques.view' },
+                    { title: 'nav.maintenanceBills', icon: StampIcon, routeName: 'maintenance-bills.index', activeFor: ['maintenance-bills.*'], permission: 'maintenance_bills.view' },
+                    { title: 'nav.salaries', icon: CoinsIcon, routeName: 'salaries.index', activeFor: ['salaries.*'], permission: 'salaries.view' },
                 ],
             },
             {
                 title: 'nav.staffMenu',
                 icon: ContactRoundIcon,
                 children: [
-                    { title: 'nav.allStaff', icon: ContactRoundIcon, routeName: 'staff.index', activeFor: ['staff.*'], ability: 'viewStaff' },
-                    { title: 'nav.attendance', icon: CalendarCheckIcon, routeName: 'attendance.index', activeFor: ['attendance.*'], ability: 'viewStaff' },
-                    { title: 'nav.payroll', icon: BanknoteIcon, routeName: 'payroll.index', activeFor: ['payroll.*'], ability: 'viewStaff' },
+                    { title: 'nav.allStaff', icon: ContactRoundIcon, routeName: 'staff.index', activeFor: ['staff.*'], permission: 'staff.view' },
+                    { title: 'nav.attendance', icon: CalendarCheckIcon, routeName: 'attendance.index', activeFor: ['attendance.*'], permission: 'attendance.view' },
+                    { title: 'nav.myAttendance', icon: CalendarClockIcon, routeName: 'my.attendance', ability: 'self' },
+                    { title: 'nav.payroll', icon: BanknoteIcon, routeName: 'payroll.index', activeFor: ['payroll.*'], permission: 'payroll.view' },
                 ],
             },
             {
                 title: 'nav.configuration',
                 icon: SlidersHorizontalIcon,
                 children: [
-                    { title: 'nav.companyProfile', icon: BriefcaseBusinessIcon, routeName: 'configuration.company' },
-                    { title: 'nav.propertyTypes', icon: TagsIcon, routeName: 'configuration.property-types' },
-                    { title: 'nav.roomTypes', icon: BedDoubleIcon, routeName: 'configuration.room-types' },
-                    { title: 'nav.maintenanceStatuses', icon: ListChecksIcon, routeName: 'configuration.maintenance-statuses' },
-                    { title: 'nav.maintenanceCategories', icon: ShapesIcon, routeName: 'configuration.maintenance-categories' },
-                    { title: 'nav.chequeStatuses', icon: ClipboardCheckIcon, routeName: 'configuration.cheque-statuses' },
-                    { title: 'nav.staffRoles', icon: BadgeCheckIcon, routeName: 'configuration.staff-roles' },
-                    { title: 'nav.regionalOffices', icon: MapPinnedIcon, routeName: 'configuration.regional-offices' },
-                    { title: 'nav.users', icon: UserCogIcon, routeName: 'admin.dashboard', adminOnly: true },
+                    { title: 'nav.companyProfile', icon: BriefcaseBusinessIcon, routeName: 'configuration.company', permission: 'company_profile.view' },
+                    { title: 'nav.propertyTypes', icon: TagsIcon, routeName: 'configuration.property-types', permission: 'property_types.view' },
+                    { title: 'nav.roomTypes', icon: BedDoubleIcon, routeName: 'configuration.room-types', permission: 'room_types.view' },
+                    { title: 'nav.maintenanceStatuses', icon: ListChecksIcon, routeName: 'configuration.maintenance-statuses', permission: 'maintenance_statuses.view' },
+                    { title: 'nav.maintenanceCategories', icon: ShapesIcon, routeName: 'configuration.maintenance-categories', permission: 'maintenance_categories.view' },
+                    { title: 'nav.chequeStatuses', icon: ClipboardCheckIcon, routeName: 'configuration.cheque-statuses', permission: 'cheque_statuses.view' },
+                    { title: 'nav.staffRoles', icon: BadgeCheckIcon, routeName: 'configuration.staff-roles', permission: 'staff_roles.view' },
+                    { title: 'nav.regionalOffices', icon: MapPinnedIcon, routeName: 'configuration.regional-offices', permission: 'regional_offices.view' },
+                    { title: 'nav.usersPermissions', icon: ShieldCheckIcon, routeName: 'configuration.users', activeFor: ['configuration.users', 'configuration.users.*'], permission: 'users.manage' },
+                    { title: 'nav.users', icon: UserCogIcon, routeName: 'admin.dashboard', adminOnly: true, heading: 'nav.platform' },
+                    { title: 'nav.companies', icon: Building2Icon, routeName: 'admin.companies.index', activeFor: ['admin.companies.*'], adminOnly: true, heading: 'nav.platform' },
                 ],
             },
             {
@@ -177,6 +192,7 @@ export const navigation = [
                 icon: WrenchIcon,
                 routeName: 'maintenance.index',
                 activeFor: ['maintenance.*'],
+                permission: 'maintenance.view',
             },
         ],
     },
@@ -187,13 +203,13 @@ export const navigation = [
                 title: 'nav.reports',
                 icon: ChartColumnBigIcon,
                 children: [
-                    { title: 'nav.allReports', icon: LayoutGridIcon, routeName: 'reports.index' },
-                    { title: 'nav.reportSummary', icon: PresentationIcon, routeName: 'reports.summary' },
-                    { title: 'nav.reportIncome', icon: ScaleIcon, routeName: 'reports.income' },
-                    { title: 'nav.reportReceivables', icon: HourglassIcon, routeName: 'reports.receivables' },
-                    { title: 'nav.reportOccupancy', icon: BedDoubleIcon, routeName: 'reports.occupancy' },
-                    { title: 'nav.reportMaintenance', icon: WrenchIcon, routeName: 'reports.maintenance' },
-                    { title: 'nav.reportStaff', icon: UsersRoundIcon, routeName: 'reports.staff', ability: 'viewStaff' },
+                    { title: 'nav.allReports', icon: LayoutGridIcon, routeName: 'reports.index', permission: REPORT_PERMISSIONS },
+                    { title: 'nav.reportSummary', icon: PresentationIcon, routeName: 'reports.summary', permission: 'report_summary.view' },
+                    { title: 'nav.reportIncome', icon: ScaleIcon, routeName: 'reports.income', permission: 'report_income.view' },
+                    { title: 'nav.reportReceivables', icon: HourglassIcon, routeName: 'reports.receivables', permission: 'report_receivables.view' },
+                    { title: 'nav.reportOccupancy', icon: BedDoubleIcon, routeName: 'reports.occupancy', permission: 'report_occupancy.view' },
+                    { title: 'nav.reportMaintenance', icon: WrenchIcon, routeName: 'reports.maintenance', permission: 'report_maintenance.view' },
+                    { title: 'nav.reportStaff', icon: UsersRoundIcon, routeName: 'reports.staff', permission: 'report_staff.view' },
                 ],
             },
         ],
@@ -210,68 +226,65 @@ export const footerNavigation = [
  * command menu. They need a company, like the add buttons on each list.
  */
 export const createActions = [
-    { title: 'properties.add', icon: Building2Icon, routeName: 'properties.create', group: 'nav.properties' },
-    { title: 'roomList.add', icon: DoorOpenIcon, routeName: 'rooms.create', group: 'nav.properties' },
-    { title: 'apartmentList.add', icon: HouseIcon, routeName: 'apartments.create', group: 'nav.properties' },
-    { title: 'shopList.add', icon: StoreIcon, routeName: 'shops.create', group: 'nav.properties' },
-    { title: 'leasing.clients.add', icon: UsersIcon, routeName: 'clients.create', group: 'nav.tenants' },
-    { title: 'leasing.occupants.add', icon: UserPlusIcon, routeName: 'occupants.create', group: 'nav.tenants' },
-    { title: 'leasing.checkIn.button', icon: LogInIcon, routeName: 'occupancies.create', group: 'nav.tenants' },
-    { title: 'leasing.contracts.add', icon: FileSignatureIcon, routeName: 'contracts.create', group: 'nav.tenants' },
-    { title: 'finance.rentals.add', icon: KeyRoundIcon, routeName: 'rentals.create', group: 'nav.tenants' },
-    { title: 'leasing.landlords.add', icon: LandmarkIcon, routeName: 'landlords.create', group: 'nav.landlordsMenu' },
-    { title: 'leasing.headLeases.add', icon: FileKeyIcon, routeName: 'head-leases.create', group: 'nav.landlordsMenu' },
-    { title: 'leasing.payments.add', icon: ReceiptIcon, routeName: 'payments.create', group: 'nav.payments' },
-    { title: 'maintenance.add', icon: WrenchIcon, routeName: 'maintenance.create', group: 'nav.maintenance' },
-    { title: 'amcs.services.fire_safety.add', icon: FlameIcon, routeName: 'amcs.fire-safety.create', group: 'nav.contractsMenu' },
-    { title: 'amcs.services.lifts.add', icon: ArrowUpDownIcon, routeName: 'amcs.lifts.create', group: 'nav.contractsMenu' },
-    { title: 'amcs.services.garbage.add', icon: Trash2Icon, routeName: 'amcs.garbage.create', group: 'nav.contractsMenu' },
-    { title: 'amcs.services.grease_traps.add', icon: FilterIcon, routeName: 'amcs.grease-traps.create', group: 'nav.contractsMenu' },
-    { title: 'amcs.services.drainage.add', icon: WavesIcon, routeName: 'amcs.drainage.create', group: 'nav.contractsMenu' },
-    { title: 'amcs.services.pest_control.add', icon: BugIcon, routeName: 'amcs.pest-control.create', group: 'nav.contractsMenu' },
-    { title: 'amcs.services.air_conditioning.add', icon: AirVentIcon, routeName: 'amcs.air-conditioning.create', group: 'nav.contractsMenu' },
-    { title: 'amcs.services.water_tanks.add', icon: DropletsIcon, routeName: 'amcs.water-tanks.create', group: 'nav.contractsMenu' },
-    { title: 'staff.add', icon: UserRoundPlusIcon, routeName: 'staff.create', group: 'nav.staffMenu', ability: 'manageStaff' },
-    { title: 'staff.actions.attendance', icon: CalendarCheckIcon, routeName: 'attendance.index', group: 'nav.staffMenu', ability: 'viewStaff' },
+    { title: 'properties.add', icon: Building2Icon, routeName: 'properties.create', group: 'nav.properties', permission: 'properties.create' },
+    { title: 'roomList.add', icon: DoorOpenIcon, routeName: 'rooms.create', group: 'nav.properties', permission: 'rooms.create' },
+    { title: 'apartmentList.add', icon: HouseIcon, routeName: 'apartments.create', group: 'nav.properties', permission: 'apartments.create' },
+    { title: 'shopList.add', icon: StoreIcon, routeName: 'shops.create', group: 'nav.properties', permission: 'shops.create' },
+    { title: 'leasing.clients.add', icon: UsersIcon, routeName: 'clients.create', group: 'nav.tenants', permission: 'clients.create' },
+    { title: 'leasing.occupants.add', icon: UserPlusIcon, routeName: 'occupants.create', group: 'nav.tenants', permission: 'occupants.create' },
+    { title: 'leasing.checkIn.button', icon: LogInIcon, routeName: 'occupancies.create', group: 'nav.tenants', permission: 'occupants.check_in' },
+    { title: 'leasing.contracts.add', icon: FileSignatureIcon, routeName: 'contracts.create', group: 'nav.tenants', permission: 'contracts.create' },
+    { title: 'finance.rentals.add', icon: KeyRoundIcon, routeName: 'rentals.create', group: 'nav.tenants', permission: 'rentals.create' },
+    { title: 'leasing.landlords.add', icon: LandmarkIcon, routeName: 'landlords.create', group: 'nav.landlordsMenu', permission: 'landlords.create' },
+    { title: 'leasing.headLeases.add', icon: FileKeyIcon, routeName: 'head-leases.create', group: 'nav.landlordsMenu', permission: 'head_leases.create' },
+    { title: 'leasing.payments.add', icon: ReceiptIcon, routeName: 'payments.create', group: 'nav.payments', permission: 'payments_received.create' },
+    { title: 'maintenance.add', icon: WrenchIcon, routeName: 'maintenance.create', group: 'nav.maintenance', permission: 'maintenance.create' },
+    { title: 'amcs.services.fire_safety.add', icon: FlameIcon, routeName: 'amcs.fire-safety.create', group: 'nav.contractsMenu', permission: 'amc_fire_safety.create' },
+    { title: 'amcs.services.lifts.add', icon: ArrowUpDownIcon, routeName: 'amcs.lifts.create', group: 'nav.contractsMenu', permission: 'amc_lifts.create' },
+    { title: 'amcs.services.garbage.add', icon: Trash2Icon, routeName: 'amcs.garbage.create', group: 'nav.contractsMenu', permission: 'amc_garbage.create' },
+    { title: 'amcs.services.grease_traps.add', icon: FilterIcon, routeName: 'amcs.grease-traps.create', group: 'nav.contractsMenu', permission: 'amc_grease_traps.create' },
+    { title: 'amcs.services.drainage.add', icon: WavesIcon, routeName: 'amcs.drainage.create', group: 'nav.contractsMenu', permission: 'amc_drainage.create' },
+    { title: 'amcs.services.pest_control.add', icon: BugIcon, routeName: 'amcs.pest-control.create', group: 'nav.contractsMenu', permission: 'amc_pest_control.create' },
+    { title: 'amcs.services.air_conditioning.add', icon: AirVentIcon, routeName: 'amcs.air-conditioning.create', group: 'nav.contractsMenu', permission: 'amc_air_conditioning.create' },
+    { title: 'amcs.services.water_tanks.add', icon: DropletsIcon, routeName: 'amcs.water-tanks.create', group: 'nav.contractsMenu', permission: 'amc_water_tanks.create' },
+    { title: 'staff.add', icon: UserRoundPlusIcon, routeName: 'staff.create', group: 'nav.staffMenu', permission: 'staff.create' },
+    { title: 'staff.actions.attendance', icon: CalendarCheckIcon, routeName: 'attendance.index', group: 'nav.staffMenu', permission: 'attendance.view' },
 ];
 
 /**
- * Whether the user may open `link`, from what their sign-in allows
- * (`auth.access`). Its `ability` is `app` (the default: the rest of the
- * app), `viewStaff` (supervisors and staff admins), `manageStaff` (staff
- * admins), `self` (staff, for their own page) or `any`; `adminOnly` links
- * need an admin too.
+ * Whether the user may open `link`: platform admins its `adminOnly` links,
+ * anyone its `any` links, staff members their own (`self`) pages, and
+ * otherwise whoever has its `permission` (any of them, when a list). A link
+ * with none of these is offered to no one.
  *
- * @param {{ ability?: string, adminOnly?: boolean }} link
- * @param {{ access: { app: boolean, staff: string, self: boolean } | null, isAdmin: boolean }} user
+ * @param {{ permission?: string | string[], ability?: string, adminOnly?: boolean }} link
+ * @param {{ can: (...permissions: string[]) => boolean, access: { self: boolean } | null, isAdmin: boolean }} user
  */
-export function canOpen(link, { access, isAdmin }) {
-    if (link.adminOnly && !isAdmin) {
-        return false;
+export function canOpen(link, { can, access, isAdmin }) {
+    if (link.adminOnly) {
+        return isAdmin;
     }
 
-    switch (link.ability ?? 'app') {
-        case 'any':
-            return true;
-        case 'self':
-            return Boolean(access?.self);
-        case 'viewStaff':
-            return access?.staff === 'supervisor' || access?.staff === 'admin';
-        case 'manageStaff':
-            return access?.staff === 'admin';
-        default:
-            return Boolean(access?.app);
+    if (link.ability === 'any') {
+        return true;
     }
+
+    if (link.ability === 'self') {
+        return Boolean(access?.self);
+    }
+
+    return link.permission !== undefined && can(...[link.permission].flat());
 }
 
 /**
  * canOpen() for the signed-in user.
  *
- * @return {(link: { ability?: string, adminOnly?: boolean }) => boolean}
+ * @return {(link: { permission?: string | string[], ability?: string, adminOnly?: boolean }) => boolean}
  */
 export function useCanOpen() {
     const { auth } = usePage().props;
-    const user = { access: auth.access, isAdmin: Boolean(auth.user?.is_admin) };
+    const can = useCan();
+    const user = { can, access: auth.access, isAdmin: Boolean(auth.user?.is_admin) };
 
     return (link) => canOpen(link, user);
 }

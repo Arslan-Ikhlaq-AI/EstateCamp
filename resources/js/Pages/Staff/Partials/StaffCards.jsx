@@ -1,9 +1,30 @@
 import DataTable from '@/Components/DataTable';
 import { DetailList, SectionCard } from '@/Components/DetailCards';
 import { DocumentStatusBadge, SalaryStatusBadge, useAbsences, useCalendarFormat } from '@/Components/StaffBadges';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { useTranslation } from '@/hooks/use-translation';
 import { Link } from '@inertiajs/react';
-import { BanknoteIcon, IdCardIcon } from 'lucide-react';
+import { BanknoteIcon, IdCardIcon, UserRoundXIcon } from 'lucide-react';
+
+/**
+ * In place of a staff member's own page, for a sign-in that is not one of
+ * the company's staff records.
+ */
+export function NoStaffRecord() {
+    const { t } = useTranslation();
+
+    return (
+        <Empty className="border bg-card py-16 shadow-(--card-shadow)">
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <UserRoundXIcon />
+                </EmptyMedia>
+                <EmptyTitle>{t('staff.me.noRecord.title')}</EmptyTitle>
+                <EmptyDescription>{t('staff.me.noRecord.description')}</EmptyDescription>
+            </EmptyHeader>
+        </Empty>
+    );
+}
 
 /**
  * The monthly salary, its parts and how it is paid.

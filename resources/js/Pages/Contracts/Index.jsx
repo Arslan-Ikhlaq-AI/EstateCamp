@@ -7,6 +7,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
@@ -32,10 +33,11 @@ const TYPE_ICONS = { company: Building2Icon, individual: UserIcon };
 
 export default function Index({ company, filters, facets, summary, contracts }) {
     const { t, formatNumber, formatCurrency, formatMoney } = useTranslation();
+    const can = useCan();
     const { period, unitsSummary } = useLeasingFormat();
     const title = t('leasing.contracts.title');
 
-    const addButton = (
+    const addButton = can('contracts.create') && (
         <Button nativeButton={false} render={<Link href={route('contracts.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('leasing.contracts.add')}
@@ -173,11 +175,11 @@ export default function Index({ company, filters, facets, summary, contracts }) 
                                 <RowActions
                                     label={contract.number}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('contracts.show', contract.id), icon: EyeIcon },
+                                        { label: t('leasing.common.view'), href: route('contracts.show', contract.id), icon: EyeIcon, permission: 'contracts.view' },
                                         ...(['draft', 'active'].includes(contract.status)
-                                            ? [{ label: t('leasing.common.edit'), href: route('contracts.edit', contract.id), icon: PencilIcon }]
+                                            ? [{ label: t('leasing.common.edit'), href: route('contracts.edit', contract.id), icon: PencilIcon, permission: 'contracts.edit' }]
                                             : []),
-                                        { label: t('leasing.contracts.viewClient'), href: route('clients.show', contract.client.id), icon: UserIcon },
+                                        { label: t('leasing.contracts.viewClient'), href: route('clients.show', contract.client.id), icon: UserIcon, permission: 'clients.view' },
                                     ]}
                                 />
                             )}

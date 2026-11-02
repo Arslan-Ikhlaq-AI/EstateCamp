@@ -6,6 +6,7 @@ import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
@@ -37,6 +38,7 @@ import { LeaseNote, OwnershipBadge, StatusBadge } from './Partials/PropertyBadge
  */
 export default function Show({ property, landlord, leases, contracts, clients, documents, currency }) {
     const { t, tOr, formatNumber, formatPercent, formatCurrency, formatDate } = useTranslation();
+    const can = useCan();
     const occupancy = property.roomOccupancy;
     const type = property.type ? tOr(`propertyTypes.${property.typeSlug}`, property.type) : null;
     const place = [property.area, property.city].filter(Boolean).join(', ');
@@ -55,30 +57,40 @@ export default function Show({ property, landlord, leases, contracts, clients, d
                 description={[property.code, type, place].filter(Boolean).join(' · ')}
                 actions={
                     <>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('properties.edit', property.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('propertyShow.edit')}
-                        </Button>
+                        {can('properties.edit') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('properties.edit', property.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('propertyShow.edit')}
+                            </Button>
+                        )}
                         <Button variant="outline" nativeButton={false} render={<Link href={route('properties.allocation', property.id)} />}>
                             <LayoutPanelLeftIcon data-icon="inline-start" />
                             {t('properties.actions.allocation')}
                         </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('properties.tenant-contracts', property.id)} />}>
-                            <FileSignatureIcon data-icon="inline-start" />
-                            {t('properties.actions.tenantContracts')}
-                        </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('properties.payments', property.id)} />}>
-                            <WalletIcon data-icon="inline-start" />
-                            {t('properties.actions.payments')}
-                        </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('maintenance.create', { property: property.id })} />}>
-                            <WrenchIcon data-icon="inline-start" />
-                            {t('maintenance.reportProblem')}
-                        </Button>
-                        <Button variant="brand" nativeButton={false} render={<Link href={route('contracts.create')} />}>
-                            <FilePlusIcon data-icon="inline-start" />
-                            {t('propertyShow.newContract')}
-                        </Button>
+                        {can('contracts.view') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('properties.tenant-contracts', property.id)} />}>
+                                <FileSignatureIcon data-icon="inline-start" />
+                                {t('properties.actions.tenantContracts')}
+                            </Button>
+                        )}
+                        {can('property_payments.view') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('properties.payments', property.id)} />}>
+                                <WalletIcon data-icon="inline-start" />
+                                {t('properties.actions.payments')}
+                            </Button>
+                        )}
+                        {can('maintenance.create') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('maintenance.create', { property: property.id })} />}>
+                                <WrenchIcon data-icon="inline-start" />
+                                {t('maintenance.reportProblem')}
+                            </Button>
+                        )}
+                        {can('contracts.create') && (
+                            <Button variant="brand" nativeButton={false} render={<Link href={route('contracts.create')} />}>
+                                <FilePlusIcon data-icon="inline-start" />
+                                {t('propertyShow.newContract')}
+                            </Button>
+                        )}
                     </>
                 }
             />
@@ -132,9 +144,11 @@ export default function Show({ property, landlord, leases, contracts, clients, d
                         title={t('propertyShow.documents.title')}
                         description={t('propertyShow.documents.description')}
                         action={
-                            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`${route('properties.edit', property.id)}#step-documents`} />}>
-                                {t('propertyShow.documents.manage')}
-                            </Button>
+                            can('properties.edit') && (
+                                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`${route('properties.edit', property.id)}#step-documents`} />}>
+                                    {t('propertyShow.documents.manage')}
+                                </Button>
+                            )
                         }
                     >
                         {documents.length > 0 ? (

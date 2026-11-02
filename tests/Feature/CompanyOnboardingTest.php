@@ -44,9 +44,9 @@ function onboardingInput(array $overrides = []): array
         'admin_password' => 'Layla-Passw0rd',
         'admin_password_confirmation' => 'Layla-Passw0rd',
         'team' => [
-            ['name' => 'Ravi Menon', 'email' => 'ravi@atlasliving.test', 'role' => UserRole::MANAGER, 'password' => 'Ravi-Passw0rd'],
+            ['name' => 'Ravi Menon', 'email' => 'ravi@atlasliving.test', 'role' => UserRole::OFFICE_ADMIN, 'password' => 'Ravi-Passw0rd'],
             // Left without a password, so one is generated.
-            ['name' => 'Aisha Karim', 'email' => 'Aisha@AtlasLiving.test', 'role' => UserRole::ACCOUNTANT, 'password' => ''],
+            ['name' => 'Aisha Karim', 'email' => 'Aisha@AtlasLiving.test', 'role' => UserRole::AREA_MANAGER, 'password' => ''],
         ],
         'terms' => true,
         'terms_version' => Company::TERMS_VERSION,
@@ -61,7 +61,7 @@ function onboardingInput(array $overrides = []): array
  */
 function teammate(array $overrides = []): array
 {
-    return ['name' => 'Ravi Menon', 'email' => 'ravi@atlasliving.test', 'role' => UserRole::MANAGER, ...$overrides];
+    return ['name' => 'Ravi Menon', 'email' => 'ravi@atlasliving.test', 'role' => UserRole::OFFICE_ADMIN, ...$overrides];
 }
 
 test('shows the sign-up steps with the roles and kinds of business on offer', function () {
@@ -144,8 +144,8 @@ test('sets up the company with its logo, super admin and teammates, and emails e
     // Nobody signing up becomes a platform admin, which would open every company's data.
     expect($users->map(fn (User $user) => [$user->email, $user->role->slug, $user->is_admin])->all())->toBe([
         ['layla@atlasliving.test', UserRole::SUPER_ADMIN, false],
-        ['ravi@atlasliving.test', UserRole::MANAGER, false],
-        ['aisha@atlasliving.test', UserRole::ACCOUNTANT, false],
+        ['ravi@atlasliving.test', UserRole::OFFICE_ADMIN, false],
+        ['aisha@atlasliving.test', UserRole::AREA_MANAGER, false],
     ]);
 
     Mail::assertQueuedCount(4);
@@ -250,7 +250,7 @@ test('emails a user their workspace, role and password, encrypted while it waits
         'terms_version' => Company::TERMS_VERSION,
         'terms_accepted_at' => now(),
     ]);
-    $user = User::factory()->create(['company_id' => $company->id, 'user_role_id' => UserRole::builtIn(UserRole::MANAGER)->id]);
+    $user = User::factory()->create(['company_id' => $company->id, 'user_role_id' => UserRole::builtIn(UserRole::OFFICE_ADMIN)->id]);
 
     $mail = new AccountCredentials($user, 'Tmp9xYz42QwErt', isGenerated: true);
 
@@ -259,7 +259,7 @@ test('emails a user their workspace, role and password, encrypted while it waits
         ->assertSeeInHtml('Temporary password')
         ->assertSeeInHtml(url('/storage/companies/1/atlas-logo.png'))
         ->assertSeeInHtml($company->workspaceUrl())
-        ->assertSeeInHtml('Manager');
+        ->assertSeeInHtml('Office Admin');
 
     expect($mail)->toBeInstanceOf(ShouldBeEncrypted::class);
 
@@ -271,6 +271,6 @@ test('emails a user their workspace, role and password, encrypted while it waits
     (new WorkspaceReady($company))
         ->assertSeeInHtml('Version '.Company::TERMS_VERSION)
         ->assertSeeInHtml($user->name)
-        ->assertSeeInHtml('Manager')
+        ->assertSeeInHtml('Office Admin')
         ->assertSeeInText($company->workspaceUrl());
 });

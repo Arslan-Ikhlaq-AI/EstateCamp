@@ -7,6 +7,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
@@ -30,9 +31,10 @@ const STATUS_ICONS = { active: CircleCheckIcon, inactive: CirclePauseIcon };
 
 export default function Index({ company, filters, facets, summary, clients }) {
     const { t, formatNumber, formatCurrency, formatMoney } = useTranslation();
+    const can = useCan();
     const title = t('leasing.clients.title');
 
-    const addButton = (
+    const addButton = can('clients.create') && (
         <Button nativeButton={false} render={<Link href={route('clients.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('leasing.clients.add')}
@@ -153,10 +155,10 @@ export default function Index({ company, filters, facets, summary, clients }) {
                                 <RowActions
                                     label={client.name}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('clients.show', client.id), icon: EyeIcon },
-                                        { label: t('leasing.common.edit'), href: route('clients.edit', client.id), icon: PencilIcon },
-                                        { label: t('leasing.contracts.add'), href: route('contracts.create', { client: client.id }), icon: FileSignatureIcon },
-                                        { label: t('leasing.payments.add'), href: route('payments.create', { client: client.id }), icon: ReceiptIcon },
+                                        { label: t('leasing.common.view'), href: route('clients.show', client.id), icon: EyeIcon, permission: 'clients.view' },
+                                        { label: t('leasing.common.edit'), href: route('clients.edit', client.id), icon: PencilIcon, permission: 'clients.edit' },
+                                        { label: t('leasing.contracts.add'), href: route('contracts.create', { client: client.id }), icon: FileSignatureIcon, permission: 'contracts.create' },
+                                        { label: t('leasing.payments.add'), href: route('payments.create', { client: client.id }), icon: ReceiptIcon, permission: 'payments_received.create' },
                                     ]}
                                 />
                             )}

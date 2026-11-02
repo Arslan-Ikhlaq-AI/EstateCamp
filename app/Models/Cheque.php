@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\ChequeFactory;
@@ -53,7 +54,7 @@ use Illuminate\Validation\ValidationException;
 class Cheque extends Model
 {
     /** @use HasFactory<ChequeFactory> */
-    use HasFactory;
+    use HasFactory, LimitedToCamps;
 
     public const DIRECTIONS = ['received', 'issued'];
 
@@ -738,5 +739,26 @@ class Cheque extends Model
     public function recordedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    /**
+     * Cheques under the camps' contracts, head leases, maintenance contracts and rentals.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->whereHasMorph('chequeable', [Contract::class, HeadLease::class, MaintenanceContract::class, RoomRental::class]);
+    }
+
+    /**
+     * A cheque is reached through the agreement it is under.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return true;
     }
 }

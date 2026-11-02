@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import {
@@ -55,6 +56,7 @@ const contractWords = (contract) => [
  */
 export default function TenantContracts({ property, clients, summary, chequeStatuses, banks, currency }) {
     const { t, tOr, formatNumber, formatCurrency } = useTranslation();
+    const can = useCan();
     const holdingSummary = useHoldingSummary();
     const [status, setStatus] = useState('all');
     const [search, setSearch] = useState('');
@@ -104,10 +106,12 @@ export default function TenantContracts({ property, clients, summary, chequeStat
                             <LayoutPanelLeftIcon data-icon="inline-start" />
                             {t('properties.actions.allocation')}
                         </Button>
-                        <Button variant="brand" nativeButton={false} render={<Link href={route('contracts.create')} />}>
-                            <FilePlusIcon data-icon="inline-start" />
-                            {t('propertyShow.newContract')}
-                        </Button>
+                        {can('contracts.create') && (
+                            <Button variant="brand" nativeButton={false} render={<Link href={route('contracts.create')} />}>
+                                <FilePlusIcon data-icon="inline-start" />
+                                {t('propertyShow.newContract')}
+                            </Button>
+                        )}
                     </>
                 }
             />
@@ -172,10 +176,12 @@ export default function TenantContracts({ property, clients, summary, chequeStat
                             <EmptyDescription>{t('propertyTenantContracts.empty.description')}</EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent>
-                            <Button variant="outline" nativeButton={false} render={<Link href={route('contracts.create')} />}>
-                                <FilePlusIcon data-icon="inline-start" />
-                                {t('propertyShow.newContract')}
-                            </Button>
+                            {can('contracts.create') && (
+                                <Button variant="outline" nativeButton={false} render={<Link href={route('contracts.create')} />}>
+                                    <FilePlusIcon data-icon="inline-start" />
+                                    {t('propertyShow.newContract')}
+                                </Button>
+                            )}
                         </EmptyContent>
                     </Empty>
                 </Card>

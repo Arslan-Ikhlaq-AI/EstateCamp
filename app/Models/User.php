@@ -3,22 +3,25 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Concerns\HasPermissions;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 #[Fillable(['name', 'email', 'password'])]
-// The staff record holds pay and identity details, so it never travels with the shared `auth.user`.
-#[Hidden(['password', 'remember_token', 'staffMember'])]
+// The staff record holds pay and identity details, so it never travels with the shared `auth.user`;
+// nor do the company and role permissions are read from, the stored permission list (`auth.permissions` is what counts) or their camps.
+#[Hidden(['password', 'remember_token', 'permissions', 'staffMember', 'company', 'role', 'properties'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, HasPermissions, Notifiable;
 
     /**
      * Get the attributes that should be cast.
@@ -31,6 +34,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'permissions' => 'array',
         ];
     }
 
@@ -48,6 +52,16 @@ class User extends Authenticatable
     public function role(): BelongsTo
     {
         return $this->belongsTo(UserRole::class, 'user_role_id');
+    }
+
+    /**
+     * The camps an area manager or camp boss looks after (see campPropertyIds()).
+     *
+     * @return BelongsToMany<Property, $this>
+     */
+    public function properties(): BelongsToMany
+    {
+        return $this->belongsToMany(Property::class)->withTimestamps();
     }
 
     /**
@@ -74,10 +88,11 @@ class User extends Authenticatable
 
     /**
      * Whether the user may use the rest of the app (the dashboard, properties,
-     * tenants, payments, maintenance and configuration), not only the staff pages.
+     * tenants, payments, maintenance and configuration), not only the staff
+     * pages. A staff member given a role uses what the role opens.
      */
     public function canUseApp(): bool
     {
-        return $this->is_admin || $this->staffMember === null || $this->staffMember->app_access;
+        return $this->is_admin || $this->role !== null || $this->staffMember === null || $this->staffMember->app_access;
     }
 }

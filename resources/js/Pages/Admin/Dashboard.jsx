@@ -78,7 +78,7 @@ export default function Dashboard({
             <Head title={t('nav.users')} />
 
             <PageHeader
-                breadcrumbs={[{ label: t('nav.configuration') }, { label: t('nav.users') }]}
+                breadcrumbs={[{ label: t('nav.platform') }, { label: t('nav.users') }]}
                 title={t('nav.users')}
                 description="Track signups and manage everyone who can sign in."
                 actions={

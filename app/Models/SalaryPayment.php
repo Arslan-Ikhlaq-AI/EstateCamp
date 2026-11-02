@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,8 @@ use Illuminate\Support\Facades\DB;
 #[Fillable(['additions', 'deductions', 'note'])]
 class SalaryPayment extends Model
 {
+    use LimitedToCamps;
+
     public const STATUSES = ['pending', 'paid'];
 
     public const PAYMENT_METHODS = StaffMember::PAYMENT_METHODS;
@@ -186,5 +190,26 @@ class SalaryPayment extends Model
     public function paidBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'paid_by');
+    }
+
+    /**
+     * Salaries of the camps' staff.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->whereHas('staffMember');
+    }
+
+    /**
+     * Of someone working at the camps.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return $this->staffMember()->exists();
     }
 }

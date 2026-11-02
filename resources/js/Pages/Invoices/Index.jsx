@@ -153,11 +153,11 @@ export default function Index({ company, filters, period: listPeriod, facets, su
                                 <RowActions
                                     label={invoice.number}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('invoices.show', invoice.id), icon: EyeIcon },
+                                        { label: t('leasing.common.view'), href: route('invoices.show', invoice.id), icon: EyeIcon, permission: 'invoices.view' },
                                         ...(invoice.balance > 0
-                                            ? [{ label: t('leasing.payments.add'), href: route('payments.create', { client: invoice.client.id, invoice: invoice.id }), icon: ReceiptIcon }]
+                                            ? [{ label: t('leasing.payments.add'), href: route('payments.create', { client: invoice.client.id, invoice: invoice.id }), icon: ReceiptIcon, permission: 'payments_received.create' }]
                                             : []),
-                                        { label: t('leasing.invoices.viewContract'), href: route('contracts.show', invoice.contract.id), icon: FileSignatureIcon },
+                                        { label: t('leasing.invoices.viewContract'), href: route('contracts.show', invoice.contract.id), icon: FileSignatureIcon, permission: 'contracts.view' },
                                     ]}
                                 />
                             )}

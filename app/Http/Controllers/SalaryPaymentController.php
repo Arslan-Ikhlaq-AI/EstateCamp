@@ -72,7 +72,7 @@ class SalaryPaymentController extends Controller
                     'staff' => self::personDetails($salary->staffMember),
                     'paidBy' => $salary->paidBy?->name,
                 ]),
-            'canManage' => Gate::allows('manage-staff'),
+            'canManage' => Gate::allows('payroll.manage'),
         ]);
     }
 

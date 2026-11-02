@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Database\Factories\ExtraIncomeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,7 +28,7 @@ use Illuminate\Support\Str;
 class ExtraIncome extends Model
 {
     /** @use HasFactory<ExtraIncomeFactory> */
-    use HasDocumentNumber, HasFactory;
+    use HasDocumentNumber, HasFactory, LimitedToCamps;
 
     public const NUMBER_PREFIX = 'EI';
 

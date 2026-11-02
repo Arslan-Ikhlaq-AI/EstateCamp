@@ -4,6 +4,7 @@ import PeriodFilter, { usePeriodLabel } from '@/Components/PeriodFilter';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, router } from '@inertiajs/react';
 import {
@@ -81,6 +82,8 @@ export default function Payments({
     currency,
 }) {
     const { t, tOr, formatDate } = useTranslation();
+    // `can` holds what the server decided for this page, such as confirming cash.
+    const hasPermission = useCan();
     const { range } = usePeriodLabel();
     const periodLabel = range(period);
     const [tab, setTab] = useState(initialTab);
@@ -147,22 +150,30 @@ export default function Payments({
                             <LayoutPanelLeftIcon data-icon="inline-start" />
                             {t('properties.actions.allocation')}
                         </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('properties.tenant-contracts', property.id)} />}>
-                            <FileSignatureIcon data-icon="inline-start" />
-                            {t('properties.actions.tenantContracts')}
-                        </Button>
-                        <Button variant="brand" nativeButton={false} render={<Link href={route('maintenance.create', { property: property.id, from: 'payments' })} />}>
-                            <WrenchIcon data-icon="inline-start" />
-                            {t('propertyPayments.addMaintenance')}
-                        </Button>
-                        <Button variant="brand" nativeButton={false} render={<Link href={route('other-payments.create', { property: property.id })} />}>
-                            <ReceiptIcon data-icon="inline-start" />
-                            {t('propertyPayments.addOtherPayment')}
-                        </Button>
-                        <Button variant="brand" nativeButton={false} render={<Link href={route('extra-incomes.create', { property: property.id, from: 'payments' })} />}>
-                            <BadgePercentIcon data-icon="inline-start" />
-                            {t('propertyPayments.addExtraIncome')}
-                        </Button>
+                        {hasPermission('contracts.view') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('properties.tenant-contracts', property.id)} />}>
+                                <FileSignatureIcon data-icon="inline-start" />
+                                {t('properties.actions.tenantContracts')}
+                            </Button>
+                        )}
+                        {hasPermission('maintenance.create') && (
+                            <Button variant="brand" nativeButton={false} render={<Link href={route('maintenance.create', { property: property.id, from: 'payments' })} />}>
+                                <WrenchIcon data-icon="inline-start" />
+                                {t('propertyPayments.addMaintenance')}
+                            </Button>
+                        )}
+                        {hasPermission('other_payments.create') && (
+                            <Button variant="brand" nativeButton={false} render={<Link href={route('other-payments.create', { property: property.id })} />}>
+                                <ReceiptIcon data-icon="inline-start" />
+                                {t('propertyPayments.addOtherPayment')}
+                            </Button>
+                        )}
+                        {hasPermission('extra_income.create') && (
+                            <Button variant="brand" nativeButton={false} render={<Link href={route('extra-incomes.create', { property: property.id, from: 'payments' })} />}>
+                                <BadgePercentIcon data-icon="inline-start" />
+                                {t('propertyPayments.addExtraIncome')}
+                            </Button>
+                        )}
                     </>
                 }
             />
@@ -362,9 +373,11 @@ export default function Payments({
                             },
                         ]}
                     >
-                        <SectionPart title={t('propertyPayments.sections.unpaid.collect')} count={cash.owing} hint={t('propertyPayments.sections.unpaid.collectHint')}>
-                            <ShortTermCollect {...collectProps} methods={pageMethods(collectionMethods)} banks={banks} />
-                        </SectionPart>
+                        {hasPermission('rent_collections.create') && (
+                            <SectionPart title={t('propertyPayments.sections.unpaid.collect')} count={cash.owing} hint={t('propertyPayments.sections.unpaid.collectHint')}>
+                                <ShortTermCollect {...collectProps} methods={pageMethods(collectionMethods)} banks={banks} />
+                            </SectionPart>
+                        )}
                         <SectionPart
                             title={t('propertyPayments.sections.unpaid.receipts')}
                             count={incoming.cashReceipts.length}

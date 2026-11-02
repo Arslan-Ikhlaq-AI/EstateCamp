@@ -7,7 +7,6 @@ use App\Models\HeadLease;
 use App\Models\MaintenanceContract;
 use App\Models\RoomRental;
 use App\Models\User;
-use App\Models\UserRole;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -46,15 +45,14 @@ class AppServiceProvider extends ServiceProvider
             ? Limit::perMinute(120)->by($request->ip())
             : Limit::perHour(10)->by($request->ip()));
 
+        // Every permission in config/permissions.php is an ability of its own, so `can('rooms.create')` works anywhere.
+        Gate::before(fn (User $user, string $ability): ?bool => in_array($ability, User::allPermissions(), true) ? $user->hasPermission($ability) : null);
+
+        // The platform's own pages, which see every company.
         Gate::define('view-admin-dashboard', fn (User $user): bool => (bool) $user->is_admin);
         Gate::define('manage-configuration', fn (User $user): bool => (bool) $user->is_admin);
 
-        // Staff who sign in see what their access allows; everyone else keeps full access.
+        // Whether a staff member's sign-in reaches beyond the staff pages; only such a sign-in may open them to another.
         Gate::define('use-app', fn (User $user): bool => $user->canUseApp());
-        Gate::define('view-staff', fn (User $user): bool => in_array($user->staffAccess(), ['supervisor', 'admin'], true));
-        Gate::define('manage-staff', fn (User $user): bool => $user->staffAccess() === 'admin');
-
-        // The camp boss collects cash on site; only an admin confirms the company has received it.
-        Gate::define('confirm-cash-handover', fn (User $user): bool => $user->is_admin || $user->role?->slug === UserRole::SUPER_ADMIN);
     }
 }

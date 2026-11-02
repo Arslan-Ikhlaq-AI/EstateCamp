@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Concerns;
 
 use App\Models\Company;
+use App\Models\User;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,8 @@ use Illuminate\Support\Facades\DB;
  * and not earned; and extra income, such as a provider's share. Spent:
  * the landlord's and the maintenance contractors' cheques that cleared,
  * maintenance bills paid and one-off payments made. A client payment that
- * no contract can be found for has no property.
+ * no contract can be found for has no property. Someone limited to some
+ * camps gets only the money of those camps.
  */
 trait ReadsPropertyMoney
 {
@@ -74,6 +76,8 @@ trait ReadsPropertyMoney
             ->where('company_id', $company->id)
             ->where('status', 'paid'), 'property_id', 'payment_date', 'amount');
 
+        $camps = User::signedInCampIds();
+
         return $this->contractRent($company, $from, $to)
             ->concat($shortTerm->map($row('revenue', 'short_term')))
             ->concat($extraIncome->map($row('revenue', 'extra_income')))
@@ -81,6 +85,8 @@ trait ReadsPropertyMoney
             ->concat($issuedCheques('maintenance_contract', 'maintenance_contracts')->map($row('expense', 'contracts')))
             ->concat($bills->map($row('expense', 'bills')))
             ->concat($others->map($row('expense', 'others')))
+            // Read straight from the tables, so an area manager's or camp boss's camps are kept to here.
+            ->when($camps !== null, fn (Collection $money) => $money->filter(fn (array $money) => in_array($money['property'], $camps, true)))
             ->values();
     }
 

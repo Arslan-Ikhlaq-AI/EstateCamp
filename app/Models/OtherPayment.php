@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonInterface;
 use Database\Factories\OtherPaymentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -27,7 +28,7 @@ use Illuminate\Support\Str;
 class OtherPayment extends Model
 {
     /** @use HasFactory<OtherPaymentFactory> */
-    use HasDocumentNumber, HasFactory;
+    use HasDocumentNumber, HasFactory, LimitedToCamps;
 
     public const NUMBER_PREFIX = 'OP';
 

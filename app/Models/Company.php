@@ -87,7 +87,28 @@ class Company extends Model
         return [
             'expiry_date' => 'date',
             'terms_accepted_at' => 'datetime',
+            'disabled_features' => 'array',
         ];
+    }
+
+    /**
+     * The pages a company can be given, by top menu, from config/permissions.php.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function features(): array
+    {
+        return collect(config('permissions.modules'))->map(fn (array $pages) => array_keys($pages))->all();
+    }
+
+    /**
+     * Whether the company may use `$page` (such as `rooms` or `payroll`):
+     * every page is on until the platform switches it off, and a few can
+     * never be (see `always_on`).
+     */
+    public function hasFeature(string $page): bool
+    {
+        return in_array($page, config('permissions.always_on'), true) || ! in_array($page, $this->disabled_features ?? [], true);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -19,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 #[Fillable(['issue_date', 'due_date', 'period_start', 'period_end', 'notes'])]
 class Invoice extends Model
 {
-    use HasDocumentNumber;
+    use HasDocumentNumber, LimitedToCamps;
 
     public const NUMBER_PREFIX = 'INV';
 
@@ -138,5 +139,26 @@ class Invoice extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class);
+    }
+
+    /**
+     * Invoices under the camps' contracts.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->whereHas('contract');
+    }
+
+    /**
+     * Raised under a contract at the camps.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return $this->contract_id === null || $this->contract()->exists();
     }
 }

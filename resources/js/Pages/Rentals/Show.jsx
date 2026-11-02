@@ -18,6 +18,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useCan } from '@/hooks/use-can';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ const STATEMENT_TONES = { paid: 'success', partial: 'warning', unpaid: 'danger',
 
 function ReceiptActions({ payment, onVoid }) {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <DropdownMenu>
@@ -53,7 +55,7 @@ function ReceiptActions({ payment, onVoid }) {
                         {t('finance.receipts.actions.open')}
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
-                {payment.status !== 'void' && !payment.fromCheque && (
+                {payment.status !== 'void' && !payment.fromCheque && can('rent_collections.void') && (
                     <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onClick={onVoid}>
@@ -74,6 +76,7 @@ function ReceiptActions({ payment, onVoid }) {
  */
 export default function Show({ rental, statement, payments, cheques, pendingCheques, banks, chequeStatuses, methods, refundMethods, currency }) {
     const { t, formatMoney, formatDate, formatCurrency } = useTranslation();
+    const can = useCan();
     const { period } = useLeasingFormat();
     const place = useRentalPlace();
     const [dialog, setDialog] = useState(null);
@@ -168,22 +171,24 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
                 }
                 actions={
                     <>
-                        {isActive && (
+                        {isActive && can('rentals.edit') && (
                             <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.edit', rental.id)} />}>
                                 <PencilIcon data-icon="inline-start" />
                                 {t('finance.rentals.edit')}
                             </Button>
                         )}
-                        {isActive && (
+                        {isActive && can('rentals.end') && (
                             <Button variant="outline" onClick={() => setDialog({ type: 'end' })}>
                                 <DoorOpenIcon data-icon="inline-start" />
                                 {t('finance.rentals.end.button')}
                             </Button>
                         )}
-                        <Button onClick={() => setDialog({ type: 'pay' })}>
-                            <ReceiptIcon data-icon="inline-start" />
-                            {t('finance.rentals.payment.button')}
-                        </Button>
+                        {can('rent_collections.create') && (
+                            <Button onClick={() => setDialog({ type: 'pay' })}>
+                                <ReceiptIcon data-icon="inline-start" />
+                                {t('finance.rentals.payment.button')}
+                            </Button>
+                        )}
                     </>
                 }
             />
@@ -256,10 +261,12 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
                         title={t('finance.rentals.show.receipts')}
                         description={t('finance.rentals.show.receiptsDescription')}
                         action={
-                            <Button variant="outline" size="sm" onClick={() => setDialog({ type: 'pay' })}>
-                                <ReceiptIcon data-icon="inline-start" />
-                                {t('finance.rentals.payment.button')}
-                            </Button>
+                            can('rent_collections.create') && (
+                                <Button variant="outline" size="sm" onClick={() => setDialog({ type: 'pay' })}>
+                                    <ReceiptIcon data-icon="inline-start" />
+                                    {t('finance.rentals.payment.button')}
+                                </Button>
+                            )
                         }
                         flush
                     >

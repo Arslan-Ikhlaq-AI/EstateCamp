@@ -4,13 +4,14 @@ import { generatePassword } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
 import {
     BriefcaseBusinessIcon,
-    CalculatorIcon,
     CrownIcon,
+    MapIcon,
     MailIcon,
     MinusIcon,
     PlusIcon,
     ShieldCheckIcon,
     SmartphoneIcon,
+    TentIcon,
     Trash2Icon,
     UserPlusIcon,
     UserRoundIcon,
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 import { FieldSection, IconField, IconSelect, PasswordField } from './OnboardingFields';
 
-export const ROLE_ICONS = { super_admin: CrownIcon, manager: BriefcaseBusinessIcon, accountant: CalculatorIcon };
+export const ROLE_ICONS = { super_admin: CrownIcon, office_admin: BriefcaseBusinessIcon, area_manager: MapIcon, camp_boss: TentIcon };
 
 /**
  * A person's initials on a gradient disc: gold for the super admin, brand blue for everyone else.
@@ -123,7 +124,7 @@ export default function TeamStep({ form, bind, roles, maxTeam, onTeamCountChange
                         </span>
                         <div className="flex flex-col gap-1">
                             <p className="font-bold text-foreground">Just you for now?</p>
-                            <p className="max-w-sm text-[0.8125rem] text-muted-foreground">That works. Add managers or accountants here, or give staff their own sign-in later from the Staff pages.</p>
+                            <p className="max-w-sm text-[0.8125rem] text-muted-foreground">That works. Add office admins, area managers or camp bosses here, or give staff their own sign-in later from the Staff pages.</p>
                         </div>
                         <Button type="button" variant="outline" onClick={() => onTeamCountChange(1)}>
                             <PlusIcon data-icon="inline-start" /> Add a teammate

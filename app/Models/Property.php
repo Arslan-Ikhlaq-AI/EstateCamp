@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use Database\Factories\PropertyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -50,7 +51,7 @@ use Illuminate\Support\Collection;
 class Property extends Model
 {
     /** @use HasFactory<PropertyFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, LimitedToCamps, SoftDeletes;
 
     /**
      * Get the attributes that should be cast.
@@ -359,5 +360,26 @@ class Property extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(PropertyDocument::class);
+    }
+
+    /**
+     * The camps themselves.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->whereIn($this->qualifyColumn('id'), $propertyIds);
+    }
+
+    /**
+     * Only a camp already given to the user, so they cannot add one.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return $this->exists && in_array((int) $this->getKey(), $propertyIds, true);
     }
 }

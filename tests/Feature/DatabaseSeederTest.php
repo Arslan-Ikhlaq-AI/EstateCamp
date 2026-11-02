@@ -105,7 +105,8 @@ it('can be run again without duplicating records', function () {
 it('fills every column except those that do not apply', function () {
     $this->seed(DatabaseSeeder::class);
 
-    expect(blankColumns(Company::sole()))->toBe([])
+    // Every page is on for a company until the platform switches one off.
+    expect(blankColumns(Company::sole()))->toBe(['disabled_features'])
         ->and(blankColumns(Room::first()))->toBe([])
         ->and(blankColumns(RoomAttachment::first()))->toBe([]);
 
@@ -113,8 +114,9 @@ it('fills every column except those that do not apply', function () {
     Apartment::all()->each(fn (Apartment $apartment) => expect(blankColumns($apartment))->toBe([]));
     Shop::all()->each(fn (Shop $shop) => expect(blankColumns($shop))->toBe([]));
 
-    // A user's remember token is only set when they sign in; a staff member's sign-in has no user role.
-    User::all()->each(fn (User $user) => expect(blankColumns($user))->toBe($user->staffMember ? ['remember_token', 'user_role_id'] : ['remember_token']));
+    // A user's remember token is only set when they sign in; a staff member's sign-in has no user role;
+    // and a user's permissions follow their role until someone chooses them.
+    User::all()->each(fn (User $user) => expect(blankColumns($user))->toEqualCanonicalizing($user->staffMember ? ['remember_token', 'user_role_id', 'permissions'] : ['remember_token', 'permissions']));
 
     // Landlord and lease details do not apply to a property the company owns.
     expect(blankColumns(Property::where('code', PropertySeeder::AL_QUOZ)->sole()))

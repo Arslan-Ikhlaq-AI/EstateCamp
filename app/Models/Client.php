@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitedToCamps;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -33,7 +35,7 @@ use Illuminate\Support\Facades\DB;
 class Client extends Model
 {
     /** @use HasFactory<ClientFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, LimitedToCamps, SoftDeletes;
 
     public const TYPES = ['company', 'individual'];
 
@@ -97,5 +99,31 @@ class Client extends Model
     public function roomRentals(): HasMany
     {
         return $this->hasMany(RoomRental::class);
+    }
+
+    /**
+     * Clients renting at the camps, and those not renting anywhere yet, so a new one can be chosen.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->where(fn (Builder $clients) => $clients
+            ->whereHas('contracts')
+            ->orWhereHas('roomRentals')
+            ->orWhere(fn (Builder $unplaced) => $unplaced
+                ->whereDoesntHave('contracts', fn (Builder $contracts) => $contracts->withoutGlobalScope('camps'))
+                ->whereDoesntHave('roomRentals', fn (Builder $rentals) => $rentals->withoutGlobalScope('camps'))));
+    }
+
+    /**
+     * Clients are reached through what they rent.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return true;
     }
 }

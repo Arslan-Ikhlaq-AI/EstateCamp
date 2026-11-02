@@ -8,6 +8,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
@@ -19,6 +20,7 @@ import { Building2Icon, EyeIcon, ListFilterIcon, MoreHorizontalIcon, PencilIcon 
  */
 export default function ShopActions({ shop, onImage = false }) {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <DropdownMenu>
@@ -46,10 +48,12 @@ export default function ShopActions({ shop, onImage = false }) {
                         <EyeIcon />
                         {t('shopList.actions.view')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('shops.edit', shop.id)} />}>
-                        <PencilIcon />
-                        {t('shopList.actions.edit')}
-                    </DropdownMenuItem>
+                    {can('shops.edit') && (
+                        <DropdownMenuItem render={<Link href={route('shops.edit', shop.id)} />}>
+                            <PencilIcon />
+                            {t('shopList.actions.edit')}
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -57,10 +61,12 @@ export default function ShopActions({ shop, onImage = false }) {
                         <ListFilterIcon />
                         {t('shopList.actions.sameProperty')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem render={<Link href={route('properties.edit', shop.property.id)} />}>
-                        <Building2Icon />
-                        {t('shopList.actions.property')}
-                    </DropdownMenuItem>
+                    {can('properties.edit') && (
+                        <DropdownMenuItem render={<Link href={route('properties.edit', shop.property.id)} />}>
+                            <Building2Icon />
+                            {t('shopList.actions.property')}
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuGroup>
             </DropdownMenuContent>
         </DropdownMenu>

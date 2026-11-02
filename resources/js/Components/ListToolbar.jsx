@@ -48,8 +48,9 @@ const isTyping = (element) =>
 
 /**
  * A search box that also takes focus when "/" is pressed anywhere on the page.
+ * `className` replaces its default widths.
  */
-export function ListSearch({ id, value, onChange, placeholder, label, isLoading }) {
+export function ListSearch({ id, value, onChange, placeholder, label, isLoading, className = 'w-full sm:w-64 2xl:w-80' }) {
     const { t } = useTranslation();
 
     useEffect(() => {
@@ -68,7 +69,7 @@ export function ListSearch({ id, value, onChange, placeholder, label, isLoading 
     }, [id]);
 
     return (
-        <InputGroup className="w-full sm:w-64 2xl:w-80">
+        <InputGroup className={className}>
             <InputGroupAddon>
                 <SearchIcon />
             </InputGroupAddon>

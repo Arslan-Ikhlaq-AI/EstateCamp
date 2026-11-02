@@ -3,6 +3,7 @@ import { AlertPulse, useVisitTiming, VisitStatusDialog } from '@/Components/Visi
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCan } from '@/hooks/use-can';
 import { LOCALES, useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
@@ -36,6 +37,7 @@ function DateLeaf({ date, isOverdue }) {
 
 function VisitRow({ visit, onDone }) {
     const { t } = useTranslation();
+    const can = useCan();
     const timing = useVisitTiming()(visit);
     const isOverdue = visit.alert === 'overdue';
 
@@ -67,10 +69,12 @@ function VisitRow({ visit, onDone }) {
             </div>
             <div className="flex items-center gap-2">
                 <VisitStatusBadge status={visit.status} alert={visit.alert} />
-                <Button variant="outline" size="sm" onClick={() => onDone(visit)}>
-                    <CircleCheckIcon data-icon="inline-start" />
-                    {t('amcs.schedule.actions.done')}
-                </Button>
+                {can('amc_visits.manage') && (
+                    <Button variant="outline" size="sm" onClick={() => onDone(visit)}>
+                        <CircleCheckIcon data-icon="inline-start" />
+                        {t('amcs.schedule.actions.done')}
+                    </Button>
+                )}
             </div>
         </li>
     );

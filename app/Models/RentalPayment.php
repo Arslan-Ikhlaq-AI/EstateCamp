@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -18,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['paid_on', 'amount', 'purpose', 'method', 'reference', 'notes'])]
 class RentalPayment extends Model
 {
-    use HasDocumentNumber;
+    use HasDocumentNumber, LimitedToCamps;
 
     public const NUMBER_PREFIX = 'RR';
 
@@ -115,5 +117,26 @@ class RentalPayment extends Model
     public function handedOverTo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'handed_over_to');
+    }
+
+    /**
+     * Receipts from the camps' short-term rentals.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->whereHas('rental');
+    }
+
+    /**
+     * Paid towards a rental at the camps.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return $this->rental()->exists();
     }
 }

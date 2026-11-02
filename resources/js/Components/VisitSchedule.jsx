@@ -16,6 +16,7 @@ import {
 import { FieldGroup } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { todayIso } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Link, router, useForm } from '@inertiajs/react';
@@ -470,8 +471,11 @@ export function AddVisitsDialog({ contract, scheduled, open, onOpenChange }) {
  * cancelled, move it or remove it. `showContract` adds the property,
  * contractor and kind of contract, for the list across contracts.
  */
-export default function VisitSchedule({ visits, showContract = false }) {
+export default function VisitSchedule({ visits: allVisits, showContract = false }) {
     const { t, formatDate } = useTranslation();
+    const can = useCan();
+    // Without leave to manage visits, each one is only read: no moves, rescheduling or removing.
+    const visits = can('amc_visits.manage') ? allVisits : allVisits.map((visit) => ({ ...visit, actions: [], canReschedule: false, canDelete: false }));
     const [dialog, setDialog] = useState(null);
     const close = (open) => !open && setDialog(null);
 

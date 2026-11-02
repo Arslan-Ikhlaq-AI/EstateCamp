@@ -7,6 +7,7 @@ import RecordList, { ListEmpty, NoCompany } from '@/Components/RecordList';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
@@ -22,11 +23,12 @@ const STATUS_ICONS = { received: CircleCheckIcon, cancelled: BanIcon };
  */
 export default function Index({ company, filters, period, facets, summary, incomes }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
+    const can = useCan();
     const { full } = usePeriodLabel();
     const title = t('finance.extraIncome.title');
     const range = summary ? (summary.inPeriod ? full(period) : t('finance.lists.thisMonth')) : '';
 
-    const addButton = (
+    const addButton = can('extra_income.create') && (
         <Button variant="brand" nativeButton={false} render={<Link href={route('extra-incomes.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('finance.extraIncome.add')}

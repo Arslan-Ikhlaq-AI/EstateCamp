@@ -7,6 +7,7 @@ import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
 import { DoorClosedIcon, LogInIcon, LogOutIcon, PencilIcon, UserCheckIcon } from 'lucide-react';
@@ -15,6 +16,7 @@ import CheckOutDialog from './Partials/CheckOutDialog';
 
 export default function Show({ occupant, stays }) {
     const { t, formatDate, formatNumber } = useTranslation();
+    const can = useCan();
     const { period } = useLeasingFormat();
     const [isCheckingOut, setIsCheckingOut] = useState(false);
     const current = stays.find((stay) => stay.checkOutDate === null);
@@ -46,20 +48,26 @@ export default function Show({ occupant, stays }) {
                 }
                 actions={
                     <>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('occupants.edit', occupant.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('leasing.common.edit')}
-                        </Button>
+                        {can('occupants.edit') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('occupants.edit', occupant.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('leasing.common.edit')}
+                            </Button>
+                        )}
                         {current ? (
-                            <Button onClick={() => setIsCheckingOut(true)}>
-                                <LogOutIcon data-icon="inline-start" />
-                                {t('leasing.occupants.checkOut.button')}
-                            </Button>
+                            can('occupants.check_in') && (
+                                <Button onClick={() => setIsCheckingOut(true)}>
+                                    <LogOutIcon data-icon="inline-start" />
+                                    {t('leasing.occupants.checkOut.button')}
+                                </Button>
+                            )
                         ) : (
-                            <Button nativeButton={false} render={<Link href={route('occupancies.create', { occupant: occupant.id })} />}>
-                                <LogInIcon data-icon="inline-start" />
-                                {t('leasing.checkIn.button')}
-                            </Button>
+                            can('occupants.check_in') && (
+                                <Button nativeButton={false} render={<Link href={route('occupancies.create', { occupant: occupant.id })} />}>
+                                    <LogInIcon data-icon="inline-start" />
+                                    {t('leasing.checkIn.button')}
+                                </Button>
+                            )
                         )}
                     </>
                 }
@@ -106,10 +114,12 @@ export default function Show({ occupant, stays }) {
                                     <EmptyDescription>{t('leasing.occupants.show.noStayDescription')}</EmptyDescription>
                                 </EmptyHeader>
                                 <EmptyContent>
-                                    <Button nativeButton={false} render={<Link href={route('occupancies.create', { occupant: occupant.id })} />}>
-                                        <LogInIcon data-icon="inline-start" />
-                                        {t('leasing.checkIn.button')}
-                                    </Button>
+                                    {can('occupants.check_in') && (
+                                        <Button nativeButton={false} render={<Link href={route('occupancies.create', { occupant: occupant.id })} />}>
+                                            <LogInIcon data-icon="inline-start" />
+                                            {t('leasing.checkIn.button')}
+                                        </Button>
+                                    )}
                                 </EmptyContent>
                             </Empty>
                         )}

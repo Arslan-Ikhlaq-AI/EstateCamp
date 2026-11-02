@@ -7,6 +7,7 @@ import RowActions from '@/Components/RowActions';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { useCan } from '@/hooks/use-can';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
@@ -30,10 +31,11 @@ const STATUS_ICONS = { draft: FileClockIcon, active: CircleCheckIcon, expired: C
 
 export default function Index({ company, filters, facets, summary, leases }) {
     const { t, formatNumber, formatCurrency, formatDate } = useTranslation();
+    const can = useCan();
     const { period } = useLeasingFormat();
     const title = t('leasing.headLeases.title');
 
-    const addButton = (
+    const addButton = can('head_leases.create') && (
         <Button nativeButton={false} render={<Link href={route('head-leases.create')} />}>
             <PlusIcon data-icon="inline-start" />
             {t('leasing.headLeases.add')}
@@ -182,9 +184,9 @@ export default function Index({ company, filters, facets, summary, leases }) {
                                 <RowActions
                                     label={lease.number}
                                     items={[
-                                        { label: t('leasing.common.view'), href: route('head-leases.show', lease.id), icon: EyeIcon },
-                                        { label: t('leasing.common.edit'), href: route('head-leases.edit', lease.id), icon: PencilIcon },
-                                        { label: t('leasing.headLeases.renew'), href: route('head-leases.create', { renew: lease.id }), icon: RefreshCwIcon },
+                                        { label: t('leasing.common.view'), href: route('head-leases.show', lease.id), icon: EyeIcon, permission: 'head_leases.view' },
+                                        { label: t('leasing.common.edit'), href: route('head-leases.edit', lease.id), icon: PencilIcon, permission: 'head_leases.edit' },
+                                        { label: t('leasing.headLeases.renew'), href: route('head-leases.create', { renew: lease.id }), icon: RefreshCwIcon, permission: 'head_leases.create' },
                                     ]}
                                 />
                             )}

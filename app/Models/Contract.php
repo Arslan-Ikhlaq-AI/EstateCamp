@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Models\Concerns\HasBillingStatement;
 use App\Models\Concerns\HasCheques;
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\ContractFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -45,7 +47,7 @@ use Illuminate\Validation\ValidationException;
 class Contract extends Model
 {
     /** @use HasFactory<ContractFactory> */
-    use HasBillingStatement, HasCheques, HasDocumentNumber, HasFactory, SoftDeletes;
+    use HasBillingStatement, HasCheques, HasDocumentNumber, HasFactory, LimitedToCamps, SoftDeletes;
 
     public const NUMBER_PREFIX = 'CTR';
 
@@ -684,5 +686,26 @@ class Contract extends Model
     public function renewal(): HasOne
     {
         return $this->hasOne(Contract::class, 'renewed_from_id');
+    }
+
+    /**
+     * Contracts renting anything at the camps; the whole contract shows, so its lines and money add up.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<int>  $propertyIds
+     */
+    public function limitToCamps(Builder $query, array $propertyIds): void
+    {
+        $query->whereHas('lines', fn (Builder $lines) => $lines->whereIn('property_id', $propertyIds));
+    }
+
+    /**
+     * Its lines are checked as they are saved, after the contract itself.
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function isAtCamps(array $propertyIds): bool
+    {
+        return true;
     }
 }

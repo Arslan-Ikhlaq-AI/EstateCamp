@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/empty';
 import { useListQuery } from '@/hooks/use-list-query';
 import { useStoredState } from '@/hooks/use-stored-state';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
@@ -102,6 +103,7 @@ function RoomStats({ summary, currency }) {
 
 function EmptyState({ hasRooms, onReset }) {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <Empty className="py-16">
@@ -118,10 +120,12 @@ function EmptyState({ hasRooms, onReset }) {
                         {t('properties.filters.clearAll')}
                     </Button>
                 ) : (
-                    <Button nativeButton={false} render={<Link href={route('rooms.create')} />}>
-                        <PlusIcon data-icon="inline-start" />
-                        {t('roomList.add')}
-                    </Button>
+                    can('rooms.create') && (
+                        <Button nativeButton={false} render={<Link href={route('rooms.create')} />}>
+                            <PlusIcon data-icon="inline-start" />
+                            {t('roomList.add')}
+                        </Button>
+                    )
                 )}
             </EmptyContent>
         </Empty>
@@ -249,6 +253,7 @@ function RoomList({ company, filters, facets, summary, rooms }) {
 
 export default function Index({ company, filters, facets, summary, rooms }) {
     const { t } = useTranslation();
+    const can = useCan();
 
     return (
         <DashboardLayout>
@@ -260,7 +265,8 @@ export default function Index({ company, filters, facets, summary, rooms }) {
                 count={summary?.rooms}
                 description={t('roomList.description')}
                 actions={
-                    company !== null && (
+                    company !== null &&
+                    can('rooms.create') && (
                         <Button nativeButton={false} render={<Link href={route('rooms.create')} />}>
                             <PlusIcon data-icon="inline-start" />
                             {t('roomList.add')}

@@ -11,6 +11,7 @@ import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useLeasingFormat } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
@@ -23,6 +24,7 @@ function EmptyLine({ children }) {
 
 export default function Show({ client, contracts, stays, invoices, cheques, chequeTotals, payments, holdings, documents, rentals = [], currency }) {
     const { t, formatMoney, formatCurrency, formatDate, formatNumber } = useTranslation();
+    const can = useCan();
     const { period, unitsSummary } = useLeasingFormat();
     const isCompany = client.client_type === 'company';
     const activeContracts = contracts.filter((contract) => contract.status === 'active').length;
@@ -50,26 +52,36 @@ export default function Show({ client, contracts, stays, invoices, cheques, cheq
                 description={isCompany ? client.contact_person_name : client.nationality}
                 actions={
                     <>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('clients.edit', client.id)} />}>
-                            <PencilIcon data-icon="inline-start" />
-                            {t('leasing.common.edit')}
-                        </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('occupants.create', { client: client.id })} />}>
-                            <UserPlusIcon data-icon="inline-start" />
-                            {t('leasing.occupants.add')}
-                        </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('payments.create', { client: client.id })} />}>
-                            <ReceiptIcon data-icon="inline-start" />
-                            {t('leasing.payments.add')}
-                        </Button>
-                        <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { client: client.id })} />}>
-                            <KeyRoundIcon data-icon="inline-start" />
-                            {t('finance.rentals.add')}
-                        </Button>
-                        <Button nativeButton={false} render={<Link href={route('contracts.create', { client: client.id })} />}>
-                            <FileSignatureIcon data-icon="inline-start" />
-                            {t('leasing.contracts.add')}
-                        </Button>
+                        {can('clients.edit') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('clients.edit', client.id)} />}>
+                                <PencilIcon data-icon="inline-start" />
+                                {t('leasing.common.edit')}
+                            </Button>
+                        )}
+                        {can('occupants.create') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('occupants.create', { client: client.id })} />}>
+                                <UserPlusIcon data-icon="inline-start" />
+                                {t('leasing.occupants.add')}
+                            </Button>
+                        )}
+                        {can('payments_received.create') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('payments.create', { client: client.id })} />}>
+                                <ReceiptIcon data-icon="inline-start" />
+                                {t('leasing.payments.add')}
+                            </Button>
+                        )}
+                        {can('rentals.create') && (
+                            <Button variant="outline" nativeButton={false} render={<Link href={route('rentals.create', { client: client.id })} />}>
+                                <KeyRoundIcon data-icon="inline-start" />
+                                {t('finance.rentals.add')}
+                            </Button>
+                        )}
+                        {can('contracts.create') && (
+                            <Button nativeButton={false} render={<Link href={route('contracts.create', { client: client.id })} />}>
+                                <FileSignatureIcon data-icon="inline-start" />
+                                {t('leasing.contracts.add')}
+                            </Button>
+                        )}
                     </>
                 }
             />

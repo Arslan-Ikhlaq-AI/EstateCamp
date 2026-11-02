@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { todayIso } from '@/hooks/use-leasing-format';
+import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link, router } from '@inertiajs/react';
@@ -97,6 +98,7 @@ function Filters({ period, type, propertyTypes, by, buckets, onChange }) {
 
 export default function Index({ company, period, through, isToDate, previousPeriod, by, buckets, type, propertyTypes, timeline, totals, properties, unlinked }) {
     const { t, formatCurrency, formatDate, formatPercent } = useTranslation();
+    const can = useCan();
     const { full, range } = usePeriodLabel();
     const [isLoading, setIsLoading] = useState(false);
     const [focus, setFocus] = useState('all');
@@ -162,10 +164,12 @@ export default function Index({ company, period, through, isToDate, previousPeri
                         title={t('analyze.empty.title')}
                         description={t('analyze.empty.description')}
                         action={
-                            <Button nativeButton={false} render={<Link href={route('properties.create')} />}>
-                                <PlusIcon data-icon="inline-start" />
-                                {t('properties.add')}
-                            </Button>
+                            can('properties.create') && (
+                                <Button nativeButton={false} render={<Link href={route('properties.create')} />}>
+                                    <PlusIcon data-icon="inline-start" />
+                                    {t('properties.add')}
+                                </Button>
+                            )
                         }
                     />
                 </Card>
