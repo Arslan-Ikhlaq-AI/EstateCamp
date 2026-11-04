@@ -3,14 +3,17 @@ import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import {
     BadgeAlertIcon,
+    CalendarCheckIcon,
     CalendarClockIcon,
     CalendarX2Icon,
+    CalendarXIcon,
     FileClockIcon,
     FileWarningIcon,
     HandCoinsIcon,
     IdCardIcon,
     LandmarkIcon,
     PenLineIcon,
+    PlaneIcon,
     SirenIcon,
     TicketXIcon,
     WalletCardsIcon,
@@ -34,6 +37,9 @@ const ICONS = {
     staff_document_expired: IdCardIcon,
     visit_due: SirenIcon,
     visit_overdue: SirenIcon,
+    leave_requested: PlaneIcon,
+    leave_approved: CalendarCheckIcon,
+    leave_rejected: CalendarXIcon,
 };
 
 const CHEQUE_HEADINGS = {
@@ -55,7 +61,7 @@ const TONES = {
  *
  * @return {{heading: string, details: string[]}}
  */
-function describe({ type, title, subject, service, days }, t) {
+function describe({ type, title, subject, service, days, length }, t) {
     const timing = (pastKey, futureKey) => {
         if (days === 0) {
             return t('alerts.expiresToday');
@@ -112,6 +118,21 @@ function describe({ type, title, subject, service, days }, t) {
                     days === 0 ? t('alerts.visitToday') : days < 0 ? t('alerts.visitOverdue', { count: Math.abs(days) }) : t('alerts.visitIn', { count: days }),
                     subject,
                 ],
+            };
+        case 'leave_requested':
+            return {
+                heading: t('alerts.leaveRequested', { name: title }),
+                details: [
+                    t(`staff.leave.types.${subject}`),
+                    days === 0 ? t('alerts.startsToday') : days < 0 ? t('alerts.startedAgo', { count: Math.abs(days) }) : t('alerts.startsIn', { count: days }),
+                    t('staff.leave.days', { count: length }),
+                ],
+            };
+        case 'leave_approved':
+        case 'leave_rejected':
+            return {
+                heading: t(type === 'leave_approved' ? 'alerts.leaveApproved' : 'alerts.leaveRejected'),
+                details: [t(`staff.leave.types.${title}`), subject && t(`staff.leave.pay.${subject}Leave`), t('staff.leave.days', { count: length })],
             };
         default:
             return {

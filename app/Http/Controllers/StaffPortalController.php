@@ -134,6 +134,7 @@ class StaffPortalController extends Controller
             throw ValidationException::withMessages(['attendance' => match (true) {
                 ! $member->isEmployedOn($today) => 'You are not employed on this day, so it cannot be checked into.',
                 $member->openShift($today) !== null => 'Check out of your last shift first.',
+                in_array($mark?->status, ['leave', 'unpaid_leave'], true) => 'You are on leave today, so there is no attendance to mark.',
                 default => 'Today is already marked. Ask your supervisor if it needs changing.',
             }]);
         }

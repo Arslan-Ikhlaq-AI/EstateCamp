@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
 import { BanknoteIcon, CalendarCheckIcon, CoinsIcon, UsersRoundIcon } from 'lucide-react';
 
-const MARKS = ['present', 'half_day', 'absent', 'leave', 'day_off'];
+const MARKS = ['present', 'half_day', 'absent', 'leave', 'unpaid_leave', 'day_off'];
 
 /**
  * The staff and payroll report: who works where and in what role, the

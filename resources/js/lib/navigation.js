@@ -11,6 +11,7 @@ import {
     CalendarCheck2Icon,
     CalendarCheckIcon,
     CalendarClockIcon,
+    CalendarPlusIcon,
     ChartColumnBigIcon,
     ChartNoAxesCombinedIcon,
     ChartPieIcon,
@@ -36,6 +37,7 @@ import {
     ListChecksIcon,
     LogInIcon,
     MapPinnedIcon,
+    PlaneIcon,
     PresentationIcon,
     ReceiptIcon,
     ReceiptTextIcon,
@@ -47,6 +49,7 @@ import {
     StampIcon,
     StoreIcon,
     TagsIcon,
+    TreePalmIcon,
     Trash2Icon,
     UserCogIcon,
     UserPlusIcon,
@@ -166,7 +169,9 @@ export const navigation = [
                 children: [
                     { title: 'nav.allStaff', icon: ContactRoundIcon, routeName: 'staff.index', activeFor: ['staff.*'], permission: 'staff.view' },
                     { title: 'nav.attendance', icon: CalendarCheckIcon, routeName: 'attendance.index', activeFor: ['attendance.*'], permission: 'attendance.view' },
+                    { title: 'nav.leave', icon: TreePalmIcon, routeName: 'leave.index', activeFor: ['leave.*'], permission: 'leave.view' },
                     { title: 'nav.myAttendance', icon: CalendarClockIcon, routeName: 'my.attendance', ability: 'self' },
+                    { title: 'nav.myLeave', icon: PlaneIcon, routeName: 'my.leave', activeFor: ['my.leave', 'my.leave.*'], ability: 'self' },
                     { title: 'nav.payroll', icon: BanknoteIcon, routeName: 'payroll.index', activeFor: ['payroll.*'], permission: 'payroll.view' },
                 ],
             },
@@ -249,6 +254,7 @@ export const createActions = [
     { title: 'amcs.services.water_tanks.add', icon: DropletsIcon, routeName: 'amcs.water-tanks.create', group: 'nav.contractsMenu', permission: 'amc_water_tanks.create' },
     { title: 'staff.add', icon: UserRoundPlusIcon, routeName: 'staff.create', group: 'nav.staffMenu', permission: 'staff.create' },
     { title: 'staff.actions.attendance', icon: CalendarCheckIcon, routeName: 'attendance.index', group: 'nav.staffMenu', permission: 'attendance.view' },
+    { title: 'staff.leave.give', icon: CalendarPlusIcon, routeName: 'leave.create', group: 'nav.staffMenu', permission: 'leave.manage' },
 ];
 
 /**

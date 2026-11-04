@@ -170,7 +170,7 @@ export default function Payroll({ company, month, currentMonth, salaries, summar
             cell: (salary) => (
                 <div className="flex flex-col text-sm tabular-nums">
                     <span>{t('staff.payroll.days', { payable: salary.payableDays, total: salary.daysInMonth })}</span>
-                    <span className={(salary.attendance.absent ?? 0) + (salary.attendance.half_day ?? 0) > 0 ? 'text-xs text-warning' : 'text-xs text-muted-foreground'}>
+                    <span className={(salary.attendance.absent ?? 0) + (salary.attendance.half_day ?? 0) + (salary.attendance.unpaid_leave ?? 0) > 0 ? 'text-xs text-warning' : 'text-xs text-muted-foreground'}>
                         {absences(salary.attendance)}
                     </span>
                 </div>

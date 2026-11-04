@@ -40,7 +40,21 @@ class CompanyUserController extends Controller
                 ->get()
                 ->map(fn (User $user) => $this->summary($user, $editor)),
             'available' => count($this->availablePermissions($company)),
-            'roles' => $this->roles($editor, $company),
+        ]);
+    }
+
+    /**
+     * The page for adding a user: their name, the email and password they
+     * sign in with, the roles the signed-in user may give, and the camps
+     * for an area manager or camp boss.
+     */
+    public function create(Request $request): Response
+    {
+        $company = $this->currentCompany($request);
+
+        return Inertia::render('Configuration/AddUser', [
+            'available' => count($this->availablePermissions($company)),
+            'roles' => $this->roles($request->user(), $company),
             'properties' => $this->properties($company),
         ]);
     }

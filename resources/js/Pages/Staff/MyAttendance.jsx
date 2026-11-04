@@ -109,8 +109,13 @@ function MonthTotals({ attendance }) {
                 icon={TreePalmIcon}
                 tone="gold"
                 label={t('staff.myAttendance.stats.leave')}
-                value={formatNumber(counts.leave)}
-                detail={counts.day_off > 0 ? t('staff.myAttendance.stats.daysOff', { count: counts.day_off }) : t('staff.myAttendance.stats.noDaysOff')}
+                value={formatNumber(counts.leave + counts.unpaid_leave)}
+                detail={[
+                    counts.unpaid_leave > 0 && t('staff.myAttendance.stats.unpaidLeave', { count: counts.unpaid_leave }),
+                    counts.day_off > 0 ? t('staff.myAttendance.stats.daysOff', { count: counts.day_off }) : t('staff.myAttendance.stats.noDaysOff'),
+                ]
+                    .filter(Boolean)
+                    .join(' · ')}
             />
             <StatCard
                 icon={ClockIcon}

@@ -6,6 +6,7 @@ import { getInitials } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
 import {
+    BanknoteXIcon,
     BriefcaseBusinessIcon,
     Building2Icon,
     CircleAlertIcon,
@@ -29,14 +30,21 @@ import { useMemo } from 'react';
 export const LEVEL_ICONS = { head_office: BriefcaseBusinessIcon, regional: MapPinnedIcon, site: Building2Icon };
 
 /**
- * How each attendance mark looks: its icon, badge variant and the classes
- * of its cell in the monthly register.
+ * How each attendance mark looks: its icon, badge variant (and extra badge
+ * classes for a colour no variant has) and the classes of its cell in the
+ * monthly register. Unpaid leave is violet, apart from absences and paid leave.
  */
 export const ATTENDANCE = {
     present: { icon: CircleCheckIcon, variant: 'success', cell: 'bg-success/15 text-success' },
     half_day: { icon: ClockFadingIcon, variant: 'info', cell: 'bg-brand-cyan/15 text-brand-ink' },
     absent: { icon: CircleXIcon, variant: 'destructive', cell: 'bg-destructive/12 text-destructive' },
     leave: { icon: TreePalmIcon, variant: 'warning', cell: 'bg-warning/15 text-warning' },
+    unpaid_leave: {
+        icon: BanknoteXIcon,
+        variant: 'outline',
+        badge: 'border-transparent bg-violet-500/10 text-violet-700 inset-ring inset-ring-violet-500/25 dark:bg-violet-500/15 dark:text-violet-300',
+        cell: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+    },
     day_off: { icon: MoonIcon, variant: 'secondary', cell: 'bg-muted text-muted-foreground' },
 };
 
@@ -58,8 +66,8 @@ export function useStaffNames() {
 }
 
 /**
- * The absences behind a month's salary, such as "2 absent · 1 half day",
- * from its attendance counts.
+ * The absences behind a month's salary, such as "2 absent · 1 half day ·
+ * 5 days unpaid leave", from its attendance counts.
  */
 export function useAbsences() {
     const { t } = useTranslation();
@@ -67,10 +75,17 @@ export function useAbsences() {
     return (attendance) => {
         const absent = attendance.absent ?? 0;
         const half = attendance.half_day ?? 0;
+        const unpaid = attendance.unpaid_leave ?? 0;
 
-        return absent + half === 0
+        return absent + half + unpaid === 0
             ? t('staff.payroll.noAbsences')
-            : [absent > 0 && t('staff.payroll.absentDays', { count: absent }), half > 0 && t('staff.payroll.halfDays', { count: half })].filter(Boolean).join(' · ');
+            : [
+                  absent > 0 && t('staff.payroll.absentDays', { count: absent }),
+                  half > 0 && t('staff.payroll.halfDays', { count: half }),
+                  unpaid > 0 && t('staff.payroll.unpaidLeaveDays', { count: unpaid }),
+              ]
+                  .filter(Boolean)
+                  .join(' · ');
     };
 }
 
@@ -141,10 +156,10 @@ export function SalaryStatusBadge({ status }) {
 
 export function AttendanceBadge({ status }) {
     const { t } = useTranslation();
-    const { icon: Icon, variant } = ATTENDANCE[status] ?? { icon: CircleDashedIcon, variant: 'outline' };
+    const { icon: Icon, variant, badge } = ATTENDANCE[status] ?? { icon: CircleDashedIcon, variant: 'outline' };
 
     return (
-        <Badge variant={variant}>
+        <Badge variant={variant} className={badge}>
             <Icon data-icon="inline-start" />
             {t(`staff.attendance.statuses.${status}`)}
         </Badge>

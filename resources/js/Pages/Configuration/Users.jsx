@@ -1,6 +1,4 @@
-import ActionDialog from '@/Components/ActionDialog';
 import FlashMessages from '@/Components/FlashMessages';
-import { PasswordField, SelectField, TextField } from '@/Components/FormFields';
 import PageHeader from '@/Components/PageHeader';
 import { ListEmpty } from '@/Components/RecordList';
 import { StaffAvatar } from '@/Components/StaffBadges';
@@ -9,70 +7,11 @@ import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { FieldGroup } from '@/components/ui/field';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { Building2Icon, ChevronRightIcon, ContactRoundIcon, CrownIcon, EyeIcon, SlidersHorizontalIcon, UserPlusIcon, UsersRoundIcon } from 'lucide-react';
-import { useState } from 'react';
-import CampPicker from './Partials/CampPicker';
 import { FULL_ACCESS, roleIcon, useAccessName } from './Partials/UserAccess';
-
-/**
- * The add-user dialog: a name, the email and password they sign in with, a
- * role from those the signed-in user may give, and for an area manager or
- * camp boss, their camps.
- */
-function AddUserDialog({ roles, properties, open, onOpenChange }) {
-    const { t, tOr } = useTranslation();
-    const givable = roles.filter((role) => role.givable);
-    const form = useForm({ name: '', email: '', password: '', role: givable.find((role) => role.value !== 'super_admin')?.value ?? givable[0]?.value ?? null, property_ids: [] });
-    const { data, setData, errors, processing } = form;
-    const bind = (field) => ({ id: `user-${field}`, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
-    const chosen = roles.find((role) => role.value === data.role);
-
-    return (
-        <ActionDialog
-            open={open}
-            onOpenChange={onOpenChange}
-            title={t('permissions.users.add')}
-            description={t('permissions.users.addDescription')}
-            submitLabel={t('permissions.users.add')}
-            onSubmit={() => {
-                form.transform((values) => ({ ...values, property_ids: chosen?.camps ? values.property_ids : [] }));
-                form.post(route('configuration.users.store'), { preserveScroll: true });
-            }}
-            processing={processing}
-            className={chosen?.camps ? 'sm:max-w-lg' : undefined}
-        >
-            <FieldGroup className="gap-4">
-                <TextField {...bind('name')} label={t('permissions.users.fields.name')} autoComplete="off" dir="auto" />
-                <TextField {...bind('email')} type="email" label={t('permissions.users.fields.email')} autoComplete="off" />
-                <PasswordField {...bind('password')} label={t('permissions.users.fields.password')} description={t('permissions.users.fields.passwordHint')} />
-                <SelectField
-                    {...bind('role')}
-                    onChange={(value) => setData((current) => ({ ...current, role: value, property_ids: value === 'camp_boss' ? current.property_ids.slice(0, 1) : current.property_ids }))}
-                    label={t('permissions.users.fields.role')}
-                    items={givable.map((role) => ({ value: role.value, label: tOr(`permissions.roles.${role.value}.name`, role.name) }))}
-                    description={chosen && tOr(`permissions.roles.${chosen.value}.description`, chosen.description)}
-                />
-                {chosen?.camps && (
-                    <div className="flex flex-col gap-2">
-                        <span className="text-sm font-medium">{t(chosen.campLimit === 1 ? 'permissions.users.chooseCamp' : 'permissions.users.chooseCamps')}</span>
-                        <span className="text-xs text-muted-foreground">{t('permissions.users.campsHint')}</span>
-                        <CampPicker
-                            properties={properties}
-                            value={data.property_ids}
-                            limit={chosen.campLimit}
-                            error={errors.property_ids ?? errors['property_ids.0']}
-                            onChange={(ids) => setData('property_ids', ids)}
-                        />
-                    </div>
-                )}
-            </FieldGroup>
-        </ActionDialog>
-    );
-}
 
 /**
  * One user in the list: who they are, their access and where it comes
@@ -154,16 +93,16 @@ function UserRow({ user, available }) {
 
 /**
  * The company's users: the figures, everyone who can sign in with their
- * access, and adding a user. Each user's permissions open on their own page.
+ * access, and the way to add a user. Adding a user and each user's
+ * permissions open on their own pages.
  */
-export default function Users({ users, available, roles, properties }) {
+export default function Users({ users, available }) {
     const { t, formatNumber } = useTranslation();
-    const [isAdding, setAdding] = useState(false);
     const title = t('permissions.users.title');
     const count = (...kinds) => users.filter((user) => kinds.includes(user.kind)).length;
 
     const addButton = (
-        <Button variant="brand" onClick={() => setAdding(true)}>
+        <Button variant="brand" nativeButton={false} render={<Link href={route('configuration.users.create')} />}>
             <UserPlusIcon data-icon="inline-start" />
             {t('permissions.users.add')}
         </Button>
@@ -207,8 +146,6 @@ export default function Users({ users, available, roles, properties }) {
                     </ul>
                 )}
             </Card>
-
-            {isAdding && <AddUserDialog roles={roles} properties={properties} open onOpenChange={setAdding} />}
         </DashboardLayout>
     );
 }

@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\RegionalOffice;
 use App\Models\SalaryPayment;
 use App\Models\StaffAttendance;
+use App\Models\StaffLeave;
 use App\Models\StaffMember;
 use App\Models\StaffRole;
 use App\Models\User;
@@ -21,7 +22,8 @@ use Illuminate\Support\Collection;
  * and this month's is prepared. One person is on leave, one has left, one
  * joined this month, and a few documents are about to run out. Three of
  * them can sign in, one at each level of access (see SIGN_INS), with the
- * demo password.
+ * demo password. Leave is in every state: paid and unpaid leave under way,
+ * requests waiting for a decision and one turned down.
  *
  * Safe to re-run: offices and staff are matched on their names, attendance
  * on the day. Requires PortfolioSeeder.
@@ -78,6 +80,52 @@ class StaffSeeder extends Seeder
         $this->giveSignIns($company);
         $this->markAttendance($company, $user);
         $this->preparePayroll($company, $user);
+        $this->giveLeave($company, $user);
+    }
+
+    /**
+     * Krishna on a month of paid annual leave (the days marked leave above)
+     * and Manoj two months on unpaid leave, both given by the company and so
+     * taken off this month's salary where unpaid; requests from Hari and
+     * Joseph waiting for a decision; and one of Maria's turned down last
+     * month. Anyone who already has leave is left alone.
+     */
+    private function giveLeave(Company $company, ?User $user): void
+    {
+        if ($user === null) {
+            return;
+        }
+
+        $today = CarbonImmutable::today();
+        $leaves = [
+            ['Krishna Bhandari', 'annual', $today->subDays(11), 30, 'Annual leave home to Nepal.', 'paid'],
+            ['Manoj Yadav', 'emergency', $today->subDays(5), 60, 'Family emergency. Travelling home to Bihar.', 'unpaid'],
+            ['Hari Prasad Adhikari', 'annual', $today->addDays(20), 14, 'Going home for Tihar with my family.', 'pending'],
+            ['Joseph Mathew', 'annual', $today->addDays(40), 30, 'Annual leave to Kerala. Ram Bahadur will run the camp.', 'pending'],
+            ['Maria Santos', 'annual', $today->subMonthNoOverflow()->startOfMonth()->addDays(24), 7, 'A week in Manila.', 'rejected'],
+        ];
+
+        foreach ($leaves as [$name, $type, $from, $days, $reason, $outcome]) {
+            $member = $company->staffMembers()->where('full_name', $name)->with('user')->first();
+
+            if ($member === null || $member->leaves()->exists()) {
+                continue;
+            }
+
+            $isRequest = in_array($outcome, ['pending', 'rejected'], true);
+            $leave = StaffLeave::record(
+                $member,
+                ['type' => $type, 'starts_on' => $from->toDateString(), 'ends_on' => $from->addDays($days - 1)->toDateString(), 'reason' => $reason],
+                $isRequest ? ($member->user ?? $user) : $user,
+                $isRequest,
+            );
+
+            match ($outcome) {
+                'paid', 'unpaid' => $leave->approve($outcome === 'paid', null, $user),
+                'rejected' => $leave->reject('Payroll closes that week. Please pick dates after the 5th.', $user),
+                default => null,
+            };
+        }
     }
 
     /**

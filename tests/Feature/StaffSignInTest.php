@@ -234,7 +234,7 @@ test('lists a staff member\'s days of the month so far with their totals and hou
             ->where('attendance.days.12.date', '2026-10-10')
             ->where('attendance.days.7', ['date' => '2026-10-15', 'status' => 'leave', 'checkIn' => null, 'checkOut' => null, 'minutes' => null, 'note' => 'Eid'])
             ->where('attendance.days.9.minutes', 480)
-            ->where('attendance.counts', ['present' => 2, 'half_day' => 0, 'absent' => 1, 'leave' => 1, 'day_off' => 0, 'unmarked' => 9])
+            ->where('attendance.counts', ['present' => 2, 'half_day' => 0, 'absent' => 1, 'leave' => 1, 'unpaid_leave' => 0, 'day_off' => 0, 'unmarked' => 9])
             ->where('attendance.minutes', 990)
             ->where('attendance.timedDays', 2)
         );

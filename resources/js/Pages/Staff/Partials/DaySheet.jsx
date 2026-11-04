@@ -21,6 +21,7 @@ const PRESSED = {
     half_day: 'aria-pressed:border-brand-cyan/50 aria-pressed:bg-brand-cyan/10 aria-pressed:text-brand-ink',
     absent: 'aria-pressed:border-destructive/40 aria-pressed:bg-destructive/10 aria-pressed:text-destructive',
     leave: 'aria-pressed:border-warning/40 aria-pressed:bg-warning/10 aria-pressed:text-warning',
+    unpaid_leave: 'aria-pressed:border-violet-500/40 aria-pressed:bg-violet-500/10 aria-pressed:text-violet-700 dark:aria-pressed:text-violet-300',
     day_off: 'aria-pressed:border-foreground/20 aria-pressed:bg-muted aria-pressed:text-foreground',
 };
 
@@ -223,8 +224,8 @@ export default function DaySheet({ date, sheet, statuses }) {
                     icon={TreePalmIcon}
                     tone="gold"
                     label={t('staff.attendance.stats.away')}
-                    value={formatNumber(count('leave', 'day_off'))}
-                    detail={t('staff.attendance.stats.awayDetail', { leave: count('leave'), off: count('day_off') })}
+                    value={formatNumber(count('leave', 'unpaid_leave', 'day_off'))}
+                    detail={t('staff.attendance.stats.awayDetail', { leave: count('leave', 'unpaid_leave'), off: count('day_off') })}
                 />
                 <StatCard
                     icon={CircleDashedIcon}

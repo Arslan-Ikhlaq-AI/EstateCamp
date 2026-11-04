@@ -123,7 +123,7 @@ export default function Me({ staff, today, attendance, salaries, currency }) {
                     tone="success"
                     label={t('staff.me.stats.present')}
                     value={formatNumber((counts.present ?? 0) + (counts.half_day ?? 0))}
-                    detail={t('staff.me.stats.presentDetail', { absent: counts.absent ?? 0, leave: counts.leave ?? 0, month: formatMonth(attendance.month) })}
+                    detail={t('staff.me.stats.presentDetail', { absent: counts.absent ?? 0, leave: (counts.leave ?? 0) + (counts.unpaid_leave ?? 0), month: formatMonth(attendance.month) })}
                 />
                 {latest ? (
                     <StatCard

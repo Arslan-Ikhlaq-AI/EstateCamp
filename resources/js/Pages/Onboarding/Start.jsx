@@ -29,8 +29,9 @@ const INITIAL_DATA = {
     address_line_1: '',
     business_type: '',
     slug: '',
-    default_currency: '',
-    timezone: '',
+    // A new company starts on the UAE's currency and time; its country, once chosen, suggests its own.
+    default_currency: 'AED',
+    timezone: 'Asia/Dubai',
     admin_name: '',
     admin_email: '',
     admin_phone: '',
@@ -79,10 +80,8 @@ function MobileProgress({ step }) {
 export default function Start({ completed, businessTypes, roles, countries, currencies, timezones, maxTeam, workspaceBase, termsVersion }) {
     const host = workspaceBase.replace(/^https?:\/\//, '');
     // The terms version shown here goes back with the sign-up, so the server records what was actually read.
-    // Nothing is assumed about where the company is, except the time zone the visitor's own browser is in.
     const form = useForm('post', route('onboarding.store'), () => ({
         ...INITIAL_DATA,
-        timezone: timezones.includes(browserTimeZone()) ? browserTimeZone() : '',
         terms_version: termsVersion,
     }));
     const { data } = form;

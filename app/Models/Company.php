@@ -253,6 +253,16 @@ class Company extends Model
     }
 
     /**
+     * Leave its staff asked for or were given.
+     *
+     * @return HasMany<StaffLeave, $this>
+     */
+    public function staffLeaves(): HasMany
+    {
+        return $this->hasMany(StaffLeave::class);
+    }
+
+    /**
      * Every staff salary the payroll has worked out, paid or not.
      *
      * @return HasMany<SalaryPayment, $this>

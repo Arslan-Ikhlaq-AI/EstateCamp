@@ -15,8 +15,8 @@ use Illuminate\Support\Facades\DB;
  * One staff member's salary for one month, as the payroll works it out.
  *
  * The month's pay is the monthly salary (basic pay plus allowances) for the
- * days they were employed in it, less a day's pay for each day absent and
- * half for each half day; leave and days off are paid. A day's pay is the
+ * days they were employed in it, less a day's pay for each day absent or on
+ * unpaid leave and half for each half day; paid leave and days off are paid. A day's pay is the
  * monthly salary divided by the days in the month. Bonuses and deductions
  * such as an advance are added by hand. Until it is paid the salary is
  * worked out again each time the payroll is prepared; once paid it is kept

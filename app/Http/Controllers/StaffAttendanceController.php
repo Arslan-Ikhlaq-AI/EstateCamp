@@ -65,7 +65,9 @@ class StaffAttendanceController extends Controller
     }
 
     /**
-     * Save a day's sheet: each person marked gets that day's entry, replacing any earlier one.
+     * Save a day's sheet: each person marked gets that day's entry, replacing
+     * any earlier one. A day of approved leave marked as something else no
+     * longer belongs to the leave, so cancelling the leave leaves it alone.
      */
     public function store(StaffAttendanceRequest $request): RedirectResponse
     {
@@ -87,6 +89,7 @@ class StaffAttendanceController extends Controller
                 ]);
 
                 $attendance->forceFill([
+                    'staff_leave_id' => $attendance->status === $entry['status'] ? $attendance->staff_leave_id : null,
                     'status' => $entry['status'],
                     'check_in' => $entry['check_in'] ?? null,
                     'check_out' => $entry['check_out'] ?? null,

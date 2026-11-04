@@ -133,6 +133,22 @@ test('adds a user with the password chosen for them, which they sign in with', f
     $this->assertAuthenticatedAs($user);
 });
 
+test('opens the add user page with the roles the editor may give', function () {
+    $this->actingAs(officeAdminWithoutPayroll())
+        ->get(route('configuration.users.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Configuration/AddUser')
+            ->has('roles', count(UserRole::BUILT_IN))
+            ->where('roles', fn ($roles) => collect($roles)->pluck('givable', 'value')->only([UserRole::SUPER_ADMIN, UserRole::OFFICE_ADMIN, UserRole::AREA_MANAGER])->all() === [
+                UserRole::SUPER_ADMIN => false,
+                UserRole::OFFICE_ADMIN => false,
+                UserRole::AREA_MANAGER => true,
+            ])
+            ->has('properties'));
+
+    $this->actingAs(companyUser(UserRole::CAMP_BOSS))->get(route('configuration.users.create'))->assertForbidden();
+});
+
 test('saves a new password with a user’s access, which they then sign in with', function () {
     $colleague = companyUser(UserRole::OFFICE_ADMIN, ['remember_token' => 'remembered']);
     $oldPassword = $colleague->password;

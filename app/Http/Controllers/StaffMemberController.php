@@ -8,6 +8,7 @@ use App\Http\Requests\StaffMemberRequest;
 use App\Models\Company;
 use App\Models\SalaryPayment;
 use App\Models\StaffAttendance;
+use App\Models\StaffLeave;
 use App\Models\StaffMember;
 use App\Models\StaffRole;
 use Carbon\CarbonImmutable;
@@ -185,7 +186,35 @@ class StaffMemberController extends Controller
                 ->limit(12)
                 ->get()
                 ->map(fn (SalaryPayment $salary) => PayrollController::salaryDetails($salary)),
+            // Their latest leave and this year's paid and unpaid days, for those who may see leave.
+            'leave' => Gate::allows('leave.view') ? $this->leaveSummary($staffMember) : null,
+            'canGiveLeave' => Gate::allows('leave.manage') && ! $staffMember->hasLeft() && $staffMember->user_id !== $request->user()->id,
         ]);
+    }
+
+    /**
+     * A staff member's five latest leaves and the days of paid and unpaid
+     * leave approved this year.
+     *
+     * @return array{year: int, paidDays: int, unpaidDays: int, recent: list<array<string, mixed>>}
+     */
+    private function leaveSummary(StaffMember $member): array
+    {
+        $year = $member->company->localNow()->year;
+        $approved = $member->leaves()->where('status', 'approved')->whereYear('starts_on', $year)->get(['days', 'is_paid']);
+
+        return [
+            'year' => $year,
+            'paidDays' => (int) $approved->where('is_paid', true)->sum('days'),
+            'unpaidDays' => (int) $approved->where('is_paid', false)->sum('days'),
+            'recent' => $member->leaves()
+                ->with('decidedBy:id,name')
+                ->orderByDesc('starts_on')
+                ->limit(5)
+                ->get()
+                ->map(fn (StaffLeave $leave) => StaffLeaveController::leaveDetails($leave))
+                ->all(),
+        ];
     }
 
     /**

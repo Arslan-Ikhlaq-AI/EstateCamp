@@ -7,7 +7,7 @@ import { Link } from '@inertiajs/react';
 import { UsersRoundIcon } from 'lucide-react';
 
 // The totals shown at the end of each row, in this order.
-const TOTALS = ['present', 'half_day', 'absent', 'leave', 'day_off'];
+const TOTALS = ['present', 'half_day', 'absent', 'leave', 'unpaid_leave', 'day_off'];
 
 /**
  * A month of attendance for everyone employed in it: one row per person,

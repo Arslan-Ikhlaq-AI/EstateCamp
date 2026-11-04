@@ -404,6 +404,16 @@ class StaffMember extends Model
     }
 
     /**
+     * Leave they asked for or were given, whatever became of it.
+     *
+     * @return HasMany<StaffLeave, $this>
+     */
+    public function leaves(): HasMany
+    {
+        return $this->hasMany(StaffLeave::class);
+    }
+
+    /**
      * The account they sign in with, if they have one.
      *
      * @return BelongsTo<User, $this>

@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { todayIso } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link } from '@inertiajs/react';
-import { CalendarCheckIcon, KeyRoundIcon, PencilIcon } from 'lucide-react';
+import { CalendarCheckIcon, CalendarPlusIcon, KeyRoundIcon, PencilIcon } from 'lucide-react';
 import AttendanceCalendar from './Partials/AttendanceCalendar';
+import { LeavePayBadge, LeaveStatusBadge, LeaveType, useLeaveSpan } from './Partials/LeaveParts';
 import { DocumentsCard, SalaryCard, SalaryHistory } from './Partials/StaffCards';
 
 /**
@@ -77,7 +78,53 @@ function SignInCard({ signIn }) {
     );
 }
 
-export default function Show({ staff, attendance, salaries, currency, canManage }) {
+/**
+ * Their latest leave with this year's paid and unpaid days, and the way to
+ * give them leave.
+ */
+function LeaveCard({ staff, leave, canGiveLeave }) {
+    const { t } = useTranslation();
+    const span = useLeaveSpan();
+
+    return (
+        <SectionCard
+            title={t('staff.show.leave')}
+            description={t('staff.leave.show.historyTotals', { year: String(leave.year), paid: leave.paidDays, unpaid: leave.unpaidDays })}
+            action={
+                canGiveLeave && (
+                    <Button variant="outline" size="sm" nativeButton={false} render={<Link href={route('leave.create', { staff: staff.id })} />}>
+                        <CalendarPlusIcon data-icon="inline-start" />
+                        {t('staff.leave.give')}
+                    </Button>
+                )
+            }
+        >
+            {leave.recent.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('staff.leave.show.noHistory')}</p>
+            ) : (
+                <ul className="-my-2 flex flex-col divide-y">
+                    {leave.recent.map((item) => (
+                        <li key={item.id}>
+                            <Link href={route('leave.show', item.id)} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm hover:text-brand-ink">
+                                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <LeaveType type={item.type} className="font-medium" />
+                                    <span className="text-muted-foreground tabular-nums">{span(item)}</span>
+                                    <span className="tabular-nums">{t('staff.leave.days', { count: item.days })}</span>
+                                </span>
+                                <span className="flex gap-2">
+                                    <LeaveStatusBadge status={item.status} />
+                                    <LeavePayBadge isPaid={item.isPaid} />
+                                </span>
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </SectionCard>
+    );
+}
+
+export default function Show({ staff, attendance, salaries, currency, canManage, leave, canGiveLeave }) {
     const { t, formatDate } = useTranslation();
     const { roleName } = useStaffNames();
     const { formatMonth } = useCalendarFormat();
@@ -146,6 +193,8 @@ export default function Show({ staff, attendance, salaries, currency, canManage 
                     >
                         <AttendanceCalendar month={attendance.month} days={attendance.days} marks={attendance.marks} counts={attendance.counts} />
                     </SectionCard>
+
+                    {leave && <LeaveCard staff={staff} leave={leave} canGiveLeave={canGiveLeave} />}
 
                     <SectionCard title={t('staff.show.salaries')} description={t('staff.show.salariesDescription')} flush>
                         <SalaryHistory salaries={salaries} currency={currency} linkToPayroll empty={t('staff.show.noSalaries')} />

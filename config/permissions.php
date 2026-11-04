@@ -214,6 +214,10 @@ return [
                 'view' => ['attendance.index'],
                 'mark' => ['attendance.store'],
             ],
+            'leave' => [
+                'view' => ['leave.index', 'leave.show'],
+                'manage' => ['leave.create', 'leave.store', 'leave.approve', 'leave.reject', 'leave.cancel'],
+            ],
             'payroll' => [
                 'view' => ['payroll.index'],
                 'manage' => ['payroll.store', 'payroll.pay-all', 'payroll.update', 'payroll.pay', 'payroll.unpay'],
@@ -247,7 +251,7 @@ return [
                 'manage' => ['configuration.regional-offices.store', 'configuration.regional-offices.update', 'configuration.regional-offices.destroy'],
             ],
             'users' => [
-                'manage' => ['configuration.users', 'configuration.users.store', 'configuration.users.edit', 'configuration.users.update'],
+                'manage' => ['configuration.users', 'configuration.users.create', 'configuration.users.store', 'configuration.users.edit', 'configuration.users.update'],
             ],
         ],
     ],
@@ -307,13 +311,13 @@ return [
     */
     'staff_access' => [
         'self' => [],
-        'supervisor' => ['staff.view', 'attendance.*', 'payroll.view', 'salaries.view', 'report_staff.view'],
-        'admin' => ['staff.*', 'attendance.*', 'payroll.*', 'salaries.view', 'report_staff.view', 'regional_offices.*'],
+        'supervisor' => ['staff.view', 'attendance.*', 'leave.view', 'payroll.view', 'salaries.view', 'report_staff.view'],
+        'admin' => ['staff.*', 'attendance.*', 'leave.*', 'payroll.*', 'salaries.view', 'report_staff.view', 'regional_offices.*'],
     ],
 
     'app_access' => [
         '*',
-        '!staff.*', '!attendance.*', '!payroll.*', '!salaries.*', '!report_staff.*', '!regional_offices.manage',
+        '!staff.*', '!attendance.*', '!leave.*', '!payroll.*', '!salaries.*', '!report_staff.*', '!regional_offices.manage',
         '!property_payments.confirm_cash', '!users.*',
     ],
 

@@ -14,7 +14,9 @@ use App\Models\Property;
 use App\Models\PropertyDocument;
 use App\Models\Room;
 use App\Models\RoomRental;
+use App\Models\StaffLeave;
 use App\Models\StaffMember;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\Request;
@@ -86,7 +88,7 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             // Each of the company's alerts goes to those who may open what it is about.
-            'notifications' => fn () => $company ? $this->notifications($company, $permissions) : [],
+            'notifications' => fn () => $company ? $this->notifications($company, $permissions, $member) : [],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
             ],
@@ -210,14 +212,70 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
+     * Leave requests waiting for a decision, soonest first, one notification
+     * each; `$member`'s own are left out, since someone else decides them.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function leaveRequestNotifications(Company $company, ?StaffMember $member): Collection
+    {
+        $today = CarbonImmutable::parse($company->localNow()->toDateString());
+
+        return $company->staffLeaves()
+            ->where('status', 'pending')
+            ->when($member, fn (Builder $query, StaffMember $member) => $query->where('staff_member_id', '!=', $member->id))
+            ->whereHas('staffMember')
+            ->with('staffMember:id,full_name')
+            ->orderBy('starts_on')
+            ->limit(50)
+            ->get()
+            ->map(fn (StaffLeave $leave): array => [
+                'id' => "leave-{$leave->id}",
+                'type' => 'leave_requested',
+                'severity' => 'warning',
+                'title' => $leave->staffMember->full_name,
+                'subject' => $leave->type,
+                'days' => (int) $today->diffInDays($leave->starts_on, false),
+                'length' => $leave->days,
+                'url' => route('leave.show', $leave->id),
+            ]);
+    }
+
+    /**
+     * Decisions on `$member`'s own leave requests from the last week.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function ownLeaveNotifications(StaffMember $member): Collection
+    {
+        return $member->leaves()
+            ->where('is_request', true)
+            ->whereIn('status', ['approved', 'rejected'])
+            ->where('decided_at', '>=', now()->subWeek())
+            ->orderByDesc('decided_at')
+            ->get()
+            ->map(fn (StaffLeave $leave): array => [
+                'id' => "my-leave-{$leave->id}",
+                'type' => $leave->isApproved() ? 'leave_approved' : 'leave_rejected',
+                'severity' => $leave->isApproved() ? 'info' : 'warning',
+                'title' => $leave->type,
+                'subject' => $leave->isApproved() ? ($leave->is_paid ? 'paid' : 'unpaid') : null,
+                'days' => null,
+                'length' => $leave->days,
+                'url' => route('my.leave'),
+            ]);
+    }
+
+    /**
      * Things in the company that need attention, most urgent first, of the
-     * kinds the user's `$permissions` let them open. Each entry carries data
-     * rather than a sentence so the client can word it in the user's language.
+     * kinds the user's `$permissions` let them open, and for a staff member
+     * (`$member`) news of their own leave. Each entry carries data rather
+     * than a sentence so the client can word it in the user's language.
      *
      * @param  list<string>  $permissions
-     * @return array<int, array{id: string, type: string, severity: string, title: string, subject: string|null, service?: string, days: int|null, url: string}>
+     * @return array<int, array{id: string, type: string, severity: string, title: string, subject: string|null, service?: string, days: int|null, length?: int, url: string}>
      */
-    private function notifications(Company $company, array $permissions): array
+    private function notifications(Company $company, array $permissions, ?StaffMember $member): array
     {
         $today = today();
         $may = fn (string $permission) => in_array($permission, $permissions, true);
@@ -299,6 +357,8 @@ class HandleInertiaRequests extends Middleware
             ->concat($may('cheques.view') ? $this->chequeNotifications($company) : [])
             ->concat($documents)
             ->concat($may('staff.view') ? $this->staffDocumentNotifications($company) : [])
+            ->concat($may('leave.manage') ? $this->leaveRequestNotifications($company, $member) : [])
+            ->concat($member ? $this->ownLeaveNotifications($member) : [])
             ->concat($leases)
             ->concat($rooms)
             ->sortBy([

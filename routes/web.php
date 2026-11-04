@@ -25,6 +25,7 @@ use App\Http\Controllers\MaintenanceJobController;
 use App\Http\Controllers\MaintenanceReportController;
 use App\Http\Controllers\MaintenanceStatusController;
 use App\Http\Controllers\MaintenanceVisitController;
+use App\Http\Controllers\MyLeaveController;
 use App\Http\Controllers\OccupancyController;
 use App\Http\Controllers\OccupancyReportController;
 use App\Http\Controllers\OccupantController;
@@ -49,6 +50,7 @@ use App\Http\Controllers\RoomTypeController;
 use App\Http\Controllers\SalaryPaymentController;
 use App\Http\Controllers\ShopController;
 use App\Http\Controllers\StaffAttendanceController;
+use App\Http\Controllers\StaffLeaveController;
 use App\Http\Controllers\StaffMemberController;
 use App\Http\Controllers\StaffPortalController;
 use App\Http\Controllers\StaffReportController;
@@ -89,6 +91,10 @@ Route::middleware(['auth', 'verified', 'permission'])->group(function () {
     Route::get('my/attendance', [StaffPortalController::class, 'attendance'])->name('my.attendance');
     Route::post('my/check-in', [StaffPortalController::class, 'checkIn'])->name('my.check-in');
     Route::post('my/check-out', [StaffPortalController::class, 'checkOut'])->name('my.check-out');
+    Route::get('my/leave', [MyLeaveController::class, 'index'])->name('my.leave');
+    Route::get('my/leave/create', [MyLeaveController::class, 'create'])->name('my.leave.create');
+    Route::post('my/leave', [MyLeaveController::class, 'store'])->name('my.leave.store');
+    Route::post('my/leave/{staffLeave}/cancel', [MyLeaveController::class, 'cancel'])->whereNumber('staffLeave')->name('my.leave.cancel');
 
     // Staff: everyone the company employs, their daily attendance and their monthly salaries.
     Route::resource('staff', StaffMemberController::class)->only(['index', 'show'])->parameters(['staff' => 'staffMember'])->whereNumber('staffMember');
@@ -104,6 +110,17 @@ Route::middleware(['auth', 'verified', 'permission'])->group(function () {
     Route::put('payroll/{salaryPayment}', [PayrollController::class, 'update'])->whereNumber('salaryPayment')->name('payroll.update');
     Route::post('payroll/{salaryPayment}/pay', [PayrollController::class, 'pay'])->whereNumber('salaryPayment')->name('payroll.pay');
     Route::post('payroll/{salaryPayment}/unpay', [PayrollController::class, 'unpay'])->whereNumber('salaryPayment')->name('payroll.unpay');
+
+    // Leave: staff requests to approve as paid or unpaid, and leave given without one.
+    Route::controller(StaffLeaveController::class)->group(function () {
+        Route::get('leave', 'index')->name('leave.index');
+        Route::get('leave/create', 'create')->name('leave.create');
+        Route::post('leave', 'store')->name('leave.store');
+        Route::get('leave/{staffLeave}', 'show')->whereNumber('staffLeave')->name('leave.show');
+        Route::post('leave/{staffLeave}/approve', 'approve')->whereNumber('staffLeave')->name('leave.approve');
+        Route::post('leave/{staffLeave}/reject', 'reject')->whereNumber('staffLeave')->name('leave.reject');
+        Route::post('leave/{staffLeave}/cancel', 'cancel')->whereNumber('staffLeave')->name('leave.cancel');
+    });
     Route::post('configuration/regional-offices', [RegionalOfficeController::class, 'store'])->name('configuration.regional-offices.store');
     Route::put('configuration/regional-offices/{regionalOffice}', [RegionalOfficeController::class, 'update'])->name('configuration.regional-offices.update');
     Route::delete('configuration/regional-offices/{regionalOffice}', [RegionalOfficeController::class, 'destroy'])->name('configuration.regional-offices.destroy');
@@ -223,6 +240,7 @@ Route::middleware(['auth', 'verified', 'permission'])->group(function () {
 
     // The company's users: adding them, their roles and what each may do.
     Route::get('configuration/users', [CompanyUserController::class, 'index'])->name('configuration.users');
+    Route::get('configuration/users/create', [CompanyUserController::class, 'create'])->name('configuration.users.create');
     Route::post('configuration/users', [CompanyUserController::class, 'store'])->name('configuration.users.store');
     Route::get('configuration/users/{user}', [CompanyUserController::class, 'edit'])->whereNumber('user')->name('configuration.users.edit');
     Route::put('configuration/users/{user}', [CompanyUserController::class, 'update'])->whereNumber('user')->name('configuration.users.update');

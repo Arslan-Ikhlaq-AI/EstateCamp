@@ -12,7 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One staff member's attendance on one day, with the times they came and
- * went. A day not marked counts as worked.
+ * went. A day not marked counts as worked. Days of approved leave are marked
+ * by it (see StaffLeave) as paid or unpaid leave.
  */
 #[Fillable(['work_date', 'status', 'check_in', 'check_out', 'note'])]
 class StaffAttendance extends Model
@@ -20,13 +21,13 @@ class StaffAttendance extends Model
     /** @use HasFactory<StaffAttendanceFactory> */
     use HasFactory, LimitedToCamps;
 
-    public const STATUSES = ['present', 'half_day', 'absent', 'leave', 'day_off'];
+    public const STATUSES = ['present', 'half_day', 'absent', 'leave', 'unpaid_leave', 'day_off'];
 
     /**
-     * The share of a day's pay each status takes off the salary; leave and
-     * days off are paid.
+     * The share of a day's pay each status takes off the salary; paid leave
+     * and days off are paid.
      */
-    public const UNPAID_SHARE = ['absent' => 1.0, 'half_day' => 0.5];
+    public const UNPAID_SHARE = ['absent' => 1.0, 'half_day' => 0.5, 'unpaid_leave' => 1.0];
 
     /**
      * Get the attributes that should be cast.
@@ -71,6 +72,16 @@ class StaffAttendance extends Model
     public function staffMember(): BelongsTo
     {
         return $this->belongsTo(StaffMember::class);
+    }
+
+    /**
+     * The approved leave that marked this day, if any.
+     *
+     * @return BelongsTo<StaffLeave, $this>
+     */
+    public function leave(): BelongsTo
+    {
+        return $this->belongsTo(StaffLeave::class, 'staff_leave_id');
     }
 
     /**
