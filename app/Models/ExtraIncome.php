@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\HasSettlements;
 use App\Models\Concerns\LimitedToCamps;
 use Database\Factories\ExtraIncomeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -18,8 +19,8 @@ use Illuminate\Support\Str;
  * an internet, gas or washing machine provider pays for serving the
  * building under its own agreement with the company. An admin records it
  * once it is received, so it is always paid; one added by mistake is
- * cancelled and no longer counts. A received one is money in in the cash
- * ledger and on the property's payments.
+ * cancelled and no longer counts. It is an extra payment, kept out of
+ * payments, revenue and the reports, and held until it is settled.
  *
  * The invoice is kept on the private disk and served only to the
  * company's own users.
@@ -28,7 +29,7 @@ use Illuminate\Support\Str;
 class ExtraIncome extends Model
 {
     /** @use HasFactory<ExtraIncomeFactory> */
-    use HasDocumentNumber, HasFactory, LimitedToCamps;
+    use HasDocumentNumber, HasFactory, HasSettlements, LimitedToCamps;
 
     public const NUMBER_PREFIX = 'EI';
 
@@ -52,6 +53,7 @@ class ExtraIncome extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'settled_amount' => 'decimal:2',
             'received_on' => 'date',
         ];
     }

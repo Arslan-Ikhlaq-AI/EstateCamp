@@ -3,8 +3,11 @@
 use App\Models\Apartment;
 use App\Models\Cheque;
 use App\Models\Client;
+use App\Models\Commission;
 use App\Models\Contract;
 use App\Models\ContractLine;
+use App\Models\Deposit;
+use App\Models\ExtraIncome;
 use App\Models\HeadLease;
 use App\Models\Invoice;
 use App\Models\Landlord;
@@ -13,6 +16,7 @@ use App\Models\Occupant;
 use App\Models\Payment;
 use App\Models\Property;
 use App\Models\Room;
+use App\Models\Settlement;
 use App\Models\Shop;
 use Database\Seeders\ClientSeeder;
 use Database\Seeders\DatabaseSeeder;
@@ -77,17 +81,17 @@ it('leaves this month\'s invoices in the states the demo describes', function ()
         ->and($balance(ClientSeeder::RAHUL))->toBe(0.0);
 });
 
-it('bills the first invoice with the deposit and VAT only on shop rent', function () {
+it('keeps the deposit off the first invoice and puts VAT only on shop rent', function () {
     $this->seed(DatabaseSeeder::class);
 
     $miniMart = Client::where('name', ClientSeeder::MINI_MART)->sole();
     [$first, $second] = $miniMart->invoices()->orderBy('period_start')->limit(2)->get();
 
-    expect((float) $first->subtotal)->toBe(26000.0)
+    expect((float) $first->subtotal)->toBe(19500.0)
         ->and((float) $first->vat_amount)->toBe(975.0)
         ->and((float) $second->subtotal)->toBe(19500.0)
-        ->and($first->items()->where('item_type', 'deposit')->count())->toBe(1)
-        ->and($second->items()->where('item_type', 'deposit')->count())->toBe(0);
+        ->and($first->items()->where('item_type', 'deposit')->count())->toBe(0)
+        ->and((float) $first->contract->deposit()->sole()->amount)->toBe(6500.0);
 });
 
 it('clears the landlord cheques already due and copies the running lease onto the property', function () {
@@ -110,9 +114,11 @@ it('clears the landlord cheques already due and copies the running lease onto th
 it('can be run again without duplicating leasing records', function () {
     $this->seed(DatabaseSeeder::class);
     $cheques = Cheque::count();
+    $extraPayments = [Commission::count(), Deposit::count(), ExtraIncome::count(), Settlement::count()];
     $this->seed(DatabaseSeeder::class);
 
-    expect(Landlord::count())->toBe(2)
+    expect([Commission::count(), Deposit::count(), ExtraIncome::count(), Settlement::count()])->toBe($extraPayments)
+        ->and(Landlord::count())->toBe(2)
         ->and(Cheque::where('direction', 'issued')->count())->toBe(18)
         ->and(Cheque::count())->toBe($cheques)
         ->and(Contract::count())->toBe(11)

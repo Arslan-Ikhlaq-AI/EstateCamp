@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\CompanyController as AdminCompanyController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\AgreementMoneyController;
 use App\Http\Controllers\AnalyzeController;
 use App\Http\Controllers\ApartmentController;
 use App\Http\Controllers\ChequeController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\CompanyUserController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExtraIncomeController;
+use App\Http\Controllers\ExtraPaymentController;
 use App\Http\Controllers\HeadLeaseController;
 use App\Http\Controllers\IncomeReportController;
 use App\Http\Controllers\IndividualController;
@@ -48,6 +50,7 @@ use App\Http\Controllers\RoomController;
 use App\Http\Controllers\RoomRentalController;
 use App\Http\Controllers\RoomTypeController;
 use App\Http\Controllers\SalaryPaymentController;
+use App\Http\Controllers\SettlementController;
 use App\Http\Controllers\ShopController;
 use App\Http\Controllers\StaffAttendanceController;
 use App\Http\Controllers\StaffLeaveController;
@@ -139,6 +142,24 @@ Route::middleware(['auth', 'verified', 'permission'])->group(function () {
     Route::resource('other-payments', OtherPaymentController::class)->only(['create', 'store', 'edit', 'update'])->parameters(['other-payments' => 'otherPayment'])->whereNumber('otherPayment');
     Route::post('other-payments/{otherPayment}/status', [OtherPaymentController::class, 'changeStatus'])->whereNumber('otherPayment')->name('other-payments.status');
     Route::get('other-payments/{otherPayment}/receipt', [OtherPaymentController::class, 'receipt'])->whereNumber('otherPayment')->name('other-payments.receipt');
+
+    // Extra payments: commissions, deposits and extra income, kept out of payments, revenue and reports.
+    Route::get('extra-payments', ExtraPaymentController::class)->name('extra-payments.index');
+
+    foreach (['commissions' => 'commission', 'deposits' => 'deposit'] as $uri => $kind) {
+        Route::controller(AgreementMoneyController::class)->group(function () use ($uri, $kind) {
+            Route::get($uri, 'index')->defaults('kind', $kind)->name("{$uri}.index");
+            Route::post("{$uri}/{record}/receive", 'receive')->defaults('kind', $kind)->whereNumber('record')->name("{$uri}.receive");
+            Route::post("{$uri}/{record}/status", 'changeStatus')->defaults('kind', $kind)->whereNumber('record')->name("{$uri}.status");
+        });
+    }
+
+    foreach (['commissions' => 'commission', 'deposits' => 'deposit', 'extra-incomes' => 'extra_income'] as $uri => $kind) {
+        Route::controller(SettlementController::class)->group(function () use ($uri, $kind) {
+            Route::post("{$uri}/{record}/settlements", 'store')->defaults('kind', $kind)->whereNumber('record')->name("{$uri}.settlements.store");
+            Route::delete("{$uri}/{record}/settlements/{settlement}", 'destroy')->defaults('kind', $kind)->whereNumber(['record', 'settlement'])->name("{$uri}.settlements.destroy");
+        });
+    }
 
     // Extra income for a property besides rent, such as an internet or washing machine provider's share.
     Route::resource('extra-incomes', ExtraIncomeController::class)->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['extra-incomes' => 'extraIncome'])->whereNumber('extraIncome');

@@ -31,7 +31,7 @@ beforeEach(function () {
 
 /**
  * A three-year contract for one apartment at 5,200 a month, billed (and
- * paid by cheque) quarterly, with a 10,000 deposit.
+ * paid by cheque) quarterly, with a 10,000 deposit kept apart from them.
  *
  * @return array<string, mixed>
  */
@@ -99,13 +99,12 @@ test('builds a three-year contract\'s cheques from its billing cycle, four a yea
     $this->actingAs($this->superAdmin)
         ->post(route('contracts.store'), [
             ...chequeContractInput($this->alNoor, $this->apartment),
-            'cheques' => chequesInHand(['security_deposit:1', 'rent:1', 'rent:2', 'rent:3', 'rent:4']),
+            'cheques' => chequesInHand(['rent:1', 'rent:2', 'rent:3', 'rent:4']),
         ])
         ->assertSessionHasNoErrors();
 
     $contract = storedContract();
     $rent = fn () => $contract->cheques()->where('purpose', 'rent');
-    $deposit = $contract->cheques()->where('purpose', 'security_deposit')->sole();
 
     expect($rent()->count())->toBe(12)
         ->and($rent()->distinct()->pluck('amount')->map(fn ($amount) => (float) $amount)->all())->toBe([15600.0])
@@ -113,11 +112,10 @@ test('builds a three-year contract\'s cheques from its billing cycle, four a yea
         ->and($rent()->where('sequence', 1)->value('period_end')->toDateString())->toBe('2027-01-31')
         ->and($rent()->where('status', 'received')->pluck('sequence')->sort()->values()->all())->toBe([1, 2, 3, 4])
         ->and($rent()->where('status', 'pending')->count())->toBe(8)
-        ->and((float) $deposit->amount)->toBe(10000.0)
-        ->and($deposit->status)->toBe('received')
-        ->and($deposit->direction)->toBe('received');
+        ->and($contract->cheques()->where('purpose', 'security_deposit')->exists())->toBeFalse()
+        ->and((float) $contract->deposit()->sole()->amount)->toBe(10000.0);
 
-    Storage::disk('local')->assertExists($deposit->front_image_path);
+    Storage::disk('local')->assertExists($rent()->where('sequence', 1)->value('front_image_path'));
 });
 
 test('saves a contract before its cheques are handed over', function () {
@@ -125,7 +123,7 @@ test('saves a contract before its cheques are handed over', function () {
         ->post(route('contracts.store'), chequeContractInput($this->alNoor, $this->apartment))
         ->assertSessionHasNoErrors();
 
-    expect(storedContract()->cheques()->count())->toBe(13)
+    expect(storedContract()->cheques()->count())->toBe(12)
         ->and(storedContract()->cheques()->distinct()->pluck('status')->all())->toBe(['pending']);
 });
 
@@ -146,22 +144,17 @@ test('saves a running contract with this year\'s cheques still to collect', func
 
 test('a cleared cheque becomes a payment that settles its period, invoicing the period first', function () {
     $contract = activeChequeContract($this->superAdmin, $this->alNoor, $this->apartment);
-    [$deposit, $first] = [
-        $contract->cheques()->where('purpose', 'security_deposit')->sole(),
-        $contract->cheques()->where('purpose', 'rent')->where('sequence', 1)->sole(),
-    ];
+    $first = $contract->cheques()->where('purpose', 'rent')->where('sequence', 1)->sole();
     $this->travelTo(now()->setDate(2026, 11, 3));
 
-    foreach ([$first, $deposit] as $cheque) {
-        $this->actingAs($this->superAdmin)->post(route('cheques.status', $cheque), ['cheque_status_id' => chequeStatusId('submitted'), 'date' => '2026-11-01'])->assertSessionHasNoErrors();
-        $this->actingAs($this->superAdmin)->post(route('cheques.status', $cheque), ['cheque_status_id' => chequeStatusId('approved'), 'date' => '2026-11-03'])->assertSessionHasNoErrors();
-    }
+    $this->actingAs($this->superAdmin)->post(route('cheques.status', $first), ['cheque_status_id' => chequeStatusId('submitted'), 'date' => '2026-11-01'])->assertSessionHasNoErrors();
+    $this->actingAs($this->superAdmin)->post(route('cheques.status', $first), ['cheque_status_id' => chequeStatusId('approved'), 'date' => '2026-11-03'])->assertSessionHasNoErrors();
 
     $invoice = $contract->invoices()->sole();
     $payment = $first->refresh()->payment;
 
     expect($invoice->period_start->toDateString())->toBe('2026-11-01')
-        ->and((float) $invoice->total)->toBe(25600.0)
+        ->and((float) $invoice->total)->toBe(15600.0)
         ->and($invoice->refresh()->status)->toBe('paid')
         ->and($payment->method)->toBe('cheque')
         ->and($payment->status)->toBe('cleared')
@@ -249,7 +242,7 @@ test('cancels the cheques still expected after a contract is terminated', functi
     $contract->terminate(today());
 
     expect($contract->cheques()->where('status', 'cancelled')->count())->toBe(8)
-        ->and($contract->cheques()->where('status', 'received')->count())->toBe(5);
+        ->and($contract->cheques()->where('status', 'received')->count())->toBe(4);
 });
 
 test('needs this year\'s cheques with a photo to save an active head lease', function () {
@@ -319,7 +312,7 @@ test('lists cheques by direction with what to bank and what goes out', function 
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Cheques/Index')
-            ->where('cheques.total', 13)
+            ->where('cheques.total', 12)
             ->where('cheques.data.0.agreement.number', 'CTR-2026-0012')
             ->where('cheques.data.0.party.name', ClientSeeder::AL_NOOR)
             ->where('facets.status', fn ($options) => collect($options)->pluck('value')->all() === ['pending', 'created', 'submitted', 'approved', 'bounced', 'returned', 'cancelled'])
@@ -341,7 +334,7 @@ test('builds the cheque schedule of a contract that has none', function () {
         ->assertSessionHasNoErrors();
 
     expect($contract->cheques()->where('purpose', 'rent')->count())->toBe(8)
-        ->and($contract->cheques()->where('purpose', 'security_deposit')->count())->toBe(1);
+        ->and($contract->cheques()->where('purpose', 'security_deposit')->count())->toBe(0);
 });
 
 test('raises bounced cheques and cheques to deposit on the dashboard', function () {

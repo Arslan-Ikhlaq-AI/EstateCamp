@@ -7,20 +7,15 @@ import { FieldGroup } from '@/components/ui/field';
 import { todayIso } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { useForm } from '@inertiajs/react';
-import { BanknoteIcon, CircleAlertIcon, InfoIcon, ShieldCheckIcon, TagIcon } from 'lucide-react';
+import { BanknoteIcon, CircleAlertIcon, InfoIcon, TagIcon } from 'lucide-react';
 
-const PURPOSE_ICONS = { rent: BanknoteIcon, deposit: ShieldCheckIcon, other: TagIcon };
+const PURPOSE_ICONS = { rent: BanknoteIcon, other: TagIcon };
 
 /**
  * What a payment for `purpose` would normally come to: the rent still to
- * pay for the next month due (or a month in advance when paid up), or
- * the deposit still to collect.
+ * pay for the next month due, or a month in advance when paid up.
  */
 function suggestedAmount(rental, purpose) {
-    if (purpose === 'deposit') {
-        return rental.deposit.toCollect || '';
-    }
-
     if (purpose === 'rent') {
         return rental.standing.arrears > 0 ? rental.standing.arrears : rental.standing.nextDueAmount || rental.monthlyRent;
     }
@@ -29,18 +24,17 @@ function suggestedAmount(rental, purpose) {
 }
 
 /**
- * Record what a tenant paid: rent, the deposit or another charge. Cash,
+ * Record what a tenant paid: rent or another charge. Cash,
  * card and transfers become a receipt straight away; a cheque goes to the
  * cheque register (with its number, bank, date and photos) and becomes a
  * receipt when it clears.
  */
 export function RecordPaymentDialog({ rental, currency, banks, methods, open, onOpenChange }) {
     const { t, formatMoney, formatDate } = useTranslation();
-    const initialPurpose = rental.deposit.toCollect > 0 && rental.standing.paid === 0 ? 'deposit' : 'rent';
     const form = useForm({
-        purpose: initialPurpose,
+        purpose: 'rent',
         method: 'cash',
-        amount: suggestedAmount(rental, initialPurpose),
+        amount: suggestedAmount(rental, 'rent'),
         paid_on: todayIso(),
         reference: '',
         notes: '',
@@ -80,7 +74,7 @@ export function RecordPaymentDialog({ rental, currency, banks, methods, open, on
                     label={t('finance.rentals.payment.purpose')}
                     value={data.purpose}
                     onChange={choosePurpose}
-                    options={['rent', 'deposit', 'other'].map((purpose) => ({ value: purpose, label: t(`finance.receipts.purposes.${purpose}`), icon: PURPOSE_ICONS[purpose] }))}
+                    options={['rent', 'other'].map((purpose) => ({ value: purpose, label: t(`finance.receipts.purposes.${purpose}`), icon: PURPOSE_ICONS[purpose] }))}
                     error={errors.purpose}
                     className="sm:col-span-2"
                 />
@@ -142,12 +136,14 @@ export function RecordPaymentDialog({ rental, currency, banks, methods, open, on
 }
 
 /**
- * The tenant moves out: the day they leave, and any deposit handed back.
- * Rent still owed stays owed after they leave.
+ * The tenant moves out: the day they leave, and any deposit handed back,
+ * saved as a settlement of the deposit. Rent still owed stays owed after
+ * they leave.
  */
 export function EndRentalDialog({ rental, currency, refundMethods, open, onOpenChange }) {
     const { t, formatMoney } = useTranslation();
-    const form = useForm({ moved_out_on: todayIso(), deposit_refunded: rental.deposit.held || '', deposit_refund_method: 'cash', note: '' });
+    const held = rental.depositStanding.held;
+    const form = useForm({ moved_out_on: todayIso(), deposit_refunded: held || '', deposit_refund_method: 'cash', note: '' });
     const { data, setData, errors, processing } = form;
     const bind = (field) => ({ id: `end-rental-${field}`, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
 
@@ -173,19 +169,23 @@ export function EndRentalDialog({ rental, currency, refundMethods, open, onOpenC
             )}
             <FieldGroup className="grid gap-4 sm:grid-cols-2">
                 <TextField {...bind('moved_out_on')} type="date" label={t('finance.rentals.end.movedOutOn')} min={rental.startDate} className="sm:col-span-2" />
-                <MoneyField
-                    {...bind('deposit_refunded')}
-                    label={t('finance.rentals.end.refund')}
-                    currency={currency}
-                    description={t('finance.rentals.end.refundHint', { amount: formatMoney(rental.deposit.held, currency) })}
-                    optional
-                />
-                <SelectField
-                    {...bind('deposit_refund_method')}
-                    label={t('finance.rentals.end.refundMethod')}
-                    items={refundMethods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`) }))}
-                    disabled={data.deposit_refunded === '' || Number(data.deposit_refunded) === 0}
-                />
+                {held > 0 && (
+                    <>
+                        <MoneyField
+                            {...bind('deposit_refunded')}
+                            label={t('finance.rentals.end.refund')}
+                            currency={currency}
+                            description={t('finance.rentals.end.refundHint', { amount: formatMoney(held, currency) })}
+                            optional
+                        />
+                        <SelectField
+                            {...bind('deposit_refund_method')}
+                            label={t('finance.rentals.end.refundMethod')}
+                            items={refundMethods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`) }))}
+                            disabled={data.deposit_refunded === '' || Number(data.deposit_refunded) === 0}
+                        />
+                    </>
+                )}
                 <TextareaField {...bind('note')} label={t('finance.rentals.end.note')} optional rows={2} className="sm:col-span-2" />
             </FieldGroup>
         </ActionDialog>

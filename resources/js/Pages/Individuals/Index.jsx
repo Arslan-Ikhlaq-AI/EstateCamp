@@ -34,7 +34,7 @@ const STATUS_ICONS = { active: CircleCheckIcon, inactive: CirclePauseIcon };
  * they rent short-term now and where their rent stands.
  */
 export default function Index({ company, filters, facets, summary, individuals }) {
-    const { t, formatNumber, formatCurrency, formatMoney, formatDate } = useTranslation();
+    const { t, formatNumber, formatCurrency, formatMoney } = useTranslation();
     const can = useCan();
     const place = useRentalPlace();
     const title = t('leasing.individuals.title');
@@ -104,9 +104,6 @@ export default function Index({ company, filters, facets, summary, individuals }
                                     </Link>
                                     {' · '}
                                     <span dir="auto">{rental.property?.name}</span>
-                                    {rental.endDate && (
-                                        <span className={cn(rental.termOver && 'text-destructive')}> · {t('leasing.individuals.until', { date: formatDate(rental.endDate) })}</span>
-                                    )}
                                 </span>
                             </li>
                         ))}

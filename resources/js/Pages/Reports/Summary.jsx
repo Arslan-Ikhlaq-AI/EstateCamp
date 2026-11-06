@@ -7,8 +7,8 @@ import { useTranslation } from '@/hooks/use-translation';
 import { Link } from '@inertiajs/react';
 import { ArrowDownLeftIcon, ArrowUpRightIcon, DoorOpenIcon, PresentationIcon, ScaleIcon } from 'lucide-react';
 
-const IN = ['client_payment', 'rental_payment', 'extra_income'];
-const OUT = ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund', 'other_payment'];
+const IN = ['client_payment', 'rental_payment'];
+const OUT = ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'other_payment'];
 
 const sum = (totals, categories) => categories.reduce((total, category) => total + (totals?.[category]?.amount ?? 0), 0);
 

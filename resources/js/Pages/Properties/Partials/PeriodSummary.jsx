@@ -59,7 +59,7 @@ function Statement({ tone, icon: Icon, title, lines, total, signed = false, acti
  * collected, less the bills paid out of it, less what was already handed
  * over, with anything from before brought forward, leaves what is to hand
  * over (or, below nothing, what the company owes back). Then the income by
- * cheque, transfer and cash with the extra income, the expenses to the landlord, the contractors
+ * cheque, transfer and cash, the expenses to the landlord, the contractors
  * and on bills, and the profit or loss they leave.
  */
 export default function PeriodSummary({ summary, periodLabel, currency, handover }) {
@@ -121,7 +121,6 @@ export default function PeriodSummary({ summary, periodLabel, currency, handover
                         { key: 'cheques', label: words('income.cheques'), detail: words('income.chequesDetail'), amount: income.cheques },
                         { key: 'transfers', label: words('income.transfers'), amount: income.transfers },
                         { key: 'cash', label: words('income.cash'), amount: income.cash },
-                        { key: 'extra', label: words('income.extra'), detail: words('income.extraDetail'), amount: income.extra },
                     ]}
                     total={{ label: words('income.total'), amount: income.total, className: 'text-success' }}
                 />

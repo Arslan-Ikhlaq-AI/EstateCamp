@@ -4,18 +4,17 @@ import { useMemo } from 'react';
 
 const parseDay = (day) => new Date(`${day}T00:00:00`);
 
-export const SOURCES = ['contract_rent', 'short_term', 'extra_income'];
+export const SOURCES = ['contract_rent', 'short_term'];
 
 /**
  * Where revenue comes from, as one ramp of the brand blue, strongest for
- * client contracts (the main money) and palest for extra income. Validated
- * as an ordinal ramp in both themes; on the dark theme the ramp runs the
- * other way, so the strongest is the brightest.
+ * client contracts (the main money). Validated as an ordinal ramp in both
+ * themes; on the dark theme the ramp runs the other way, so the strongest
+ * is the brightest.
  */
 export const SOURCE_COLORS = {
     contract_rent: 'var(--chart-4)',
     short_term: 'var(--chart-1)',
-    extra_income: 'var(--chart-context)',
 };
 
 /**
@@ -25,7 +24,6 @@ export const SOURCE_COLORS = {
 export const SOURCE_INKS = {
     contract_rent: 'fill-white dark:fill-[#070d33]',
     short_term: 'fill-white',
-    extra_income: 'fill-[#070d33] dark:fill-white',
 };
 
 /**

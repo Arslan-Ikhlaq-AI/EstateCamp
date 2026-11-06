@@ -4,6 +4,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\ContractLine;
+use App\Models\Deposit;
 use App\Models\ExtraIncome;
 use App\Models\MaintenanceJob;
 use App\Models\OtherPayment;
@@ -54,10 +55,10 @@ describe('with a small portfolio', function () {
 
         $rental = RoomRental::factory()->create(['property_id' => $this->residence->id]);
         $rental->recordPayment(['paid_on' => '2026-09-01', 'amount' => 500, 'purpose' => 'rent', 'method' => 'cash']);
-        $rental->recordPayment(['paid_on' => '2026-09-01', 'amount' => 500, 'purpose' => 'deposit', 'method' => 'cash']);
 
+        // Kept under Extra payments, so none of it is revenue.
         ExtraIncome::factory()->create(['property_id' => $this->camp->id, 'amount' => 200, 'received_on' => '2026-10-01']);
-        ExtraIncome::factory()->cancelled()->create(['property_id' => $this->camp->id, 'amount' => 9000, 'received_on' => '2026-10-01']);
+        Deposit::factory()->forAgreement($this->contract, $this->residence->id)->create(['amount' => 500, 'received_on' => '2026-09-01']);
         MaintenanceJob::factory()->completed(300)->create(['property_id' => $this->camp->id, 'paid_on' => '2026-10-05']);
         OtherPayment::factory()->paid()->create(['property_id' => $this->residence->id, 'amount' => 100, 'payment_date' => '2026-10-06']);
 
@@ -67,21 +68,21 @@ describe('with a small portfolio', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Analyze/Index')
                 ->where('properties.0.name', 'Al Quoz Camp')
-                ->where('properties.0.revenue', 4700)
-                ->where('properties.0.sources', ['contract_rent' => 4500, 'short_term' => 0, 'extra_income' => 200])
+                ->where('properties.0.revenue', 4500)
+                ->where('properties.0.sources', ['contract_rent' => 4500, 'short_term' => 0])
                 ->where('properties.0.expenses', 300)
                 ->where('properties.0.spending.bills', 300)
-                ->where('properties.0.net', 4400)
+                ->where('properties.0.net', 4200)
                 ->where('properties.1.name', 'Jebel Ali Residence')
-                ->where('properties.1.sources', ['contract_rent' => 1500, 'short_term' => 500, 'extra_income' => 0])
+                ->where('properties.1.sources', ['contract_rent' => 1500, 'short_term' => 500])
                 ->where('properties.1.spending.others', 100)
                 ->where('properties.1.net', 1900)
-                ->where('properties.0.sourceTimeline.9', ['contract_rent' => 3000, 'short_term' => 0, 'extra_income' => 200])
-                ->where('properties.1.sourceTimeline.8', ['contract_rent' => 500, 'short_term' => 500, 'extra_income' => 0])
+                ->where('properties.0.sourceTimeline.9', ['contract_rent' => 3000, 'short_term' => 0])
+                ->where('properties.1.sourceTimeline.8', ['contract_rent' => 500, 'short_term' => 500])
                 ->where('unlinked.revenue', 700)
-                ->where('totals.revenue', 7400)
+                ->where('totals.revenue', 7200)
                 ->where('totals.expenses', 400)
-                ->where('totals.net', 7000)
+                ->where('totals.net', 6800)
             );
     });
 

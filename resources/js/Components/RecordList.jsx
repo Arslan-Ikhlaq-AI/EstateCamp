@@ -3,6 +3,7 @@ import FacetFilter from '@/Components/FacetFilter';
 import ListPagination, { PER_PAGE_OPTIONS } from '@/Components/ListPagination';
 import { ListSearch } from '@/Components/ListToolbar';
 import PeriodFilter from '@/Components/PeriodFilter';
+import PropertyFilter from '@/Components/PropertyFilter';
 import { Button } from '@/components/ui/button';
 import { Card, CardFooter } from '@/components/ui/card';
 import {
@@ -25,23 +26,26 @@ import { SearchXIcon } from 'lucide-react';
  * table goes in `children`; `empty` is shown when there is nothing yet, and
  * a "no matches" message when the filters hide everything. With `period`
  * (the server's resolved period) the toolbar starts with the period filter,
- * kept in the URL as `period`; `summary` lines up under the toolbar, such
- * as the totals of the period shown.
+ * kept in the URL as `period`; with `propertyFilter` (the company's
+ * properties) a field to type a property into follows, kept as `property`;
+ * `summary` lines up under the toolbar, such as the totals of the period shown.
  */
-export default function RecordList({ routeName, filters, facets, labels, only, paginator, searchLabel, searchPlaceholder, empty, period, summary, children }) {
+export default function RecordList({ routeName, filters, facets, labels, only, paginator, searchLabel, searchPlaceholder, empty, period, propertyFilter, summary, children }) {
     const { t } = useTranslation();
     const facetKeys = Object.keys(facets);
     const hasPeriod = period !== undefined;
-    const defaults = { search: '', perPage: PER_PAGE_OPTIONS[0], ...(hasPeriod ? { period: '' } : {}), ...Object.fromEntries(facetKeys.map((key) => [key, []])) };
+    const hasProperty = propertyFilter !== undefined;
+    const resetTo = { ...(hasPeriod ? { period: '' } : {}), ...(hasProperty ? { property: '' } : {}) };
+    const defaults = { search: '', perPage: PER_PAGE_OPTIONS[0], ...resetTo, ...Object.fromEntries(facetKeys.map((key) => [key, []])) };
     const { query, search, setSearch, clearSearch, reset, visit, isLoading } = useListQuery({
         routeName,
         filters,
         defaults,
         facetKeys,
         only: hasPeriod ? [...only, 'period'] : only,
-        resetTo: hasPeriod ? { period: '' } : {},
+        resetTo,
     });
-    const isFiltered = query.search !== '' || (hasPeriod && query.period !== '') || facetKeys.some((key) => query[key].length > 0);
+    const isFiltered = query.search !== '' || (hasPeriod && query.period !== '') || (hasProperty && query.property !== '') || facetKeys.some((key) => query[key].length > 0);
 
     let content = children;
 
@@ -71,6 +75,7 @@ export default function RecordList({ routeName, filters, facets, labels, only, p
             <div className="flex flex-col gap-3 border-b px-4 py-3 sm:px-5 lg:px-6">
                 <div className="flex flex-1 flex-wrap items-center gap-2">
                     {hasPeriod && <PeriodFilter period={period} onChange={(value) => visit({ period: value })} />}
+                    {hasProperty && <PropertyFilter properties={propertyFilter} chosen={query.property} onChange={(value) => visit({ property: value })} />}
                     <ListSearch
                         id={`${routeName}-search`}
                         value={search}

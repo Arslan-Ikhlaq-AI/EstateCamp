@@ -132,8 +132,8 @@ describe('invoices', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Invoices/Show')
-                ->where('invoice.total', 24700)
-                ->has('items', 4)
+                ->where('invoice.total', 14700)
+                ->has('items', 3)
                 ->has('allocations', 1)
                 ->where('invoice.canVoid', false)
             );

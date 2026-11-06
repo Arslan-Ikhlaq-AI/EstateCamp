@@ -54,7 +54,6 @@ export const analyze = {
             total: 'Revenue',
             contract_rent: 'Client contracts',
             short_term: 'Short-term rentals',
-            extra_income: 'Extra income',
         },
         spending: {
             title: 'Where the money goes',
@@ -106,7 +105,7 @@ export const analyze = {
             unlinkedHint: 'Client payments with no contract or invoice to place them.',
             total: 'All properties',
         },
-        notes: 'Money is counted when it moves: a cheque once it clears. A contract shared by several properties is split by each one’s part of the rent. Security deposits are held, not earned, so they are left out, and salaries are not charged to a property.',
+        notes: 'Money is counted when it moves: a cheque once it clears. A contract shared by several properties is split by each one’s part of the rent. Commissions, security deposits and extra income are kept under Extra payments, so they are left out, and salaries are not charged to a property.',
         empty: {
             title: 'No properties to analyze',
             description: 'Add a property to see what it earns here.',
@@ -164,7 +163,6 @@ export const analyze = {
             total: 'الإيرادات',
             contract_rent: 'عقود العملاء',
             short_term: 'الإيجارات قصيرة الأجل',
-            extra_income: 'دخل إضافي',
         },
         spending: {
             title: 'أين تذهب الأموال',
@@ -216,7 +214,7 @@ export const analyze = {
             unlinkedHint: 'دفعات عملاء بلا عقد أو فاتورة لتحديد مكانها.',
             total: 'كل العقارات',
         },
-        notes: 'تُحتسب الأموال عند انتقالها: الشيك عند صرفه. العقد المشترك بين عدة عقارات يُقسّم حسب حصة كل عقار من الإيجار. مبالغ التأمين محتجزة وليست إيرادًا فلا تُحتسب، والرواتب لا تُحمّل على عقار.',
+        notes: 'تُحتسب الأموال عند انتقالها: الشيك عند صرفه. العقد المشترك بين عدة عقارات يُقسّم حسب حصة كل عقار من الإيجار. العمولات ومبالغ التأمين والإيرادات الإضافية تُحفظ ضمن المدفوعات الإضافية فلا تُحتسب هنا، والرواتب لا تُحمَّل على عقار.',
         empty: {
             title: 'لا توجد عقارات لتحليلها',
             description: 'أضف عقارًا لترى إيراداته هنا.',

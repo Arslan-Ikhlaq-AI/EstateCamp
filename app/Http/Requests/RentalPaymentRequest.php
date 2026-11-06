@@ -7,8 +7,8 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 
 /**
- * Money a tenant pays towards their room rental: rent, the deposit or
- * another charge, in cash, by card or transfer, or by a cheque that goes
+ * Money a tenant pays towards their room rental: rent or another charge,
+ * in cash, by card or transfer, or by a cheque that goes
  * to the cheque register (with its number, bank, date and photos).
  */
 class RentalPaymentRequest extends CompanyScopedRequest
@@ -48,7 +48,7 @@ class RentalPaymentRequest extends CompanyScopedRequest
     public function cheque(): array
     {
         return [
-            ...$this->safe()->only(['purpose', 'cheque_date', 'amount', 'cheque_number', 'bank_name', 'account_holder', 'notes']),
+            ...$this->safe()->only(['cheque_date', 'amount', 'cheque_number', 'bank_name', 'account_holder', 'notes']),
             'front_image' => $this->file('front_image'),
             'back_image' => $this->file('back_image'),
         ];

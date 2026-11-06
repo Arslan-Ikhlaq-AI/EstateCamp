@@ -8,10 +8,11 @@ use App\Http\Requests\RoomRentalRequest;
 use App\Models\Cheque;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\Deposit;
 use App\Models\RentalPayment;
 use App\Models\Room;
 use App\Models\RoomRental;
-use Carbon\CarbonImmutable;
+use App\Models\Settlement;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
@@ -128,7 +129,6 @@ class RoomRentalController extends Controller
                     'rent' => $room->monthly_rent === null ? null : (float) $room->monthly_rent,
                 ])->values(),
             ])->values(),
-            'maxMonths' => RoomRental::MAX_TERM_MONTHS,
             'paymentMethods' => RoomRental::FIRST_PAYMENT_METHODS,
             'banks' => ChequeController::knownBanks($company),
         ]);
@@ -136,9 +136,9 @@ class RoomRentalController extends Controller
 
     /**
      * Rent the rooms to the company or person; a new one is added as a
-     * client. Unless the first payment is left for later, the first month's rent,
-     * and any deposit, are recorded as paid today by transfer, or their
-     * cheques go to the cheque register.
+     * client. Unless the first payment is left for later, the first month's
+     * rent is recorded as paid today in cash or by transfer, or its cheque goes
+     * to the cheque register. Any commission and deposit are kept apart.
      */
     public function store(RoomRentalRequest $request): RedirectResponse
     {
@@ -165,21 +165,21 @@ class RoomRentalController extends Controller
                 $this->recordFirstPayment($rental, $request);
             }
 
+            $rental->syncCommission($request->commissionTerms(), $request->user());
+            $rental->syncDeposit($request->depositTerms(), $request->user());
+
             return $rental;
         });
 
         $rooms = $rental->rooms()->orderBy('room_number')->pluck('room_number');
-        $isPaidByCheque = $request->validated('payment_method') === 'cheque';
         $paid = match (true) {
             $request->validated('first_payment') !== 'now' => ' Record their first payment.',
-            $isPaidByCheque && $rental->security_deposit > 0 => ' The cheques for the first month’s rent and the deposit are in the cheque register.',
-            $isPaidByCheque => ' The cheque for the first month’s rent is in the cheque register.',
-            $rental->security_deposit > 0 => ' The first month’s rent and the deposit are recorded as paid.',
+            $request->validated('payment_method') === 'cheque' => ' The cheque for the first month’s rent is in the cheque register.',
             default => ' The first month’s rent is recorded as paid.',
         };
 
         return to_route('rentals.show', $rental)
-            ->with('success', "{$rental->rental_number} was created: {$rental->client->name} rents ".Str::plural('room', $rooms->count()).' '.$rooms->join(', ')." until {$rental->end_date->format('j M Y')}.{$paid}");
+            ->with('success', "{$rental->rental_number} was created: {$rental->client->name} rents ".Str::plural('room', $rooms->count()).' '.$rooms->join(', ')." from {$rental->start_date->format('j M Y')} until the rental is ended.{$paid}");
     }
 
     /**
@@ -207,16 +207,12 @@ class RoomRentalController extends Controller
                 'notes' => $roomRental->notes,
                 'createdBy' => $roomRental->createdBy?->name,
                 'createdAt' => $roomRental->created_at?->toDateString(),
-                'deposit' => $roomRental->depositStanding(),
-                'depositRefund' => $roomRental->deposit_refunded > 0 ? [
-                    'amount' => (float) $roomRental->deposit_refunded,
-                    'on' => $roomRental->deposit_refunded_on?->toDateString(),
-                    'method' => $roomRental->deposit_refund_method,
-                ] : null,
+                'depositStanding' => $roomRental->depositStanding(),
+                ...ExtraPaymentController::ofAgreement($roomRental),
                 'otherPaid' => $roomRental->paidFor('other'),
                 'canChangeRent' => ! $roomRental->payments->contains(fn (RentalPayment $payment) => $payment->purpose === 'rent' && ! $payment->isVoid()),
             ],
-            'statement' => $this->statement($roomRental, $standing),
+            'statement' => array_slice($roomRental->rentMonths($roomRental->start_date, today()), -self::STATEMENT_MONTHS),
             'payments' => $roomRental->payments->map(fn (RentalPayment $payment) => RentalPaymentController::details($payment)),
             'cheques' => $cheques->map(fn (Cheque $cheque) => ChequeController::details($cheque)),
             'pendingCheques' => [
@@ -227,6 +223,7 @@ class RoomRentalController extends Controller
             'chequeStatuses' => ChequeController::statusOptions(),
             'methods' => RentalPayment::METHODS,
             'refundMethods' => RoomRental::REFUND_METHODS,
+            'settlementMethods' => Settlement::METHODS,
         ]);
     }
 
@@ -244,20 +241,19 @@ class RoomRentalController extends Controller
                 ...self::listDetails($roomRental, $roomRental->rentStanding()),
                 'canChangeRent' => ! $roomRental->payments()->where('purpose', 'rent')->where('status', 'cleared')->exists(),
                 'form' => [
-                    'months' => $roomRental->termMonths() ?? 1,
                     'start_date' => $roomRental->start_date->toDateString(),
                     'monthly_rent' => (float) $roomRental->monthly_rent,
                     'security_deposit' => (float) $roomRental->security_deposit,
                 ],
+                ...ExtraPaymentController::ofAgreement($roomRental),
             ],
             'currency' => $roomRental->company->default_currency,
             'defaults' => null,
             'clients' => [],
             'idTypes' => [],
             'properties' => [],
-            'maxMonths' => RoomRental::MAX_TERM_MONTHS,
             'paymentMethods' => [],
-            'banks' => [],
+            'banks' => ChequeController::knownBanks($roomRental->company),
         ]);
     }
 
@@ -276,8 +272,12 @@ class RoomRentalController extends Controller
             throw ValidationException::withMessages(['monthly_rent' => 'Rent has already been paid on this rental, so its rent and start date stay as they are. To change the rent, move the tenant out and start a new rental.']);
         }
 
-        $roomRental->fill($terms)->save();
-        $roomRental->recountRooms();
+        DB::transaction(function () use ($request, $roomRental, $terms) {
+            $roomRental->fill($terms)->save();
+            $roomRental->recountRooms();
+            $roomRental->syncCommission($request->commissionTerms(), $request->user());
+            $roomRental->syncDeposit($request->depositTerms(), $request->user());
+        });
 
         return to_route('rentals.show', $roomRental)->with('success', "{$roomRental->rental_number} was updated.");
     }
@@ -289,7 +289,7 @@ class RoomRentalController extends Controller
     {
         $refund = $request->filled('deposit_refunded') ? (float) $request->validated('deposit_refunded') : null;
 
-        $roomRental->end($request->date('moved_out_on'), $refund, $request->validated('deposit_refund_method'), $request->validated('note'));
+        $roomRental->end($request->date('moved_out_on'), $refund, $request->validated('deposit_refund_method'), $request->validated('note'), $request->user());
 
         $standing = $roomRental->rentStanding();
         $owing = $standing['arrears'] > 0 ? " {$roomRental->client->name} still owes {$standing['arrears']} in rent." : '';
@@ -327,12 +327,9 @@ class RoomRentalController extends Controller
             'tenant' => $rental->client ? [...$rental->client->only(['id', 'name', 'phone']), 'type' => $rental->client->client_type] : null,
             'property' => $rental->property?->only(['id', 'name', 'code']),
             'rooms' => $rental->rooms->map(fn (Room $room) => ['id' => $room->id, 'number' => $room->room_number, 'capacity' => $room->capacity])->values()->all(),
-            'months' => $rental->termMonths(),
-            'termOver' => $rental->isActive() && $rental->end_date?->lt(today()) === true,
             'monthlyRent' => (float) $rental->monthly_rent,
             'securityDeposit' => (float) $rental->security_deposit,
             'startDate' => $rental->start_date->toDateString(),
-            'endDate' => $rental->end_date?->toDateString(),
             'movedOutOn' => $rental->moved_out_on?->toDateString(),
             'standing' => [
                 ...$standing,
@@ -382,46 +379,8 @@ class RoomRentalController extends Controller
     }
 
     /**
-     * Each month of rent from the start (the latest STATEMENT_MONTHS), with
-     * what it costs, what has been paid towards it and whether it is paid,
-     * part paid, unpaid or still to come. A running rental shows every month
-     * of its term; an open-ended one ends with the next month to fall due.
-     *
-     * @param  array<string, mixed>  $standing
-     * @return list<array{start: string, end: string, amount: float, paid: float, status: string}>
-     */
-    private function statement(RoomRental $rental, array $standing): array
-    {
-        $today = CarbonImmutable::today();
-        $through = $rental->lastDay() ?? $today->addMonthNoOverflow();
-        $remaining = $standing['paid'];
-        $lines = [];
-
-        foreach ($rental->rentPeriods($through) as $period) {
-            $paid = round(min($remaining, $period['amount']), 2);
-            $remaining = round($remaining - $paid, 2);
-            $isUpcoming = $period['start']->gt($today);
-
-            $lines[] = [
-                'start' => $period['start']->toDateString(),
-                'end' => $period['end']->toDateString(),
-                'amount' => $period['amount'],
-                'paid' => $paid,
-                'status' => match (true) {
-                    $paid >= $period['amount'] => 'paid',
-                    $isUpcoming => 'upcoming',
-                    $paid > 0 => 'partial',
-                    default => 'unpaid',
-                },
-            ];
-        }
-
-        return array_slice($lines, -self::STATEMENT_MONTHS);
-    }
-
-    /**
      * Headline figures: rentals running and the rooms they hold, their
-     * monthly rent, rent owed and overdue, deposits held and what was
+     * monthly rent, rent owed and overdue, deposits still held and what was
      * collected this month.
      *
      * @param  array<int, array<string, mixed>>  $standings
@@ -432,19 +391,19 @@ class RoomRentalController extends Controller
         $active = fn () => $company->roomRentals()->active();
         $month = [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()];
         $owed = collect($standings)->filter(fn (array $standing) => $standing['arrears'] > 0);
-        $depositsPaid = (float) RentalPayment::query()
+        $depositsHeld = Deposit::query()
             ->where('company_id', $company->id)
-            ->where('status', 'cleared')
-            ->where('purpose', 'deposit')
-            ->whereHas('rental', fn (Builder $rentals) => $rentals->where('status', 'active'))
-            ->sum('amount');
+            ->where('status', 'received')
+            ->where('agreement_type', (new RoomRental)->getMorphClass())
+            ->whereIn('agreement_id', $active()->select('room_rentals.id'))
+            ->sum(DB::raw('amount - settled_amount'));
 
         return [
             'active' => $active()->count(),
             'rooms' => DB::table('room_rental_rooms')->whereIn('room_rental_id', $active()->select('room_rentals.id'))->count(),
             'monthlyRent' => round((float) $active()->sum('monthly_rent'), 2),
             'arrears' => ['count' => $owed->count(), 'amount' => round($owed->sum('arrears'), 2), 'overdue' => $owed->where('standing', 'overdue')->count()],
-            'depositsHeld' => round($depositsPaid - (float) $active()->sum('deposit_refunded'), 2),
+            'depositsHeld' => round((float) $depositsHeld, 2),
             'collectedThisMonth' => round((float) $company->rentalPayments()->where('status', 'cleared')->whereBetween('paid_on', $month)->sum('amount'), 2),
         ];
     }
@@ -476,29 +435,24 @@ class RoomRentalController extends Controller
     }
 
     /**
-     * The first month's rent, and the deposit when there is one: receipts
-     * paid today by transfer, or a cheque for each into the cheque register.
+     * The first month's rent: a receipt paid today in cash or by transfer, or
+     * a cheque into the cheque register.
      */
     private function recordFirstPayment(RoomRental $rental, RoomRentalRequest $request): void
     {
-        $purposes = array_filter(['rent' => (float) $rental->monthly_rent, 'deposit' => (float) $rental->security_deposit]);
+        if ($request->validated('payment_method') === 'cheque') {
+            $rental->receiveCheque([
+                'cheque_date' => $request->validated('cheque_date'),
+                'amount' => $rental->monthly_rent,
+                'cheque_number' => $request->validated('cheque_number'),
+                'bank_name' => $request->validated('bank_name'),
+                'account_holder' => $rental->client->name,
+            ], $request->user());
 
-        foreach ($purposes as $purpose => $amount) {
-            if ($request->validated('payment_method') === 'cheque') {
-                $rental->receiveCheque([
-                    'purpose' => $purpose,
-                    'cheque_date' => $request->validated('cheque_date'),
-                    'amount' => $amount,
-                    'cheque_number' => $request->validated($purpose === 'deposit' ? 'deposit_cheque_number' : 'cheque_number'),
-                    'bank_name' => $request->validated('bank_name'),
-                    'account_holder' => $rental->client->name,
-                ], $request->user());
-
-                continue;
-            }
-
-            $rental->recordPayment(['paid_on' => today(), 'amount' => $amount, 'purpose' => $purpose, 'method' => $request->validated('payment_method'), 'reference' => $request->validated('payment_reference')], $request->user());
+            return;
         }
+
+        $rental->recordPayment(['paid_on' => today(), 'amount' => $rental->monthly_rent, 'purpose' => 'rent', 'method' => $request->validated('payment_method'), 'reference' => $request->validated('payment_reference')], $request->user());
     }
 
     /**

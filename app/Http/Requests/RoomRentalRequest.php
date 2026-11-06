@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidatesExtraPayments;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\Room;
@@ -16,13 +17,15 @@ use Illuminate\Validation\Validator;
  * contract, or changing a rental's terms. A new rental names the renter (one
  * already on file, or a new one: a company by its name and phone with any
  * other details, a person by their name, phone and ID), the property and its
- * rooms, how many months they stay, and whether the first month is paid
- * now, by transfer or by cheque (one for the rent and one for any deposit,
- * from the same bank and dated the same day); once running, only the stay,
- * start date, rent and deposit change.
+ * rooms, and whether the first month is paid now, in cash, by transfer or
+ * by cheque. The commission and deposit are paid on their own. A rental has
+ * no term: it runs until it is ended. Once running, only the start date,
+ * rent, commission and deposit change.
  */
 class RoomRentalRequest extends CompanyScopedRequest
 {
+    use ValidatesExtraPayments;
+
     protected ?string $recordParameter = 'roomRental';
 
     /**
@@ -33,10 +36,10 @@ class RoomRentalRequest extends CompanyScopedRequest
     public function rules(): array
     {
         $terms = [
-            'months' => ['required', 'integer', 'min:1', 'max:'.RoomRental::MAX_TERM_MONTHS],
             'start_date' => ['required', 'date'],
             'monthly_rent' => ['required', 'numeric', 'gt:0', 'max:10000000'],
             'security_deposit' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            ...$this->extraPaymentRules(),
         ];
 
         if ($this->route('roomRental')) {
@@ -75,7 +78,6 @@ class RoomRentalRequest extends CompanyScopedRequest
             'payment_method' => ['required_if:first_payment,now', 'nullable', Rule::in(RoomRental::FIRST_PAYMENT_METHODS)],
             'payment_reference' => ['nullable', 'string', 'max:100'],
             'cheque_number' => [Rule::requiredIf($isPaidByCheque), 'nullable', 'string', 'max:30'],
-            'deposit_cheque_number' => [Rule::requiredIf($isPaidByCheque && (float) $this->input('security_deposit') > 0), 'nullable', 'string', 'max:30', 'different:cheque_number'],
             'bank_name' => [Rule::requiredIf($isPaidByCheque), 'nullable', 'string', 'max:255'],
             'cheque_date' => [Rule::requiredIf($isPaidByCheque), 'nullable', 'date'],
         ];
@@ -99,9 +101,8 @@ class RoomRentalRequest extends CompanyScopedRequest
     }
 
     /**
-     * Every room must be in the property, in service, free of any contract
-     * or other rental and empty. A longer term must not run into a contract
-     * or rental that has since taken one of the rooms.
+     * Every room of a new rental must be in the property, in service, free
+     * of any contract or other rental and empty.
      *
      * @return array<int, callable>
      */
@@ -109,33 +110,15 @@ class RoomRentalRequest extends CompanyScopedRequest
     {
         return [
             function (Validator $validator) {
-                if ($validator->errors()->isNotEmpty()) {
+                if ($validator->errors()->isNotEmpty() || $this->route('roomRental')) {
                     return;
                 }
 
-                $problems = $this->route('roomRental') ? $this->termProblems($this->route('roomRental')) : $this->problems();
-
-                foreach ($problems as $field => $message) {
+                foreach ($this->problems() as $field => $message) {
                     $validator->errors()->add($field, $message);
                 }
             },
         ];
-    }
-
-    /**
-     * Why a running rental's term cannot grow, by field.
-     *
-     * @return array<string, string>
-     */
-    private function termProblems(RoomRental $rental): array
-    {
-        if ($rental->end_date !== null && $this->terms()['end_date'] <= $rental->end_date->toDateString()) {
-            return [];
-        }
-
-        $taken = $rental->rooms()->whereKey(RoomRental::unavailableRoomIds($rental->company_id, $rental->id))->orderBy('room_number')->pluck('room_number');
-
-        return $taken->isEmpty() ? [] : ['months' => 'Room '.$taken->join(', ', ' and ').' has since been rented to someone else, so the term cannot be made longer.'];
     }
 
     /**
@@ -162,20 +145,16 @@ class RoomRentalRequest extends CompanyScopedRequest
     }
 
     /**
-     * The rental's terms as the model fills them, with the end date the
-     * term in months gives.
+     * The rental's terms as the model fills them.
      *
      * @return array<string, mixed>
      */
     public function terms(): array
     {
-        $start = Carbon::parse($this->validated('start_date'));
-
         return [
             'monthly_rent' => $this->validated('monthly_rent'),
             'security_deposit' => $this->validated('security_deposit') ?? 0,
-            'start_date' => $start->toDateString(),
-            'end_date' => RoomRental::endDateFor($start, $this->integer('months'))->toDateString(),
+            'start_date' => Carbon::parse($this->validated('start_date'))->toDateString(),
         ];
     }
 
@@ -199,15 +178,14 @@ class RoomRentalRequest extends CompanyScopedRequest
             'new_client.address' => 'address',
             'property_id' => 'property',
             'room_ids' => 'rooms',
-            'months' => 'months',
             'monthly_rent' => 'monthly rent',
             'security_deposit' => 'security deposit',
             'payment_method' => 'payment method',
             'payment_reference' => 'reference',
             'cheque_number' => 'cheque number',
-            'deposit_cheque_number' => 'deposit cheque number',
             'bank_name' => 'bank',
             'cheque_date' => 'cheque date',
+            ...$this->extraPaymentAttributes(),
         ];
     }
 

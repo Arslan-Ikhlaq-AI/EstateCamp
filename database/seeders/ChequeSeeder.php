@@ -82,7 +82,7 @@ class ChequeSeeder extends Seeder
 
         foreach ($cheques as $cheque) {
             $cheque->applyEntry([
-                'cheque_number' => sprintf('%06d', 200000 + $contractNumber * 1000 + ($cheque->purpose === 'rent' ? $cheque->sequence : 0)),
+                'cheque_number' => sprintf('%06d', 200000 + $contractNumber * 1000 + $cheque->sequence),
                 'bank_name' => $bank,
                 'account_holder' => $contract->client->name,
             ]);
@@ -92,9 +92,7 @@ class ChequeSeeder extends Seeder
                 continue;
             }
 
-            $invoice = $cheque->purpose === 'security_deposit'
-                ? $invoices->sortBy('period_start')->first()
-                : $invoices->first(fn (Invoice $invoice) => $invoice->period_start->equalTo($cheque->period_start));
+            $invoice = $invoices->first(fn (Invoice $invoice) => $invoice->period_start->equalTo($cheque->period_start));
 
             if ($invoice?->status === 'paid') {
                 // Paid in the demo data already, so the cheque is marked cleared without a second payment.

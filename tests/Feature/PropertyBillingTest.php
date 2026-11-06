@@ -11,6 +11,7 @@ use App\Models\RentalPayment;
 use App\Models\Room;
 use App\Models\RoomRental;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -34,7 +35,6 @@ beforeEach(function () {
     $this->rental = fn (array $rooms, array $attributes = []) => RoomRental::factory()->forRooms(...$rooms)->create([
         'client_id' => Client::factory()->create(['company_id' => $this->property->company_id, 'name' => 'Gulf Crew Services'])->id,
         'start_date' => '2026-09-01',
-        'end_date' => '2026-11-30',
         'monthly_rent' => 2400,
         'security_deposit' => 0,
         ...$attributes,
@@ -182,7 +182,7 @@ test('a cheque that clears after credit was paid keeps its leftover as credit to
 });
 
 test('paying a short-term rental more than its bill takes it off the next month', function () {
-    $rental = ($this->rental)([($this->room)('R-3'), ($this->room)('R-4')], ['start_date' => '2026-10-01', 'end_date' => '2026-12-31']);
+    $rental = ($this->rental)([($this->room)('R-3'), ($this->room)('R-4')], ['start_date' => '2026-10-01']);
 
     ($this->collect)('rental', $rental->id, 3000)->assertSessionHasNoErrors();
 
@@ -194,14 +194,15 @@ test('paying a short-term rental more than its bill takes it off the next month'
             ->where('accounts.0.statement.broughtForward', -600)
             ->where('accounts.0.statement.charged', 2400)
             ->where('accounts.0.statement.toPay', 1800)
-            ->where('accounts.0.collectionLimit', 4200)
+            ->where('accounts.0.collectionLimit', null)
         );
 });
 
 test('takes no more than pays the agreement to its end, leaving nothing behind', function () {
     $contract = ($this->contract)('Al Hajar Contracting', [($this->room)('R-1')], ['start_date' => '2026-10-01', 'end_date' => '2026-11-30']);
-    $rental = ($this->rental)([($this->room)('R-3')], ['start_date' => '2026-10-01', 'end_date' => '2026-10-31']);
+    $rental = ($this->rental)([($this->room)('R-3')], ['start_date' => '2026-10-01']);
     $rental->recordPayment(['paid_on' => '2026-10-01', 'amount' => 2400, 'purpose' => 'rent', 'method' => 'cash']);
+    $rental->end(CarbonImmutable::parse('2026-11-01'));
 
     ($this->collect)('contract', $contract->id, 4000.01)->assertSessionHasErrors('amount');
     ($this->collect)('rental', $rental->id, 10)->assertSessionHasErrors(['amount' => 'Nothing is left to pay up to the end of the agreement.']);
@@ -212,10 +213,12 @@ test('takes no more than pays the agreement to its end, leaving nothing behind',
 });
 
 test('keeps a company that moved out on the bill while it still owes', function () {
-    $rental = ($this->rental)([($this->room)('R-5')], ['start_date' => '2026-07-01', 'end_date' => '2026-08-31']);
+    $rental = ($this->rental)([($this->room)('R-5')], ['start_date' => '2026-07-01']);
     $rental->recordPayment(['paid_on' => '2026-07-01', 'amount' => 2400, 'purpose' => 'rent', 'method' => 'cash']);
-    $paidUp = ($this->rental)([($this->room)('R-6')], ['start_date' => '2026-07-01', 'end_date' => '2026-07-31']);
+    $rental->end(CarbonImmutable::parse('2026-09-01'));
+    $paidUp = ($this->rental)([($this->room)('R-6')], ['start_date' => '2026-07-01']);
     $paidUp->recordPayment(['paid_on' => '2026-07-01', 'amount' => 2400, 'purpose' => 'rent', 'method' => 'cash']);
+    $paidUp->end(CarbonImmutable::parse('2026-08-01'));
 
     $this->actingAs($this->user)
         ->get(route('properties.allocation', $this->property))

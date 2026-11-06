@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasBillingStatement;
 use App\Models\Concerns\HasCheques;
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\HasExtraPayments;
 use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -24,8 +25,9 @@ use Illuminate\Validation\ValidationException;
 /**
  * A client renting from the operator. What is rented, and at what rate,
  * lives in its ContractLines. The client pays by cheques, one per billing
- * period (four a year on a quarterly cycle), plus one for the security
- * deposit; clearing a cheque settles that period's invoice.
+ * period (four a year on a quarterly cycle); clearing a cheque settles that
+ * period's invoice. The commission and security deposit are extra payments,
+ * kept apart from the rent, its invoices and its cheques.
  *
  * Lifecycle: active from the moment it is saved → ended (its end date
  * passed) or terminated (stopped early). A renewal waits as a draft until
@@ -47,7 +49,7 @@ use Illuminate\Validation\ValidationException;
 class Contract extends Model
 {
     /** @use HasFactory<ContractFactory> */
-    use HasBillingStatement, HasCheques, HasDocumentNumber, HasFactory, LimitedToCamps, SoftDeletes;
+    use HasBillingStatement, HasCheques, HasDocumentNumber, HasExtraPayments, HasFactory, LimitedToCamps, SoftDeletes;
 
     public const NUMBER_PREFIX = 'CTR';
 
@@ -83,6 +85,38 @@ class Contract extends Model
     public function isEditable(): bool
     {
         return in_array($this->status, ['draft', 'active'], true);
+    }
+
+    /**
+     * The rent for the whole term, which a commission percentage is taken of.
+     */
+    public function commissionBase(): float
+    {
+        $months = $this->start_date->floatDiffInMonths($this->end_date->copy()->addDay());
+
+        return round((float) $this->lines()->withoutGlobalScope('camps')->sum('monthly_rate') * $months, 2);
+    }
+
+    /**
+     * The property holding most of the contract's units.
+     */
+    public function extraPaymentPropertyId(): ?int
+    {
+        return $this->lines()
+            ->withoutGlobalScope('camps')
+            ->selectRaw('property_id, count(*) as units')
+            ->groupBy('property_id')
+            ->orderByDesc('units')
+            ->orderBy('property_id')
+            ->value('property_id');
+    }
+
+    /**
+     * The deposit is an extra payment, so it has no cheque in the schedule.
+     */
+    protected function plansDepositCheque(): bool
+    {
+        return false;
     }
 
     /**
@@ -284,9 +318,8 @@ class Contract extends Model
 
     /**
      * Invoice the next billing period. Each line is charged for the part of the
-     * period it runs, pro-rated by month, at its own rate and VAT; the first
-     * invoice also collects the security deposit. Returns null when the whole
-     * term is already invoiced.
+     * period it runs, pro-rated by month, at its own rate and VAT. Returns null
+     * when the whole term is already invoiced.
      *
      * @throws ValidationException When the contract is not active.
      */
@@ -304,11 +337,10 @@ class Contract extends Model
 
         [$periodStart, $periodEnd] = $period;
         $issued = CarbonImmutable::parse($issueDate ?? today());
-        $isFirstInvoice = $periodStart->equalTo($this->start_date);
 
         $this->loadMissing(['lines.property', 'lines.room', 'lines.apartment', 'lines.shop']);
 
-        return DB::transaction(function () use ($periodStart, $periodEnd, $issued, $isFirstInvoice) {
+        return DB::transaction(function () use ($periodStart, $periodEnd, $issued) {
             $items = [];
 
             foreach ($this->lines as $line) {
@@ -330,19 +362,6 @@ class Contract extends Model
                     'vat_rate' => $line->vat_rate,
                     'amount' => $amount,
                     'vat_amount' => round($amount * (float) $line->vat_rate / 100, 2),
-                ];
-            }
-
-            if ($isFirstInvoice && (float) $this->security_deposit > 0) {
-                $items[] = [
-                    'contract_line_id' => null,
-                    'item_type' => 'deposit',
-                    'description' => 'Security deposit (refundable)',
-                    'quantity' => 1,
-                    'unit_price' => $this->security_deposit,
-                    'vat_rate' => 0,
-                    'amount' => $this->security_deposit,
-                    'vat_amount' => 0,
                 ];
             }
 
@@ -417,8 +436,8 @@ class Contract extends Model
     /**
      * The client's bill: every invoice not voided, on the first day of its
      * period, then, while the contract runs, each billing period begun by `$through` that is not
-     * invoiced yet, at what its invoice is planned to come to (the first
-     * also collects the deposit). Uses loaded `invoices` when present.
+     * invoiced yet, at what its invoice is planned to come to. Uses loaded
+     * `invoices` when present.
      *
      * @return list<array{key: string, type: string, id: ?int, number: ?string, start: CarbonImmutable, end: CarbonImmutable, chargedOn: CarbonImmutable, amount: float, isPlanned: bool}>
      */
@@ -450,10 +469,6 @@ class Contract extends Model
                 $end = $start->addMonthsNoOverflow($months)->subDay();
                 $end = $end->gt($this->end_date) ? $this->end_date->toImmutable() : $end;
                 $planned = ['id' => null, 'number' => null, 'start' => $start, 'end' => $end, 'chargedOn' => $start, 'isPlanned' => true];
-
-                if ($start->equalTo($this->start_date) && (float) $this->security_deposit > 0) {
-                    $charges->push([...$planned, 'key' => 'planned-deposit', 'type' => 'deposit', 'amount' => round((float) $this->security_deposit, 2)]);
-                }
 
                 $charges->push([...$planned, 'key' => "planned-{$start->toDateString()}", 'type' => 'rent', 'amount' => $this->plannedChequeAmount($start, $end)]);
                 $start = $end->addDay();

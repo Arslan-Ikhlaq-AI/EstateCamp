@@ -1,4 +1,5 @@
 import ChequeScheduleFields, { ChequePlanCard, TermPicker } from '@/Components/ChequeScheduleFields';
+import ExtraPaymentFields, { extraPaymentValues } from '@/Components/ExtraPaymentFields';
 import { ChoiceField, FormSection, MoneyField, TextareaField, TextField } from '@/Components/FormFields';
 import FormShell from '@/Components/FormShell';
 import DashboardLayout from '@/Layouts/DashboardLayout';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldGroup } from '@/components/ui/field';
 import { useTranslation } from '@/hooks/use-translation';
-import { chequePayload, emptyChequeEntry, initialChequeEntries, planContractCheques, scheduleRows } from '@/lib/cheques';
+import { addDays, chequePayload, emptyChequeEntry, initialChequeEntries, monthsBetween, planContractCheques, scheduleRows } from '@/lib/cheques';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { DetailList } from '@/Components/DetailCards';
 import { ContractStatusBadge, PartyTypeBadge } from '@/Components/LeasingBadges';
@@ -53,6 +54,7 @@ function initialData(contract, clientId, clients) {
             billing_cycle: 'monthly',
             payment_terms_days: 7,
             security_deposit: '',
+            ...extraPaymentValues(),
             monthly_rent: '',
             signed_on: '',
             notes: '',
@@ -78,13 +80,14 @@ function initialData(contract, clientId, clients) {
         billing_cycle: contract.billing_cycle,
         payment_terms_days: contract.payment_terms_days,
         security_deposit: contract.security_deposit ?? '',
+        ...extraPaymentValues(contract.commission, contract.deposit),
         monthly_rent: contract.monthly_rent,
         signed_on: contract.signed_on ?? '',
         notes: contract.notes ?? '',
         lines,
         cheques: initialChequeEntries(
             contract.cheques,
-            planContractCheques({ start_date: contract.start_date, end_date: contract.end_date, billing_cycle: contract.billing_cycle, security_deposit: contract.security_deposit, lines }),
+            planContractCheques({ start_date: contract.start_date, end_date: contract.end_date, billing_cycle: contract.billing_cycle, lines }),
         ),
         documents: contract.documents.map((document) => ({
             ...emptyDocument(),
@@ -192,6 +195,7 @@ export default function Form({ contract, clientId, currency, clients, clientType
     const standard = standardTotal(data.lines, properties);
     const cycleMonths = CYCLE_MONTHS[data.billing_cycle] ?? 1;
     const monthlyRent = Number(data.monthly_rent) || 0;
+    const commissionBase = data.start_date && data.end_date > data.start_date ? monthlyRent * monthsBetween(data.start_date, addDays(data.end_date, 1)) : 0;
     const linesError = errors.lines ?? errors.status ?? Object.entries(errors).find(([key]) => key.startsWith('lines.'))?.[1];
     const patchCheque = (key, patch) =>
         setData((current) => ({ ...current, cheques: { ...current.cheques, [key]: { ...(current.cheques[key] ?? emptyChequeEntry()), ...patch } } }));
@@ -294,7 +298,6 @@ export default function Form({ contract, clientId, currency, clients, clientType
                             label={t('leasing.contracts.form.fields.paymentTerms')}
                             description={t('leasing.contracts.form.paymentTermsHint')}
                         />
-                        <MoneyField {...bind('security_deposit')} label={t('leasing.common.securityDeposit')} currency={currency} optional description={t('leasing.contracts.form.depositHint')} />
                     </FieldGroup>
                 </FormSection>
 
@@ -347,6 +350,18 @@ export default function Form({ contract, clientId, currency, clients, clientType
                         )}
                     </FieldGroup>
                 </FormSection>
+
+                <ExtraPaymentFields
+                    data={data}
+                    setData={setData}
+                    errors={errors}
+                    currency={currency}
+                    commissionBase={commissionBase}
+                    baseKey="onContract"
+                    banks={banks}
+                    commission={contract?.commission}
+                    deposit={contract?.deposit}
+                />
 
                 <FormSection title={t('leasing.cheques.schedule.title')} description={t('leasing.cheques.schedule.formDescription.received')}>
                     <ChequeScheduleFields

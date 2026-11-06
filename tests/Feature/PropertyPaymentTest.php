@@ -16,6 +16,7 @@ use App\Models\Room;
 use App\Models\RoomRental;
 use App\Models\User;
 use App\Models\UserRole;
+use Carbon\CarbonImmutable;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -33,6 +34,15 @@ beforeEach(function () {
         ...$attributes,
     ]);
     $this->page = fn () => $this->actingAs($this->user)->get(route('properties.payments', $this->property))->assertOk();
+    $this->pageFor = fn (string $period) => $this->actingAs($this->user)->get(route('properties.payments', [$this->property, 'period' => $period]))->assertOk();
+    $this->rentalAt = fn (float $rent) => RoomRental::factory()->forRooms(($this->room)('R-20'))->create([
+        'client_id' => ($this->client)('Gulf Crew Services')->id,
+        'start_date' => '2026-10-01',
+        'monthly_rent' => $rent,
+        'security_deposit' => 0,
+    ]);
+    $this->collectFrom = fn (RoomRental $rental, array $payment) => $this->actingAs($this->user)
+        ->post(route('properties.billing.store', $this->property), ['account' => 'rental', 'account_id' => $rental->id, 'through' => '2026-10-31', ...$payment]);
 });
 
 test('lists contract cheques apart from short-term ones, with earlier ones still to deal with, and what each part comes to', function () {
@@ -48,7 +58,6 @@ test('lists contract cheques apart from short-term ones, with earlier ones still
     $rental = RoomRental::factory()->forRooms(($this->room)('R-2'))->create([
         'client_id' => ($this->client)('Gulf Crew Services')->id,
         'start_date' => '2026-10-01',
-        'end_date' => '2026-12-31',
         'monthly_rent' => 2400,
         'security_deposit' => 0,
     ]);
@@ -241,7 +250,6 @@ test('splits what short-term rentals paid into bank and cash, keeping cash with 
     $rental = RoomRental::factory()->forRooms(($this->room)('R-5'))->create([
         'client_id' => ($this->client)('Gulf Crew Services')->id,
         'start_date' => '2026-09-01',
-        'end_date' => '2026-12-31',
         'monthly_rent' => 3000,
         'security_deposit' => 0,
     ]);
@@ -307,6 +315,95 @@ test('records what a short-term rental paid as cash, a transfer or a cheque, and
         ->where('summary.bank.received', 2000)
         ->where('summary.bank.chequesCashed', ['count' => 1, 'amount' => 1200])
         ->where('summary.cash.toCollect', 0)
+    );
+});
+
+test('takes all a short-term rental pays this month, and the month the extra covers is not charged', function () {
+    $rental = ($this->rentalAt)(1000);
+
+    ($this->collectFrom)($rental, ['amount' => 2000, 'method' => 'cash'])->assertSessionHasNoErrors();
+
+    ($this->pageFor)('2026-10')->assertInertia(fn (Assert $page) => $page
+        ->where('incoming.rentals.0.collectionLimit', null)
+        ->where('incoming.rentals.0.statement.charged', 1000)
+        ->where('incoming.rentals.0.statement.received', 2000)
+        ->where('incoming.rentals.0.statement.carriedForward', -1000)
+        ->where('incoming.rentals.0.statement.toPay', 0)
+        ->where('incoming.rentals.0.months.0.status', 'paid')
+        ->where('incoming.rentals.0.months.1.status', 'credit')
+        ->where('incoming.rentals.0.months.1.start', '2026-11-01')
+        ->where('incoming.rentals.0.months.2.status', 'upcoming')
+        ->where('incoming.rentals.0.months.2.left', 1000)
+        ->where('summary.cash.collected.amount', 2000)
+        ->where('summary.income.total', 2000)
+    );
+
+    ($this->pageFor)('2026-11')->assertInertia(fn (Assert $page) => $page
+        ->where('incoming.rentals.0.statement.broughtForward', -1000)
+        ->where('incoming.rentals.0.statement.charged', 1000)
+        ->where('incoming.rentals.0.statement.received', 0)
+        ->where('incoming.rentals.0.statement.carriedForward', 0)
+        ->where('incoming.rentals.0.statement.toPay', 0)
+        ->where('incoming.rentals.0.months.0.status', 'credit')
+        ->where('summary.cash.toCollect', 0)
+        ->where('summary.cash.owing', 0)
+        ->where('summary.income.total', 0)
+    );
+
+    ($this->pageFor)('2026-12')->assertInertia(fn (Assert $page) => $page
+        ->where('incoming.rentals.0.statement.broughtForward', 0)
+        ->where('incoming.rentals.0.statement.toPay', 1000)
+        ->where('incoming.rentals.0.months.0.status', 'unpaid')
+        ->where('summary.cash.toCollect', 1000)
+    );
+});
+
+test('a short-term rental has no last month: it carries on into the next one, unpaid rent and all, until it is ended', function () {
+    $rental = ($this->rentalAt)(1000);
+
+    ($this->pageFor)('2027-03')->assertInertia(fn (Assert $page) => $page
+        ->where('incoming.rentals.0.statement.broughtForward', 5000)
+        ->where('incoming.rentals.0.statement.toPay', 6000)
+        ->where('summary.cash.toCollect', 6000)
+    );
+
+    $rental->end(CarbonImmutable::parse('2026-12-01'));
+
+    ($this->pageFor)('2027-03')->assertInertia(fn (Assert $page) => $page
+        ->where('incoming.rentals.0.units', [])
+        ->where('incoming.rentals.0.statement.toPay', 2000)
+        ->where('incoming.rentals.0.collectionLimit', 2000)
+    );
+});
+
+test('part of a month paid ahead comes off that month’s bill, leaving the rest to pay', function () {
+    $rental = ($this->rentalAt)(1000);
+
+    ($this->collectFrom)($rental, ['amount' => 1500, 'method' => 'bank_transfer'])->assertSessionHasNoErrors();
+
+    ($this->pageFor)('2026-11')->assertInertia(fn (Assert $page) => $page
+        ->where('incoming.rentals.0.statement.broughtForward', -500)
+        ->where('incoming.rentals.0.statement.toPay', 500)
+        ->where('incoming.rentals.0.months.0.status', 'partial')
+        ->where('incoming.rentals.0.months.0.credit', 500)
+        ->where('incoming.rentals.0.months.0.left', 500)
+    );
+});
+
+test('an extra cheque counts as credit only once it is submitted', function () {
+    $rental = ($this->rentalAt)(1000);
+
+    ($this->collectFrom)($rental, ['amount' => 2000, 'method' => 'cheque', 'cheque_number' => '000418', 'bank_name' => 'Mashreq', 'cheque_date' => '2026-10-17'])->assertSessionHasNoErrors();
+
+    ($this->pageFor)('2026-11')->assertInertia(fn (Assert $page) => $page->where('incoming.rentals.0.statement.toPay', 2000));
+
+    $this->actingAs($this->user)
+        ->post(route('cheques.settle', Cheque::query()->where('chequeable_id', $rental->id)->sole()), ['date' => '2026-10-17'])
+        ->assertSessionHasNoErrors();
+
+    ($this->pageFor)('2026-11')->assertInertia(fn (Assert $page) => $page
+        ->where('incoming.rentals.0.statement.toPay', 0)
+        ->where('incoming.rentals.0.months.0.status', 'credit')
     );
 });
 
@@ -405,9 +502,9 @@ test('sums up the camp boss\'s cash to hand over and the income, expenses and pr
 
     ($this->page)()->assertInertia(fn (Assert $page) => $page
         ->where('summary.campBoss', ['received' => 1200, 'spent' => 300, 'settled' => 300, 'broughtForward' => 200, 'toHandOver' => 800])
-        ->where('summary.income', ['cheques' => 5000, 'transfers' => 1000, 'cash' => 1200, 'extra' => 4000, 'total' => 11200])
+        ->where('summary.income', ['cheques' => 5000, 'transfers' => 1000, 'cash' => 1200, 'total' => 7200])
         ->where('summary.expenses', ['landlord' => 2500, 'contracts' => 600, 'bills' => 250, 'others' => 50, 'total' => 3400])
-        ->where('summary.profit', 7800)
+        ->where('summary.profit', 3800)
     );
 });
 

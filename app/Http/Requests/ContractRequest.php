@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ValidatesChequeSchedule;
+use App\Http\Requests\Concerns\ValidatesExtraPayments;
 use App\Models\Apartment;
 use App\Models\Client;
 use App\Models\Contract;
@@ -26,7 +27,7 @@ use Illuminate\Validation\Validator;
  */
 class ContractRequest extends CompanyScopedRequest
 {
-    use ValidatesChequeSchedule;
+    use ValidatesChequeSchedule, ValidatesExtraPayments;
 
     protected ?string $recordParameter = 'contract';
 
@@ -69,6 +70,7 @@ class ContractRequest extends CompanyScopedRequest
             'documents.*.expires_on' => ['nullable', 'date', 'after_or_equal:documents.*.issued_on'],
             'documents.*.notes' => ['nullable', 'string', 'max:2000'],
             ...$this->chequeRules(),
+            ...$this->extraPaymentRules(),
         ];
     }
 
@@ -212,12 +214,11 @@ class ContractRequest extends CompanyScopedRequest
         $rental = $type === 'room' ? RoomRental::query()
             ->active()
             ->whereDate('start_date', '<=', $line['end_date'])
-            ->where(fn (Builder $query) => $query->whereNull('end_date')->orWhereDate('end_date', '>=', $line['start_date']))
             ->whereHas('rooms', fn (Builder $rooms) => $rooms->whereKey($line['room_id']))
             ->first() : null;
 
         if ($rental) {
-            $validator->errors()->add("lines.{$index}.{$column}", "Rented short-term under {$rental->rental_number}".($rental->end_date ? " until {$rental->end_date->format('j M Y')}." : '.'));
+            $validator->errors()->add("lines.{$index}.{$column}", "Rented short-term under {$rental->rental_number}.");
 
             return false;
         }
@@ -280,6 +281,7 @@ class ContractRequest extends CompanyScopedRequest
             'lines.*.start_date' => 'line start date',
             'lines.*.end_date' => 'line end date',
             ...$this->chequeAttributes(),
+            ...$this->extraPaymentAttributes(),
         ];
     }
 

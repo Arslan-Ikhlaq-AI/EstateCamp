@@ -8,7 +8,6 @@ import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Head, Link, router } from '@inertiajs/react';
 import {
-    BadgePercentIcon,
     BanknoteIcon,
     CalendarClockIcon,
     CircleAlertIcon,
@@ -28,7 +27,6 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { CashHandoverButton } from './Partials/CashHandover';
-import ExtraIncomePanel from './Partials/ExtraIncomePanel';
 import IncomingCheques from './Partials/IncomingCheques';
 import MaintenanceBillsPanel from './Partials/MaintenanceBillsPanel';
 import OtherPaymentsPanel from './Partials/OtherPaymentsPanel';
@@ -54,8 +52,7 @@ const PAGE_METHODS = ['cash', 'bank_transfer', 'cheque'];
 /**
  * A property's payments over a period, in and out, switched by two
  * buttons. Payments in come in three numbered sections, each with its own
- * figures: the contract cheques an admin follows until they are cashed,
- * with the extra income providers paid, always received;
+ * figures: the contract cheques an admin follows until they are cashed;
  * what short-term rentals paid into the bank (transfers, and cheques once
  * submitted); and what they still owe, where a payment is recorded as
  * cash, a transfer or a cheque. Cash stays there with the camp boss until
@@ -103,7 +100,6 @@ export default function Payments({
     const counts = {
         in:
             incoming.contractCheques.length +
-            incoming.extraIncome.length +
             incoming.rentalCheques.length +
             incoming.bankReceipts.length +
             incoming.cashReceipts.length,
@@ -168,12 +164,6 @@ export default function Payments({
                                 {t('propertyPayments.addOtherPayment')}
                             </Button>
                         )}
-                        {hasPermission('extra_income.create') && (
-                            <Button variant="brand" nativeButton={false} render={<Link href={route('extra-incomes.create', { property: property.id, from: 'payments' })} />}>
-                                <BadgePercentIcon data-icon="inline-start" />
-                                {t('propertyPayments.addExtraIncome')}
-                            </Button>
-                        )}
                     </>
                 }
             />
@@ -227,13 +217,6 @@ export default function Payments({
                                 amount: cheques.failed.amount,
                                 detail: chequeCount(cheques.failed),
                             },
-                            {
-                                icon: BadgePercentIcon,
-                                tone: 'success',
-                                label: t('propertyPayments.figures.extraIncome'),
-                                amount: summary.extraIncome.amount,
-                                detail: receiptCount(summary.extraIncome),
-                            },
                         ]}
                     >
                         <SectionPart title={t('propertyPayments.sections.cheques.list')} count={incoming.contractCheques.length}>
@@ -247,13 +230,6 @@ export default function Payments({
                                     title: t('propertyPayments.sections.cheques.empty.title', { period: periodLabel }),
                                     description: t('propertyPayments.sections.cheques.empty.description'),
                                 }}
-                            />
-                        </SectionPart>
-                        <SectionPart title={t('propertyPayments.sections.cheques.extra')} count={incoming.extraIncome.length} hint={t('propertyPayments.sections.cheques.extraHint')}>
-                            <ExtraIncomePanel
-                                incomes={incoming.extraIncome}
-                                currency={currency}
-                                empty={t('propertyPayments.sections.cheques.extraEmpty', { period: periodLabel })}
                             />
                         </SectionPart>
                     </PaymentSection>

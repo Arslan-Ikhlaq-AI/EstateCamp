@@ -130,6 +130,7 @@ trait ReadsUnitHoldings
                 'isBilled' => true,
                 'otherProperties' => 0,
                 'monthly' => round((float) $rental->monthly_rent, 2),
+                'months' => $rental->rentMonths($from, $to),
             ]));
 
         return $contracts->concat($rentals)

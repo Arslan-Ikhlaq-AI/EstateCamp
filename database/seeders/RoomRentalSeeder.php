@@ -12,11 +12,10 @@ use Illuminate\Database\Seeder;
 
 /**
  * Companies renting the private room at the Jebel Ali residence short-term,
- * without a contract. A past tenant took it for six months from February,
- * paid every month, left after five and had its deposit handed back.
- * Today's tenant took it for six months from the start of July: it paid the
- * deposit and three months' rent, still owes this month's, and has handed
- * over a post-dated cheque for next month.
+ * without a contract. A past tenant took it from February, paid every month,
+ * left after five and had its deposit handed back. Today's tenant took it
+ * from the start of July: it paid the deposit and three months' rent, still
+ * owes this month's, and has handed over a post-dated cheque for next month.
  *
  * Dates follow today, so the story reads the same whenever it is seeded.
  * Safe to re-run: tenants are matched on their name. Requires RoomSeeder.
@@ -30,8 +29,6 @@ class RoomRentalSeeder extends Seeder
     private const ROOM = '102';
 
     private const RENT = 1500;
-
-    private const TERM_MONTHS = 6;
 
     /**
      * Run the database seeds.
@@ -47,19 +44,19 @@ class RoomRentalSeeder extends Seeder
         $past = $this->rental($company, $user, $room, self::PAST_TENANT, 'Hassan Ali', '+971 4 881 2290', $thisMonth->subMonthsNoOverflow(8), 'Boat crew between charters; left a month early.');
 
         if ($past?->wasRecentlyCreated) {
-            $this->pay($past, $user, 'deposit', 'cash', $past->start_date->toImmutable(), self::RENT);
+            $this->takeDeposit($past, $user, $past->start_date->toImmutable());
 
             for ($month = 0; $month < 5; $month++) {
                 $this->pay($past, $user, 'rent', $month % 2 === 0 ? 'cash' : 'bank_transfer', $past->start_date->toImmutable()->addMonthsNoOverflow($month)->addDay(), self::RENT);
             }
 
-            $past->end($movedIn, self::RENT, 'bank_transfer', 'Room left clean; deposit returned in full.');
+            $past->end($movedIn, self::RENT, 'bank_transfer', 'Room left clean; deposit returned in full.', $user);
         }
 
         $current = $this->rental($company, $user, $room, self::TENANT, 'Leila Haddad', '+971 56 218 7740', $movedIn, 'Event staff for the winter season. Pays at the office at the start of each month.');
 
         if ($current?->wasRecentlyCreated) {
-            $this->pay($current, $user, 'deposit', 'bank_transfer', $movedIn, self::RENT);
+            $this->takeDeposit($current, $user, $movedIn);
 
             foreach (['cash', 'bank_transfer', 'cash'] as $month => $method) {
                 $this->pay($current, $user, 'rent', $method, $movedIn->addMonthsNoOverflow($month)->addDays(2), self::RENT);
@@ -104,7 +101,6 @@ class RoomRentalSeeder extends Seeder
             'monthly_rent' => self::RENT,
             'security_deposit' => self::RENT,
             'start_date' => $start,
-            'end_date' => RoomRental::endDateFor($start, self::TERM_MONTHS),
             'notes' => $notes,
         ]);
         $rental->forceFill([
@@ -119,6 +115,15 @@ class RoomRentalSeeder extends Seeder
         $rental->recountRooms();
 
         return $rental;
+    }
+
+    /**
+     * The deposit agreed, paid in cash on `$on`.
+     */
+    private function takeDeposit(RoomRental $rental, ?User $user, CarbonImmutable $on): void
+    {
+        $rental->syncDeposit(['payment' => 'cash'], $user);
+        $rental->deposit()->first()->forceFill(['received_on' => $on->min(CarbonImmutable::today())])->save();
     }
 
     private function pay(RoomRental $rental, ?User $user, string $purpose, string $method, CarbonImmutable $on, float $amount): void

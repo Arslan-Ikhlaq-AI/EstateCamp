@@ -57,7 +57,15 @@ trait HasCheques
     }
 
     /**
-     * The cheques the current terms call for, in order: the security deposit
+     * Whether a security deposit is paid by a cheque in the schedule.
+     */
+    protected function plansDepositCheque(): bool
+    {
+        return true;
+    }
+
+    /**
+     * The cheques the current terms call for, in order: any security deposit
      * first (on the start date), then one rent cheque per period, dated on
      * the first day it covers.
      *
@@ -69,7 +77,7 @@ trait HasCheques
 
         $plan = [];
 
-        if ((float) $this->security_deposit > 0) {
+        if ($this->plansDepositCheque() && (float) $this->security_deposit > 0) {
             $plan[] = [
                 'purpose' => 'security_deposit',
                 'sequence' => 1,

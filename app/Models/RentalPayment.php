@@ -12,8 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * A receipt for money an individual paid towards their room rental: rent
- * (noting the months it paid for), the security deposit, or another
- * charge. A receipt is never deleted; one made by mistake, or whose cheque
+ * (noting the months it paid for) or another charge. Deposits are extra
+ * payments; old deposit receipts stay voided. A receipt is never deleted; one made by mistake, or whose cheque
  * bounced, is voided and stops counting. Cash is collected on site by the
  * camp boss and stays with them until an admin confirms receiving it.
  */
@@ -26,7 +26,7 @@ class RentalPayment extends Model
 
     public const NUMBER_COLUMN = 'receipt_number';
 
-    public const PURPOSES = ['rent', 'deposit', 'other'];
+    public const PURPOSES = ['rent', 'other'];
 
     public const METHODS = RoomRental::PAYMENT_METHODS;
 

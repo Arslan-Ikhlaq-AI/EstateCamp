@@ -4,11 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FiltersByPeriod;
 use App\Http\Controllers\Concerns\ListsRecords;
+use App\Http\Controllers\Concerns\ReadsExtraPayments;
 use App\Http\Requests\ExtraIncomeRequest;
 use App\Http\Requests\ExtraIncomeStatusRequest;
 use App\Models\Company;
 use App\Models\ExtraIncome;
-use App\Models\Property;
+use App\Models\Settlement;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,12 +23,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Extra income: money a property earns besides rent, such as the share an
  * internet, gas or washing machine provider pays for serving the building.
- * Listed in the payments section and with the contract cheques on the
- * property's payments, where it can be added too.
+ * One of the extra payments: it stays out of payments, revenue and reports,
+ * and is held until it is settled.
  */
 class ExtraIncomeController extends Controller
 {
-    use FiltersByPeriod, ListsRecords;
+    use FiltersByPeriod, ListsRecords, ReadsExtraPayments;
+
+    /**
+     * Settlements listed under the table.
+     */
+    private const SETTLEMENT_ROWS = 20;
 
     /**
      * List the extra income, latest first, received in a period when one is chosen.
@@ -41,33 +47,39 @@ class ExtraIncomeController extends Controller
         }
 
         $period = $this->periodFilter($request);
+        $standings = array_values(array_diff(ExtraIncome::STANDINGS, ['to_collect']));
+        $properties = $company->properties()->orderBy('name')->get(['id', 'name', 'code']);
         $filters = [
-            ...$this->listFilters($request, ['method' => ExtraIncome::METHODS, 'status' => ExtraIncome::STATUSES]),
+            ...$this->listFilters($request, ['method' => ExtraIncome::METHODS, 'standing' => $standings]),
             'period' => $period['value'],
+            'property' => (string) $properties->firstWhere('id', $request->integer('property'))?->id,
         ];
+        $incomes = fn (?string $except = null) => $this->filteredQuery($company, $filters, $period, $except);
 
         return Inertia::render('ExtraIncome/Index', [
             'company' => ['currency' => $company->default_currency],
             'filters' => $filters,
             'period' => $period,
             'facets' => [
-                'method' => $this->facetOptions(ExtraIncome::METHODS, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'method'), 'method')),
-                'status' => $this->facetOptions(ExtraIncome::STATUSES, $this->countBy($this->filteredQuery($company, $filters, $period, except: 'status'), 'status')),
+                'standing' => $this->facetOptions($standings, $this->standingCounts($incomes('standing'))),
+                'method' => $this->facetOptions(ExtraIncome::METHODS, $this->countBy($incomes('method'), 'method')),
             ],
-            'summary' => $this->summary($company, $period),
-            'incomes' => $this->filteredQuery($company, $filters, $period)
-                ->with('property:id,name,code')
+            'properties' => $properties,
+            'summary' => $this->moneyFigures($incomes()),
+            'settlements' => $this->settlementHistory(['extra_income' => $incomes()], self::SETTLEMENT_ROWS),
+            'incomes' => $incomes()
+                ->with(['property:id,name,code', 'settlements' => fn ($query) => $query->with('createdBy:id,name')->orderBy('settled_on')->orderBy('id')])
                 ->orderByDesc('received_on')
                 ->orderByDesc('id')
                 ->paginate($filters['perPage'])
                 ->withQueryString()
                 ->through(fn (ExtraIncome $income) => self::details($income)),
+            'settlementMethods' => Settlement::METHODS,
         ]);
     }
 
     /**
-     * Show the form for new extra income, for the property it was opened
-     * from; `?from=payments` returns to that property's payments.
+     * Show the form for new extra income, for `?property=` when it is given.
      */
     public function create(Request $request): Response
     {
@@ -76,13 +88,13 @@ class ExtraIncomeController extends Controller
 
         return Inertia::render('ExtraIncome/Form', [
             'income' => null,
-            'defaults' => ['property_id' => $property?->id, 'from_payments' => $property !== null && $request->query('from') === 'payments'],
+            'defaults' => ['property_id' => $property?->id],
             ...$this->formOptions($company),
         ]);
     }
 
     /**
-     * Save new extra income, received, and go back to where it was added from.
+     * Save new extra income, received.
      */
     public function store(ExtraIncomeRequest $request): RedirectResponse
     {
@@ -103,8 +115,7 @@ class ExtraIncomeController extends Controller
             return $income;
         });
 
-        return $this->backTo($property, $request->boolean('from_payments'))
-            ->with('success', "{$income->income_number} from {$income->received_from} was received.");
+        return to_route('extra-incomes.index')->with('success', "{$income->income_number} from {$income->received_from} was received.");
     }
 
     /**
@@ -124,7 +135,7 @@ class ExtraIncomeController extends Controller
                 'received_on' => $extraIncome->received_on->toDateString(),
                 'invoice_url' => self::invoiceUrl($extraIncome),
             ],
-            'defaults' => ['property_id' => null, 'from_payments' => $request->query('from') === 'payments'],
+            'defaults' => ['property_id' => null],
             ...$this->formOptions($extraIncome->company),
         ]);
     }
@@ -140,8 +151,7 @@ class ExtraIncomeController extends Controller
             $this->syncInvoice($extraIncome, $request);
         });
 
-        return $this->backTo($property, $request->boolean('from_payments'))
-            ->with('success', "{$extraIncome->income_number} was updated.");
+        return to_route('extra-incomes.index')->with('success', "{$extraIncome->income_number} was updated.");
     }
 
     /**
@@ -178,14 +188,10 @@ class ExtraIncomeController extends Controller
     public static function details(ExtraIncome $income): array
     {
         return [
-            'id' => $income->id,
-            'number' => $income->income_number,
+            ...self::moneyDetails($income, 'extra_income'),
             'title' => $income->title,
             'receivedFrom' => $income->received_from,
-            'amount' => (float) $income->amount,
-            'status' => $income->status,
             'date' => $income->received_on->toDateString(),
-            'method' => $income->method,
             'invoiceNumber' => $income->invoice_number,
             'notes' => $income->notes,
             'invoiceUrl' => self::invoiceUrl($income),
@@ -196,35 +202,6 @@ class ExtraIncomeController extends Controller
     private static function invoiceUrl(ExtraIncome $income): ?string
     {
         return $income->invoice_path ? route('extra-incomes.invoice', [$income, 'v' => $income->updated_at?->timestamp]) : null;
-    }
-
-    /**
-     * The property's payments when the form was opened from there, otherwise the list.
-     */
-    private function backTo(Property $property, bool $toPayments): RedirectResponse
-    {
-        return $toPayments ? to_route('properties.payments', $property) : to_route('extra-incomes.index');
-    }
-
-    /**
-     * Headline figures for the chosen period, or this month when the list
-     * shows all time: what was received, by how it was paid.
-     *
-     * @param  array{kind: string, from: ?string, to: ?string}  $period
-     * @return array<string, mixed>
-     */
-    private function summary(Company $company, array $period): array
-    {
-        $range = $period['kind'] === 'all' ? ['from' => today()->startOfMonth()->toDateString(), 'to' => today()->endOfMonth()->toDateString()] : $period;
-        $received = $this->wherePeriod(ExtraIncome::query()->where('company_id', $company->id)->where('status', 'received'), 'received_on', $range);
-        $byMethod = (clone $received)->toBase()->groupBy('method')->selectRaw('method, sum(amount) as total')->pluck('total', 'method');
-
-        return [
-            'inPeriod' => $period['kind'] !== 'all',
-            'received' => ['amount' => round((float) (clone $received)->sum('amount'), 2), 'count' => (clone $received)->count()],
-            'payers' => (clone $received)->distinct()->count('received_from'),
-            'byMethod' => collect(ExtraIncome::METHODS)->mapWithKeys(fn (string $method) => [$method => round((float) ($byMethod[$method] ?? 0), 2)])->all(),
-        ];
     }
 
     /**
@@ -244,7 +221,8 @@ class ExtraIncomeController extends Controller
                 ->orWhereLike('invoice_number', "%{$search}%")
                 ->orWhereHas('property', fn (Builder $properties) => $properties->whereLike('name', "%{$search}%")->orWhereLike('code', "%{$search}%"))))
             ->when($except !== 'method' && $filters['method'] !== [], fn (Builder $query) => $query->whereIn('method', $filters['method']))
-            ->when($except !== 'status' && $filters['status'] !== [], fn (Builder $query) => $query->whereIn('status', $filters['status']));
+            ->when($except !== 'standing' && $filters['standing'] !== [], fn (Builder $query) => $query->standingIn($filters['standing']))
+            ->when($filters['property'] !== '', fn (Builder $query) => $query->where('property_id', $filters['property']));
     }
 
     /**

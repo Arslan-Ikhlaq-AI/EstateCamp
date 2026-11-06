@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasBillingStatement;
 use App\Models\Concerns\HasDocumentNumber;
+use App\Models\Concerns\HasExtraPayments;
 use App\Models\Concerns\LimitedToCamps;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -24,38 +25,36 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * A short-term rental: a company or a person taking one or more whole rooms
- * of a property for a few months, straight from the company without a
- * contract.
- * It works like a contract, with a start date, a term in months and a
- * monthly rent, but nobody is checked in and nothing is invoiced.
+ * of a property, straight from the company without a contract.
+ * It has a start date and a monthly rent but no term: it runs, and goes on
+ * being charged month after month, until it is ended. Nobody is checked in
+ * and nothing is invoiced.
  *
  * Rent falls due monthly from the start date, a month in advance: each
- * month that has begun is owed, and a month cut short by the agreed end or
- * by moving out is charged for its days. Payments are receipts
- * (RentalPayments) for rent, the deposit or another charge; a cheque from
- * the tenant waits in the cheque register and becomes a receipt when it
- * clears. Rent still owed GRACE_DAYS after its month began is overdue.
+ * month that has begun is owed, and a month cut short by moving out is
+ * charged for its days. Payments are receipts (RentalPayments) for rent or
+ * another charge; a cheque from the tenant waits in the cheque register and
+ * becomes a receipt when it clears. Paying more than is owed is credit that
+ * comes off the next months. Rent still owed GRACE_DAYS after its month
+ * began is overdue. The commission and security deposit are extra payments,
+ * kept apart from the rent and its receipts.
+ *
+ * The end_date column is left from when rentals had a term and is not read.
  */
 #[Fillable([
     'monthly_rent',
     'security_deposit',
     'start_date',
-    'end_date',
     'notes',
 ])]
 class RoomRental extends Model
 {
     /** @use HasFactory<RoomRentalFactory> */
-    use HasBillingStatement, HasDocumentNumber, HasFactory, LimitedToCamps;
+    use HasBillingStatement, HasDocumentNumber, HasExtraPayments, HasFactory, LimitedToCamps;
 
     public const NUMBER_PREFIX = 'RNT';
 
     public const NUMBER_COLUMN = 'rental_number';
-
-    /**
-     * The longest stay a short-term rental is agreed for, in months.
-     */
-    public const MAX_TERM_MONTHS = 24;
 
     public const STATUSES = ['active', 'ended'];
 
@@ -70,10 +69,10 @@ class RoomRental extends Model
     public const REFUND_METHODS = ['cash', 'bank_transfer', 'cheque'];
 
     /**
-     * How the first month can be paid on the rental form. A transfer is a
-     * receipt straight away; a cheque goes to the cheque register, in hand.
+     * How the first month can be paid on the rental form. A transfer or cash
+     * is a receipt straight away; a cheque goes to the cheque register, in hand.
      */
-    public const FIRST_PAYMENT_METHODS = ['bank_transfer', 'cheque'];
+    public const FIRST_PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque'];
 
     /**
      * Days after a month's rent falls due before it counts as overdue.
@@ -82,7 +81,7 @@ class RoomRental extends Model
 
     /**
      * How far ahead the schedule is followed to work out what advance
-     * payments cover on an open-ended rental.
+     * payments cover on a rental still running.
      */
     private const OPEN_ENDED_HORIZON_YEARS = 3;
 
@@ -95,12 +94,9 @@ class RoomRental extends Model
     {
         return [
             'start_date' => 'date',
-            'end_date' => 'date',
             'moved_out_on' => 'date',
-            'deposit_refunded_on' => 'date',
             'monthly_rent' => 'decimal:2',
             'security_deposit' => 'decimal:2',
-            'deposit_refunded' => 'decimal:2',
         ];
     }
 
@@ -110,45 +106,32 @@ class RoomRental extends Model
     }
 
     /**
-     * The last day of a term of `$months` months from `$start`.
+     * A rental runs until it is ended, so it has no total rent: a commission
+     * percentage is taken of the monthly rent.
      */
-    public static function endDateFor(CarbonInterface $start, int $months): CarbonImmutable
+    public function commissionBase(): float
     {
-        return CarbonImmutable::parse($start)->addMonthsNoOverflow($months)->subDay();
+        return round((float) $this->monthly_rent, 2);
     }
 
-    /**
-     * How many whole months the agreed term runs, or null when it is
-     * open-ended or not a whole number of months.
-     */
-    public function termMonths(): ?int
+    public function extraPaymentPropertyId(): ?int
     {
-        if ($this->end_date === null) {
-            return null;
-        }
-
-        $months = (int) $this->start_date->diffInMonths($this->end_date->copy()->addDay());
-
-        return $months > 0 && self::endDateFor($this->start_date, $months)->isSameDay($this->end_date) ? $months : null;
+        return $this->property_id;
     }
 
     /**
      * The last night the tenant is charged for: the day before they moved
-     * out, else the agreed end date. Null while the rental is open-ended.
+     * out. Null while the rental runs, as it goes on until it is ended.
      */
     public function lastDay(): ?CarbonImmutable
     {
-        if ($this->moved_out_on) {
-            return $this->moved_out_on->toImmutable()->subDay();
-        }
-
-        return $this->end_date?->toImmutable();
+        return $this->moved_out_on?->toImmutable()->subDay();
     }
 
     /**
      * The monthly rent periods from the start date, each with what it
-     * costs, that begin on or before `$through`. A month cut short by the
-     * rental's last day is charged for its share of days.
+     * costs, that begin on or before `$through`. A month cut short by
+     * moving out is charged for its share of days.
      *
      * @return list<array{start: CarbonImmutable, end: CarbonImmutable, amount: float}>
      */
@@ -188,8 +171,8 @@ class RoomRental extends Model
     }
 
     /**
-     * What has been paid for `$purpose` (rent, deposit or other), leaving
-     * out voided receipts. Uses a loaded `{purpose}_paid` sum when present.
+     * What has been paid for `$purpose` (rent or other), leaving out voided
+     * receipts. Uses a loaded `{purpose}_paid` sum when present.
      */
     public function paidFor(string $purpose): float
     {
@@ -226,6 +209,66 @@ class RoomRental extends Model
         }
 
         return $unpaid;
+    }
+
+    /**
+     * The months of rent that matter from `$from` to `$to`, oldest first:
+     * those from before still unpaid, those in the period, those after it
+     * already paid for, and the next one to pay. Payments settle the oldest
+     * months first. `credit` is the part of a month paid before it began,
+     * and a month paid wholly that way reads as `credit`: nothing was left
+     * to charge when it came.
+     *
+     * @return list<array{start: string, end: string, amount: float, paid: float, credit: float, left: float, status: string}>
+     */
+    public function rentMonths(CarbonInterface $from, CarbonInterface $to): array
+    {
+        $from = CarbonImmutable::parse($from)->startOfDay();
+        $to = CarbonImmutable::parse($to)->startOfDay();
+        $receipts = $this->billingPayments();
+        $months = [];
+
+        foreach ($this->rentPeriods($this->lastDay() ?? $to->addYears(self::OPEN_ENDED_HORIZON_YEARS)) as $period) {
+            $paid = 0.0;
+            $credit = 0.0;
+
+            while ($receipts !== [] && $paid < $period['amount'] - 0.005) {
+                $taken = round(min($receipts[0]['amount'], $period['amount'] - $paid), 2);
+                $paid = round($paid + $taken, 2);
+                $credit = round($credit + ($receipts[0]['paidOn']->lt($period['start']) ? $taken : 0), 2);
+                $receipts[0]['amount'] = round($receipts[0]['amount'] - $taken, 2);
+
+                if ($receipts[0]['amount'] <= 0) {
+                    array_shift($receipts);
+                }
+            }
+
+            $left = round($period['amount'] - $paid, 2);
+            $isUpcoming = $period['start']->gt($to);
+
+            if ($left > 0 || $period['end']->gte($from)) {
+                $months[] = [
+                    'start' => $period['start']->toDateString(),
+                    'end' => $period['end']->toDateString(),
+                    'amount' => $period['amount'],
+                    'paid' => $paid,
+                    'credit' => $credit,
+                    'left' => $left,
+                    'status' => match (true) {
+                        $left <= 0 => $credit >= $period['amount'] ? 'credit' : 'paid',
+                        $isUpcoming => 'upcoming',
+                        $paid > 0 => 'partial',
+                        default => 'unpaid',
+                    },
+                ];
+            }
+
+            if ($isUpcoming && $left > 0) {
+                break;
+            }
+        }
+
+        return $months;
     }
 
     /**
@@ -287,16 +330,14 @@ class RoomRental extends Model
      */
     public function depositStanding(): array
     {
-        $agreed = round((float) $this->security_deposit, 2);
-        $paid = $this->paidFor('deposit');
-        $refunded = round((float) $this->deposit_refunded, 2);
+        $deposit = $this->deposit()->first();
 
         return [
-            'agreed' => $agreed,
-            'paid' => $paid,
-            'toCollect' => round(max(0, $agreed - $paid), 2),
-            'refunded' => $refunded,
-            'held' => round(max(0, $paid - $refunded), 2),
+            'agreed' => round((float) $this->security_deposit, 2),
+            'paid' => $deposit?->status === 'received' ? (float) $deposit->amount : 0.0,
+            'toCollect' => $deposit?->status === 'pending' ? (float) $deposit->amount : 0.0,
+            'refunded' => (float) $deposit?->settled_amount,
+            'held' => (float) $deposit?->remaining(),
         ];
     }
 
@@ -382,8 +423,8 @@ class RoomRental extends Model
     }
 
     /**
-     * Bills run to the last night the company is charged for; an
-     * open-ended rental has no last day.
+     * Bills run to the last night the company is charged for; a rental
+     * still running has no last day.
      */
     protected function lastBillingDay(): ?CarbonInterface
     {
@@ -438,23 +479,21 @@ class RoomRental extends Model
 
     /**
      * Take a cheque from the tenant into the cheque register, in hand. It
-     * counts towards the rent or deposit only once it clears.
+     * counts towards the rent only once it clears.
      *
-     * @param  array{purpose: string, cheque_date: mixed, amount: mixed, cheque_number: string, bank_name: string, account_holder?: ?string, front_image?: ?UploadedFile, back_image?: ?UploadedFile, notes?: ?string}  $entry
+     * @param  array{cheque_date: mixed, amount: mixed, cheque_number: string, bank_name: string, account_holder?: ?string, front_image?: ?UploadedFile, back_image?: ?UploadedFile, notes?: ?string}  $entry
      */
     public function receiveCheque(array $entry, ?User $by = null): Cheque
     {
         return DB::transaction(function () use ($entry, $by) {
-            $purpose = $entry['purpose'] === 'deposit' ? 'security_deposit' : 'rent';
-
             $cheque = new Cheque;
             $cheque->forceFill([
                 'company_id' => $this->company_id,
                 'direction' => 'received',
                 'chequeable_type' => $this->getMorphClass(),
                 'chequeable_id' => $this->id,
-                'purpose' => $purpose,
-                'sequence' => (int) $this->cheques()->where('purpose', $purpose)->max('sequence') + 1,
+                'purpose' => 'rent',
+                'sequence' => (int) $this->cheques()->where('purpose', 'rent')->max('sequence') + 1,
                 'status' => 'pending',
                 'notes' => filled($entry['notes'] ?? null) ? trim($entry['notes']) : null,
             ]);
@@ -480,7 +519,7 @@ class RoomRental extends Model
         return $this->recordPayment([
             'paid_on' => $on,
             'amount' => $cheque->amount,
-            'purpose' => $cheque->purpose === 'security_deposit' ? 'deposit' : 'rent',
+            'purpose' => 'rent',
             'method' => 'cheque',
             'reference' => "Cheque {$cheque->cheque_number}",
         ], cheque: $cheque);
@@ -488,24 +527,24 @@ class RoomRental extends Model
 
     /**
      * The tenant moves out on `$on`: the rental ends (rent stops the night
-     * before) and any deposit handed back is recorded. Anyone still staying
-     * under an older rental is checked out.
+     * before) and any deposit handed back settles the deposit. Anyone still
+     * staying under an older rental is checked out.
      *
      * @throws ValidationException When the rental has already ended or the refund is more than the deposit held.
      */
-    public function end(CarbonInterface $on, ?float $refund = null, ?string $refundMethod = null, ?string $note = null): void
+    public function end(CarbonInterface $on, ?float $refund = null, ?string $refundMethod = null, ?string $note = null, ?User $by = null): void
     {
         if (! $this->isActive()) {
             throw ValidationException::withMessages(['moved_out_on' => 'This rental has already ended.']);
         }
 
-        $held = $this->depositStanding()['paid'];
+        $held = $this->depositStanding()['held'];
 
         if ($refund !== null && $refund > $held + 0.005) {
-            throw ValidationException::withMessages(['deposit_refunded' => "Only {$held} of the deposit was paid, so no more can be handed back."]);
+            throw ValidationException::withMessages(['deposit_refunded' => "Only {$held} of the deposit is held, so no more can be handed back."]);
         }
 
-        DB::transaction(function () use ($on, $refund, $refundMethod, $note) {
+        DB::transaction(function () use ($on, $refund, $refundMethod, $note, $by) {
             $this->occupancies()->whereNull('check_out_date')->with('room')->get()->each(function (Occupancy $stay) use ($on) {
                 $earliest = $stay->check_in_date->copy()->addDay();
                 $stay->update(['check_out_date' => $on->lt($earliest) ? $earliest : $on]);
@@ -515,12 +554,19 @@ class RoomRental extends Model
             $this->forceFill([
                 'status' => 'ended',
                 'moved_out_on' => $on,
-                'deposit_refunded' => $refund > 0 ? round($refund, 2) : null,
-                'deposit_refunded_on' => $refund > 0 ? $on : null,
-                'deposit_refund_method' => $refund > 0 ? $refundMethod : null,
                 'notes' => filled($note) ? trim(implode("\n", array_filter([$this->notes, trim($note)]))) : $this->notes,
             ])->save();
             $this->recountRooms();
+
+            if ($refund > 0) {
+                $this->deposit()->first()->settle([
+                    'settled_on' => $on,
+                    'amount' => round($refund, 2),
+                    'method' => $refundMethod ?? 'cash',
+                    'paid_to' => $this->client->name,
+                    'notes' => 'Handed back when moving out.',
+                ], $by);
+            }
         });
     }
 
@@ -534,8 +580,8 @@ class RoomRental extends Model
     }
 
     /**
-     * Rooms a live short-term rental of the company holds: one still running
-     * or yet to start.
+     * Rooms a short-term rental of the company holds: one running or yet to
+     * start, until it is ended.
      *
      * @return list<int>
      */
@@ -544,7 +590,7 @@ class RoomRental extends Model
         return DB::table('room_rental_rooms')
             ->whereIn('room_rental_id', self::query()
                 ->where('company_id', $companyId)
-                ->live()
+                ->active()
                 ->when($exceptRentalId, fn (Builder $query) => $query->whereKeyNot($exceptRentalId))
                 ->select('id'))
             ->pluck('room_id')
@@ -555,7 +601,7 @@ class RoomRental extends Model
 
     /**
      * Rooms a short-term rental cannot take: those a running or draft
-     * contract rents, and those another live rental holds.
+     * contract rents, and those another running rental holds.
      *
      * @return list<int>
      */
@@ -597,18 +643,6 @@ class RoomRental extends Model
     protected function active(Builder $query): void
     {
         $query->where('room_rentals.status', 'active');
-    }
-
-    /**
-     * Active rentals whose term has not run out: they hold their rooms.
-     *
-     * @param  Builder<RoomRental>  $query
-     */
-    #[Scope]
-    protected function live(Builder $query): void
-    {
-        $query->where('room_rentals.status', 'active')
-            ->where(fn (Builder $query) => $query->whereNull('room_rentals.end_date')->orWhereDate('room_rentals.end_date', '>=', today()));
     }
 
     /**

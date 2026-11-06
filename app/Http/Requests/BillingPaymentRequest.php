@@ -54,11 +54,11 @@ class BillingPaymentRequest extends CompanyScopedRequest
     /**
      * The cheque as RoomRental::receiveCheque() takes it, paying rent.
      *
-     * @return array{purpose: string, cheque_date: string, amount: string, cheque_number: string, bank_name: string}
+     * @return array{cheque_date: string, amount: string, cheque_number: string, bank_name: string}
      */
     public function cheque(): array
     {
-        return ['purpose' => 'rent', ...$this->safe()->only(['cheque_date', 'amount', 'cheque_number', 'bank_name'])];
+        return $this->safe()->only(['cheque_date', 'amount', 'cheque_number', 'bank_name']);
     }
 
     /**

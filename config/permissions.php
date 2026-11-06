@@ -54,7 +54,7 @@ $campWork = [
     'clients.view', 'clients.create', 'individuals.view', 'occupants.*', 'contracts.view', 'contracts.create', 'contracts.edit', 'rentals.*',
     'amc_visits.view',
     'invoices.view', 'payments_received.view', 'payments_received.create', 'rent_collections.view', 'rent_collections.create',
-    'extra_income.view', 'extra_income.create', 'cheques.view', 'maintenance_bills.view', 'maintenance_bills.pay',
+    'extra_payments_overview.view', 'commissions.view', 'deposits.view', 'extra_income.view', 'extra_income.create', 'cheques.view', 'maintenance_bills.view', 'maintenance_bills.pay',
     'property_payments.view', 'other_payments.view', 'other_payments.create',
     'staff.view', 'attendance.*',
     'maintenance.*',
@@ -153,6 +153,26 @@ return [
             ...$amcPages,
         ],
 
+        'extra_payments' => [
+            'extra_payments_overview' => [
+                'view' => ['extra-payments.index'],
+            ],
+            'commissions' => [
+                'view' => ['commissions.index'],
+                'settle' => ['commissions.receive', 'commissions.status', 'commissions.settlements.store', 'commissions.settlements.destroy'],
+            ],
+            'deposits' => [
+                'view' => ['deposits.index'],
+                'settle' => ['deposits.receive', 'deposits.status', 'deposits.settlements.store', 'deposits.settlements.destroy'],
+            ],
+            'extra_income' => [
+                'view' => ['extra-incomes.index', 'extra-incomes.invoice'],
+                'create' => ['extra-incomes.create', 'extra-incomes.store'],
+                'edit' => ['extra-incomes.edit', 'extra-incomes.update', 'extra-incomes.status'],
+                'settle' => ['extra-incomes.settlements.store', 'extra-incomes.settlements.destroy'],
+            ],
+        ],
+
         'payments' => [
             'payments_overview' => [
                 'view' => ['payments.overview'],
@@ -172,11 +192,6 @@ return [
                 'view' => ['rental-payments.index', 'rental-payments.show'],
                 'create' => ['rentals.payments.store'],
                 'void' => ['rental-payments.void'],
-            ],
-            'extra_income' => [
-                'view' => ['extra-incomes.index', 'extra-incomes.invoice'],
-                'create' => ['extra-incomes.create', 'extra-incomes.store'],
-                'edit' => ['extra-incomes.edit', 'extra-incomes.update', 'extra-incomes.status'],
             ],
             'cheques' => [
                 'view' => ['cheques.index', 'cheques.image', 'landlord-payments.index'],

@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\ContractLine;
+use App\Models\Deposit;
 use App\Models\Occupancy;
 use App\Models\Occupant;
 use App\Models\RentalPayment;
@@ -33,7 +34,7 @@ beforeEach(function () {
 });
 
 /**
- * A new company renting both Jebel Ali rooms for three months from the start of October.
+ * A new company renting both Jebel Ali rooms from the start of October.
  *
  * @return array<string, mixed>
  */
@@ -45,7 +46,6 @@ function rentalInput(array $overrides = []): array
         'new_client' => ['name' => 'BrightPath Events L.L.C.', 'phone' => '+971 55 120 3344'],
         'property_id' => test()->privateRoom->property_id,
         'room_ids' => [test()->privateRoom->id, test()->twinRoom->id],
-        'months' => 3,
         'start_date' => '2026-10-01',
         'monthly_rent' => 3700,
         'security_deposit' => 3700,
@@ -55,7 +55,7 @@ function rentalInput(array $overrides = []): array
 }
 
 /**
- * A company renting `$rooms` short-term, with rent receipts for `$paid` and a deposit receipt for `$depositPaid`.
+ * A company renting `$rooms` short-term, with a rent receipt for `$paid` and a deposit of `$depositPaid` received.
  *
  * @param  Room|list<Room>  $rooms
  */
@@ -63,50 +63,52 @@ function rentedRooms(Room|array $rooms, array $attributes = [], float $paid = 0,
 {
     $rental = RoomRental::factory()->forRooms(...(is_array($rooms) ? $rooms : [$rooms]))->create($attributes);
 
-    foreach (array_filter(['rent' => $paid, 'deposit' => $depositPaid]) as $purpose => $amount) {
-        $rental->recordPayment(['paid_on' => $rental->start_date, 'amount' => $amount, 'purpose' => $purpose, 'method' => 'cash']);
+    if ($paid > 0) {
+        $rental->recordPayment(['paid_on' => $rental->start_date, 'amount' => $paid, 'purpose' => 'rent', 'method' => 'cash']);
+    }
+
+    if ($depositPaid > 0) {
+        Deposit::factory()->forAgreement($rental, $rental->property_id)->create(['amount' => $depositPaid, 'received_on' => $rental->start_date]);
     }
 
     return $rental;
 }
 
 describe('renting rooms short-term', function () {
-    test('rents whole rooms to a new company for a term of months, taking them without checking anyone in', function () {
+    test('rents whole rooms to a new company until the rental is ended, taking them without checking anyone in', function () {
         $response = $this->actingAs($this->admin)->post(route('rentals.store'), rentalInput());
 
         $rental = RoomRental::sole();
         $response->assertSessionHasNoErrors()
             ->assertRedirect(route('rentals.show', $rental))
-            ->assertSessionHas('success', 'RNT-2026-0001 was created: BrightPath Events L.L.C. rents rooms 102, 103 until 31 Dec 2026. Record their first payment.');
+            ->assertSessionHas('success', 'RNT-2026-0001 was created: BrightPath Events L.L.C. rents rooms 102, 103 from 1 Oct 2026 until the rental is ended. Record their first payment.');
 
         expect($rental->status)->toBe('active')
             ->and($rental->client->only(['client_type', 'name', 'phone']))->toBe(['client_type' => 'company', 'name' => 'BrightPath Events L.L.C.', 'phone' => '+971 55 120 3344'])
             ->and($rental->property_id)->toBe($this->privateRoom->property_id)
             ->and($rental->rooms()->pluck('rooms.id')->sort()->values()->all())->toBe([$this->privateRoom->id, $this->twinRoom->id])
-            ->and($rental->end_date->toDateString())->toBe('2026-12-31')
-            ->and($rental->termMonths())->toBe(3)
+            ->and($rental->lastDay())->toBeNull()
             ->and(Occupancy::count())->toBe(0)
             ->and($this->privateRoom->refresh()->is_occupied)->toBeTrue();
     });
 
-    test('records the first month and the deposit as paid now, with the new company’s other details', function () {
+    test('records the first month and a cash deposit as paid now, with the new company’s other details', function () {
         $this->actingAs($this->admin)
             ->post(route('rentals.store'), rentalInput([
                 'new_client' => [...rentalInput()['new_client'], 'contact_person_name' => 'Leila Haddad', 'email' => 'ops@brightpath.test', 'trade_license_number' => 'CN-5521870', 'tax_registration_number' => '100778899000003'],
-                'months' => 4,
                 'first_payment' => 'now',
                 'payment_method' => 'bank_transfer',
                 'payment_reference' => 'TRF-88120',
+                'deposit_payment' => 'cash',
             ]))
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('success', fn (string $message) => str_ends_with($message, 'until 31 Jan 2027. The first month’s rent and the deposit are recorded as paid.'));
+            ->assertSessionHas('success', fn (string $message) => str_ends_with($message, 'until the rental is ended. The first month’s rent is recorded as paid.'));
 
         $rental = RoomRental::sole();
         $rent = RentalPayment::where('purpose', 'rent')->sole();
 
         expect($rental->client->only(['contact_person_name', 'email', 'trade_license_number', 'tax_registration_number', 'address']))
             ->toBe(['contact_person_name' => 'Leila Haddad', 'email' => 'ops@brightpath.test', 'trade_license_number' => 'CN-5521870', 'tax_registration_number' => '100778899000003', 'address' => null])
-            ->and($rental->termMonths())->toBe(4)
             ->and((float) $rent->amount)->toBe(3700.0)
             ->and($rent->only(['method', 'reference']))->toBe(['method' => 'bank_transfer', 'reference' => 'TRF-88120'])
             ->and($rent->paid_on->toDateString())->toBe('2026-10-17')
@@ -119,21 +121,36 @@ describe('renting rooms short-term', function () {
             ->assertSessionHasErrors('payment_method');
     });
 
-    test('takes cheques for the first month and the deposit into the cheque register, but not a card', function () {
-        $byCheque = ['first_payment' => 'now', 'payment_method' => 'cheque', 'cheque_number' => '204417', 'deposit_cheque_number' => '204418', 'bank_name' => 'Emirates NBD', 'cheque_date' => '2026-10-17'];
+    test('records the first month paid in cash as a receipt the camp boss still has to hand over, and the deposit on its own', function () {
+        $this->actingAs($this->admin)
+            ->post(route('rentals.store'), rentalInput(['first_payment' => 'now', 'payment_method' => 'cash', 'deposit_payment' => 'cash']))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', fn (string $message) => str_ends_with($message, 'The first month’s rent is recorded as paid.'));
+
+        $receipts = RentalPayment::orderBy('id')->get();
+
+        expect($receipts->pluck('purpose')->all())->toBe(['rent'])
+            ->and($receipts->pluck('method')->unique()->all())->toBe(['cash'])
+            ->and($receipts->every(fn (RentalPayment $receipt) => $receipt->awaitsHandover()))->toBeTrue()
+            ->and(Cheque::count())->toBe(0)
+            ->and(RoomRental::sole()->rentStanding()['nextDue']->toDateString())->toBe('2026-11-01');
+    });
+
+    test('takes a cheque for the first month into the cheque register, a deposit cheque on the deposit alone, but not a card', function () {
+        $byCheque = ['first_payment' => 'now', 'payment_method' => 'cheque', 'cheque_number' => '204417', 'bank_name' => 'Emirates NBD', 'cheque_date' => '2026-10-17', 'deposit_payment' => 'cheque', 'deposit_cheque_number' => '204418', 'deposit_bank_name' => 'Emirates NBD', 'deposit_cheque_date' => '2026-10-17'];
 
         $this->actingAs($this->admin)
             ->post(route('rentals.store'), rentalInput(['first_payment' => 'now', 'payment_method' => 'card']))
             ->assertSessionHasErrors('payment_method');
 
         $this->actingAs($this->admin)
-            ->post(route('rentals.store'), rentalInput([...$byCheque, 'deposit_cheque_number' => '204417', 'bank_name' => null]))
+            ->post(route('rentals.store'), rentalInput([...$byCheque, 'deposit_cheque_number' => null, 'bank_name' => null]))
             ->assertSessionHasErrors(['deposit_cheque_number', 'bank_name']);
 
         $this->actingAs($this->admin)
             ->post(route('rentals.store'), rentalInput($byCheque))
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('success', fn (string $message) => str_ends_with($message, 'The cheques for the first month’s rent and the deposit are in the cheque register.'));
+            ->assertSessionHas('success', fn (string $message) => str_ends_with($message, 'The cheque for the first month’s rent is in the cheque register.'));
 
         $rental = RoomRental::sole();
 
@@ -142,8 +159,8 @@ describe('renting rooms short-term', function () {
             ->and($rental->cheques()->orderBy('purpose')->get()->map(fn (Cheque $cheque) => [$cheque->purpose, $cheque->cheque_number, $cheque->bank_name, $cheque->account_holder, (float) $cheque->amount, $cheque->cheque_date->toDateString()])->all())
             ->toBe([
                 ['rent', '204417', 'Emirates NBD', 'BrightPath Events L.L.C.', 3700.0, '2026-10-17'],
-                ['security_deposit', '204418', 'Emirates NBD', 'BrightPath Events L.L.C.', 3700.0, '2026-10-17'],
-            ]);
+            ])
+            ->and($rental->deposit()->sole()->only(['method', 'cheque_number', 'bank_name']))->toBe(['method' => 'cheque', 'cheque_number' => '204418', 'bank_name' => 'Emirates NBD']);
     });
 
     test('rents to a company or a person already on file', function () {
@@ -219,12 +236,12 @@ describe('renting rooms short-term', function () {
                 'monthly_rent' => 2400,
                 'lines' => [['unit_type' => 'room', 'property_id' => $this->dormRoom->property_id, 'room_id' => $this->dormRoom->id]],
             ])
-            ->assertSessionHasErrors(['lines.0.room_id' => "Rented short-term under {$rental->rental_number} until 31 Dec 2026."]);
+            ->assertSessionHasErrors(['lines.0.room_id' => "Rented short-term under {$rental->rental_number}."]);
     });
 
-    test('shows the form with the free rooms of each property, and frees rooms once the term is over', function () {
-        rentedRooms($this->privateRoom, ['start_date' => '2026-10-01']);
-        rentedRooms($this->twinRoom, ['start_date' => '2026-07-01']);
+    test('shows the form with the free rooms of each property, and frees rooms once the rental is ended', function () {
+        rentedRooms($this->privateRoom, ['start_date' => '2026-07-01']);
+        rentedRooms($this->twinRoom, ['start_date' => '2026-07-01'])->end(CarbonImmutable::parse('2026-09-30'));
 
         $this->actingAs($this->admin)
             ->get(route('rentals.create', ['room' => $this->twinRoom->id]))
@@ -238,7 +255,6 @@ describe('renting rooms short-term', function () {
 
                     return $rooms->contains($this->twinRoom->id) && $rooms->doesntContain($this->privateRoom->id);
                 })
-                ->where('maxMonths', RoomRental::MAX_TERM_MONTHS)
             );
     });
 
@@ -261,7 +277,7 @@ describe('renting rooms short-term', function () {
 
 describe('rent', function () {
     test('works out what is owed, paid to date and overdue once the grace days pass', function () {
-        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-08-01', 'end_date' => '2027-01-31', 'monthly_rent' => 1000], paid: 1000);
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-08-01', 'monthly_rent' => 1000], paid: 1000);
 
         $this->actingAs($this->admin)
             ->get(route('rentals.show', $rental))
@@ -274,21 +290,50 @@ describe('rent', function () {
                 ->where('rental.standing.paidThrough', '2026-08-31')
                 ->where('rental.standing.nextDue', '2026-09-01')
                 ->where('rental.standing.standing', 'overdue')
-                ->has('statement', 6)
+                ->has('statement', 4)
                 ->where('statement.0.status', 'paid')
                 ->where('statement.2.status', 'unpaid')
                 ->where('statement.3.status', 'upcoming')
-                ->where('statement.5.end', '2027-01-31')
+                ->where('statement.3.end', '2026-11-30')
             );
 
         expect($rental->rentStanding(CarbonImmutable::parse('2026-09-06'))['standing'])->toBe('due')
             ->and($rental->rentStanding(CarbonImmutable::parse('2026-09-07'))['standing'])->toBe('overdue');
     });
 
-    test('charges a month cut short by the end date for its days', function () {
-        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'end_date' => '2026-11-15', 'monthly_rent' => 3000]);
+    test('charges a month cut short by moving out for its days', function () {
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 3000]);
+
+        $rental->end(CarbonImmutable::parse('2026-11-16'));
 
         expect($rental->rentDue(CarbonImmutable::parse('2026-11-20')))->toBe(4500.0);
+    });
+
+    test('goes on charging month after month until it is ended, whatever end date an older rental was saved with', function () {
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-07-01', 'end_date' => '2026-08-31', 'monthly_rent' => 1000]);
+
+        expect($rental->rentDue())->toBe(4000.0)
+            ->and($rental->rentDue(CarbonImmutable::parse('2027-07-01')))->toBe(13000.0)
+            ->and($rental->collectionLimit())->toBeNull();
+
+        $rental->end(CarbonImmutable::parse('2026-11-01'));
+
+        expect($rental->rentDue(CarbonImmutable::parse('2027-07-01')))->toBe(4000.0)
+            ->and($rental->collectionLimit())->toBe(4000.0);
+    });
+
+    test('shows a month paid ahead as coming from credit on the rental’s statement', function () {
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 1000], paid: 2000);
+
+        $this->actingAs($this->admin)
+            ->get(route('rentals.show', $rental))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('statement', 3)
+                ->where('statement.0.status', 'paid')
+                ->where('statement.1.status', 'credit')
+                ->where('statement.2.status', 'upcoming')
+                ->where('rental.standing.paidThrough', '2026-11-30')
+            );
     });
 
     test('records a cash payment as a receipt for the months it pays', function () {
@@ -377,18 +422,18 @@ describe('a running rental', function () {
 
         expect($rental->status)->toBe('ended')
             ->and($rental->moved_out_on->toDateString())->toBe('2026-10-17')
-            ->and((float) $rental->deposit_refunded)->toBe(600.0)
+            ->and((float) $rental->deposit()->sole()->settlements()->sole()->amount)->toBe(600.0)
             ->and($rental->depositStanding()['held'])->toBe(300.0)
             ->and(RoomRental::heldRoomIds($this->company->id))->toBe([])
             ->and($this->dormRoom->refresh()->is_occupied)->toBeFalse();
     });
 
-    test('hands back no more deposit than was paid', function () {
-        $rental = rentedRooms($this->dormRoom, ['security_deposit' => 900], depositPaid: 500);
+    test('hands back no more deposit than is held', function () {
+        $rental = rentedRooms($this->dormRoom, ['security_deposit' => 500], depositPaid: 500);
 
         $this->actingAs($this->admin)
             ->post(route('rentals.end', $rental), ['moved_out_on' => '2026-10-20', 'deposit_refunded' => 900, 'deposit_refund_method' => 'cash'])
-            ->assertSessionHasErrors(['deposit_refunded' => 'Only 500 of the deposit was paid, so no more can be handed back.']);
+            ->assertSessionHasErrors(['deposit_refunded' => 'Only 500 of the deposit is held, so no more can be handed back.']);
 
         expect($rental->fresh()->status)->toBe('active');
     });
@@ -411,31 +456,36 @@ describe('a running rental', function () {
             ->and($rental->fresh()->moved_out_on->toDateString())->toBe('2026-10-17');
     });
 
-    test('keeps the rent and start date once rent is paid, but lets the term grow', function () {
+    test('keeps the rent and start date once rent is paid, but lets the deposit change', function () {
         $rental = rentedRooms($this->dormRoom, ['start_date' => '2026-10-01', 'monthly_rent' => 900], paid: 900);
-        $terms = ['months' => 3, 'monthly_rent' => 900, 'security_deposit' => 900, 'start_date' => '2026-10-01'];
+        $terms = ['monthly_rent' => 900, 'security_deposit' => 900, 'start_date' => '2026-10-01'];
 
         $this->actingAs($this->admin)
             ->put(route('rentals.update', $rental), [...$terms, 'monthly_rent' => 1100])
             ->assertSessionHasErrors('monthly_rent');
 
         $this->actingAs($this->admin)
-            ->put(route('rentals.update', $rental), [...$terms, 'months' => 6])
+            ->put(route('rentals.update', $rental), [...$terms, 'security_deposit' => 1200])
             ->assertSessionHasNoErrors();
 
-        expect($rental->fresh()->end_date->toDateString())->toBe('2027-03-31')
-            ->and((float) $rental->fresh()->monthly_rent)->toBe(900.0);
+        expect((float) $rental->fresh()->security_deposit)->toBe(1200.0)
+            ->and((float) $rental->fresh()->monthly_rent)->toBe(900.0)
+            ->and($rental->fresh()->lastDay())->toBeNull();
     });
 
-    test('will not grow a term into a room rented to someone else since', function () {
-        $finished = rentedRooms($this->dormRoom, ['start_date' => '2026-07-01', 'monthly_rent' => 900]);
-        rentedRooms($this->dormRoom, ['start_date' => '2026-10-01']);
+    test('holds its rooms however long it runs, until it is ended', function () {
+        $rental = rentedRooms($this->dormRoom, ['start_date' => '2025-01-01', 'end_date' => '2025-03-31']);
+        $sameRoom = rentalInput(['property_id' => $this->dormRoom->property_id, 'room_ids' => [$this->dormRoom->id]]);
 
         $this->actingAs($this->admin)
-            ->put(route('rentals.update', $finished), ['months' => 6, 'monthly_rent' => 900, 'security_deposit' => 2400, 'start_date' => '2026-07-01'])
-            ->assertSessionHasErrors(['months' => 'Room 103 has since been rented to someone else, so the term cannot be made longer.']);
+            ->post(route('rentals.store'), $sameRoom)
+            ->assertSessionHasErrors(['room_ids' => 'Room 103 is no longer free. Choose another.']);
 
-        expect($finished->fresh()->end_date->toDateString())->toBe('2026-09-30');
+        expect($this->dormRoom->refresh()->isHeld())->toBeTrue();
+
+        $rental->end(today());
+
+        $this->actingAs($this->admin)->post(route('rentals.store'), $sameRoom)->assertSessionHasNoErrors();
     });
 
     test('lists rentals and narrows them to those overdue', function () {

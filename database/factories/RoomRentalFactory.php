@@ -6,7 +6,6 @@ use App\Models\Client;
 use App\Models\Property;
 use App\Models\Room;
 use App\Models\RoomRental;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -33,7 +32,6 @@ class RoomRentalFactory extends Factory
             'monthly_rent' => 2400,
             'security_deposit' => 2400,
             'start_date' => '2026-01-01',
-            'end_date' => fn (array $attributes) => RoomRental::endDateFor(CarbonImmutable::parse($attributes['start_date']), 3)->toDateString(),
             'status' => 'active',
         ];
     }

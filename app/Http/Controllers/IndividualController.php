@@ -94,8 +94,6 @@ class IndividualController extends Controller
                 'number' => $rental->rental_number,
                 'property' => $rental->property?->only(['id', 'name', 'code']),
                 'rooms' => $rental->rooms->map(fn (Room $room) => ['id' => $room->id, 'number' => $room->room_number])->all(),
-                'endDate' => $rental->end_date?->toDateString(),
-                'termOver' => $rental->end_date?->lt(today()) === true,
             ])->all(),
             'pastRentals' => $client->roomRentals->count() - $running->count(),
             'rooms' => $running->sum(fn (RoomRental $rental) => $rental->rooms->count()),

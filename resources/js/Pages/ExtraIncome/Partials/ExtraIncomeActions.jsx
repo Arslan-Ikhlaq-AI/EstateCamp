@@ -12,7 +12,7 @@ import {
 import { useCan } from '@/hooks/use-can';
 import { useTranslation } from '@/hooks/use-translation';
 import { Link, router, useForm } from '@inertiajs/react';
-import { BanIcon, ExternalLinkIcon, MoreHorizontalIcon, PencilIcon, RotateCcwIcon, WalletIcon } from 'lucide-react';
+import { BanIcon, ExternalLinkIcon, MoreHorizontalIcon, PencilIcon, RotateCcwIcon } from 'lucide-react';
 import { useState } from 'react';
 
 function CancelDialog({ income, open, onOpenChange }) {
@@ -34,11 +34,11 @@ function CancelDialog({ income, open, onOpenChange }) {
 }
 
 /**
- * The menu of one extra income: correct it, open its invoice or its
- * property's payments, and cancel it when added by mistake or count it
- * again. `fromPayments` brings the form back to the property's payments.
+ * The menu of one extra income: correct it, open its invoice, and cancel it
+ * when added by mistake or count it again. Income with settlements cannot
+ * be cancelled until they are undone.
  */
-export default function ExtraIncomeActions({ income, fromPayments = false }) {
+export default function ExtraIncomeActions({ income }) {
     const { t } = useTranslation();
     const can = useCan();
     const [isCancelling, setIsCancelling] = useState(false);
@@ -64,7 +64,7 @@ export default function ExtraIncomeActions({ income, fromPayments = false }) {
                     <DropdownMenuGroup>
                         <DropdownMenuLabel className="truncate">{income.number}</DropdownMenuLabel>
                         {canEdit && (
-                            <DropdownMenuItem render={<Link href={route('extra-incomes.edit', { extraIncome: income.id, ...(fromPayments ? { from: 'payments' } : {}) })} />}>
+                            <DropdownMenuItem render={<Link href={route('extra-incomes.edit', income.id)} />}>
                                 <PencilIcon />
                                 {t('finance.extraIncome.actions.edit')}
                             </DropdownMenuItem>
@@ -75,12 +75,6 @@ export default function ExtraIncomeActions({ income, fromPayments = false }) {
                                 {t('finance.extraIncome.actions.invoice')}
                             </DropdownMenuItem>
                         )}
-                        {!fromPayments && income.property && can('property_payments.view') && (
-                            <DropdownMenuItem render={<Link href={route('properties.payments', income.property.id)} />}>
-                                <WalletIcon />
-                                {t('finance.extraIncome.actions.payments')}
-                            </DropdownMenuItem>
-                        )}
                         {canEdit && income.status === 'cancelled' && (
                             <DropdownMenuItem onClick={restore}>
                                 <RotateCcwIcon />
@@ -88,7 +82,7 @@ export default function ExtraIncomeActions({ income, fromPayments = false }) {
                             </DropdownMenuItem>
                         )}
                     </DropdownMenuGroup>
-                    {canEdit && income.status === 'received' && (
+                    {canEdit && income.status === 'received' && income.settled <= 0 && (
                         <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem variant="destructive" onClick={() => setIsCancelling(true)}>

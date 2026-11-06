@@ -17,6 +17,7 @@ use App\Models\Occupancy;
 use App\Models\Property;
 use App\Models\Room;
 use App\Models\RoomRental;
+use App\Models\Settlement;
 use App\Models\Shop;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -113,6 +114,8 @@ class ContractController extends Controller
             $contract->syncUnitStatuses();
             $this->syncDocuments($contract, $request);
             $contract->syncCheques($request->chequeEntries(), $request->user());
+            $contract->syncCommission($request->commissionTerms(), $request->user());
+            $contract->syncDeposit($request->depositTerms(), $request->user());
 
             return $contract;
         });
@@ -170,7 +173,9 @@ class ContractController extends Controller
                 'notes' => $contract->notes,
                 'renewedFrom' => $contract->renewedFrom ? ['id' => $contract->renewedFrom->id, 'number' => $contract->renewedFrom->contract_number] : null,
                 'renewal' => $contract->renewal ? ['id' => $contract->renewal->id, 'number' => $contract->renewal->contract_number] : null,
+                ...ExtraPaymentController::ofAgreement($contract),
             ],
+            'settlementMethods' => Settlement::METHODS,
             'documents' => $contract->documents->map(fn (ContractDocument $document) => self::documentDetails($document)),
             'lines' => $contract->lines->map(fn (ContractLine $line) => [
                 ...self::lineDetails($line),
@@ -263,6 +268,7 @@ class ContractController extends Controller
                 'balance' => (float) $contract->invoices()->whereNot('status', 'void')->sum(DB::raw('total - amount_paid')),
                 'hasLockedCheques' => $contract->cheques()->whereNotIn('status', Cheque::EDITABLE_STATUSES)->exists(),
                 'cheques' => $contract->cheques()->whereNull('replaces_id')->with('chequeStatus:id,name,slug,color,stage')->get()->map(fn (Cheque $cheque) => ChequeController::formDetails($cheque)),
+                ...ExtraPaymentController::ofAgreement($contract),
             ],
             'clientId' => null,
             ...$this->formOptions($contract->company, $contract),
@@ -296,6 +302,8 @@ class ContractController extends Controller
             }
 
             $this->syncDocuments($contract, $request);
+            $contract->syncCommission($request->commissionTerms(), $request->user());
+            $contract->syncDeposit($request->depositTerms(), $request->user());
 
             return $contract->syncCheques($request->chequeEntries(), $request->user());
         });
@@ -341,6 +349,7 @@ class ContractController extends Controller
 
         $renewal = $contract->startRenewal();
         $renewal->syncCheques([], $request->user());
+        $renewal->syncDeposit(['payment' => 'later'], $request->user());
 
         return to_route('contracts.edit', $renewal)
             ->with('success', "Draft renewal {$renewal->contract_number} was created from {$contract->contract_number}. Check the dates and rates, then save.");

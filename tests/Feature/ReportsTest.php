@@ -162,7 +162,7 @@ describe('receivables', function () {
     });
 
     test('ages each unpaid month of rent from the day it fell due, settling the oldest first', function () {
-        $rental = RoomRental::factory()->create(['start_date' => '2026-07-01', 'end_date' => '2026-12-31', 'monthly_rent' => 1000]);
+        $rental = RoomRental::factory()->create(['start_date' => '2026-07-01', 'monthly_rent' => 1000]);
         $rental->recordPayment(['paid_on' => '2026-07-01', 'amount' => 1500, 'purpose' => 'rent', 'method' => 'cash']);
 
         $unpaid = collect($rental->unpaidRent())->map(fn (array $month) => [$month['dueOn']->toDateString(), $month['amount']])->all();

@@ -5,13 +5,13 @@ namespace App\Http\Requests;
 use App\Models\ExtraIncome;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Extra income for a property, added or corrected on its form: who paid,
- * what for, how much, the day it was received (not after today) and how,
- * with the invoice. It is always recorded as received; it is cancelled
- * through ExtraIncomeStatusRequest. `from_payments` sends a new one back
- * to the property's payments it was added from.
+ * what for, how much (not less than has been settled), the day it was
+ * received (not after today) and how, with the invoice. It is always
+ * recorded as received; it is cancelled through ExtraIncomeStatusRequest.
  */
 class ExtraIncomeRequest extends CompanyScopedRequest
 {
@@ -35,7 +35,22 @@ class ExtraIncomeRequest extends CompanyScopedRequest
             'notes' => ['nullable', 'string', 'max:5000'],
             'invoice' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
             'remove_invoice' => ['nullable', 'boolean'],
-            'from_payments' => ['nullable', 'boolean'],
+        ];
+    }
+
+    /**
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                $settled = (float) $this->route('extraIncome')?->settled_amount;
+
+                if ($validator->errors()->isEmpty() && (float) $this->input('amount') < $settled) {
+                    $validator->errors()->add('amount', "{$settled} of this has been settled, so it cannot be less. Undo the settlements first.");
+                }
+            },
         ];
     }
 

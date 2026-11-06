@@ -27,6 +27,7 @@ import {
     HandCoinsIcon,
     InfoIcon,
     KeyRoundIcon,
+    PlusIcon,
     ReceiptTextIcon,
     ScrollTextIcon,
 } from 'lucide-react';
@@ -52,6 +53,12 @@ const UNIT_KINDS = ['rooms', 'shops', 'apartments'];
  * The figures of a bill, in the order a statement reads them.
  */
 const FIGURES = ['broughtForward', 'charged', 'total', 'received', 'balance'];
+
+/**
+ * A month of rent by how it stands: paid in green, covered by credit paid
+ * ahead in blue, owed in gold, the next one to come muted.
+ */
+const MONTH_TONES = { paid: 'success', credit: 'primary', partial: 'warning', unpaid: 'warning', upcoming: 'muted' };
 
 const cents = (value) => Math.round(value * 100) / 100;
 
@@ -137,11 +144,33 @@ export function useUnitsSummary() {
 }
 
 /**
+ * A short-term rental month by month: what was paid, what credit covered
+ * so nothing was charged, what is still owed, and the next month to pay.
+ */
+export function RentMonths({ months, currency, className }) {
+    const { t, formatCurrency, formatDate } = useTranslation();
+
+    return (
+        <ol aria-label={t('propertyAllocation.billing.months.label')} className={cn('flex flex-wrap items-center gap-1.5', className)}>
+            {months.map((month) => (
+                <li key={month.start}>
+                    <ToneBadge tone={MONTH_TONES[month.status]} icon={month.left > 0 ? undefined : CircleCheckIcon}>
+                        <span className="tabular-nums">{formatDate(month.start)}</span>
+                        <span aria-hidden="true">·</span>
+                        {t(`propertyAllocation.billing.months.${month.status}`, { amount: formatCurrency(month.left, currency) })}
+                    </ToneBadge>
+                </li>
+            ))}
+        </ol>
+    );
+}
+
+/**
  * The line under the payment box: an error, or what the amount typed will
  * do (pay ahead, or more than the agreement can take), or where the bill
- * stands when it is paid up.
+ * stands when it is paid up, unless the row beside it already says so.
  */
-function CollectHint({ error, toPay, carriedForward, amount, limit, currency }) {
+function CollectHint({ error, toPay, carriedForward, amount, limit, currency, showsStanding }) {
     const { t, formatCurrency } = useTranslation();
     const money = (value) => formatCurrency(value, currency);
 
@@ -159,7 +188,7 @@ function CollectHint({ error, toPay, carriedForward, amount, limit, currency }) 
         );
     }
 
-    if (toPay <= 0) {
+    if (showsStanding && toPay <= 0) {
         return (
             <p className="inline-flex items-center gap-1 text-xs font-medium text-success">
                 <CircleCheckIcon aria-hidden="true" className="size-3.5" />
@@ -175,13 +204,15 @@ function CollectHint({ error, toPay, carriedForward, amount, limit, currency }) 
  * The amount received, how it was paid and a tick to record it. Cheques
  * are left to the cheque register, where they wait to clear. More than is
  * due is paid ahead and comes off the next bill, up to the end of the
- * agreement; once nothing more can be taken, the bill says so instead.
+ * agreement if it has one; once nothing more can be taken, the bill says
+ * so instead. A short-term rental also has Pay extra, which adds a month's
+ * rent to the amount each time it is pressed.
  * With a single method, such as cash only, there is nothing to choose.
  * Where `methods` offers a cheque, choosing it asks for the cheque's
  * number, bank (`banks` are suggested) and date, and the cheque goes to
  * the cheque register to be submitted.
  */
-export function CollectForm({ account, currency, propertyId, through, methods, banks = [] }) {
+export function CollectForm({ account, currency, propertyId, through, methods, banks = [], showsStanding = true }) {
     const { t, formatCurrency } = useTranslation();
     const [isRecorded, setIsRecorded] = useState(false);
     const form = useForm({ amount: '', method: methods[0], cheque_number: '', bank_name: '', cheque_date: todayIso() });
@@ -190,6 +221,13 @@ export function CollectForm({ account, currency, propertyId, through, methods, b
     const limit = account.collectionLimit;
     const amount = Number(form.data.amount) || 0;
     const isOverLimit = limit !== null && amount > limit + 0.005;
+    const paidSoFar = Math.max(amount, toPay);
+    const canPayExtra = account.kind === 'rental' && (limit === null || paidSoFar < limit - 0.005);
+    const payExtra = () => {
+        const withExtra = cents(paidSoFar + account.monthly);
+
+        form.setData('amount', String(limit === null ? withExtra : Math.min(withExtra, limit)));
+    };
     const methodItems = methods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`), icon: METHOD_ICONS[method] }));
     const error = Object.values(form.errors)[0];
 
@@ -338,7 +376,16 @@ export function CollectForm({ account, currency, propertyId, through, methods, b
                     />
                 </div>
             )}
-            <CollectHint error={error} toPay={toPay} carriedForward={carriedForward} amount={amount} limit={limit} currency={currency} />
+            {canPayExtra && (
+                <Tooltip>
+                    <TooltipTrigger render={<Button type="button" variant="outline" size="xs" onClick={payExtra} />}>
+                        <PlusIcon data-icon="inline-start" />
+                        {t('propertyAllocation.billing.collect.payExtra')}
+                    </TooltipTrigger>
+                    <TooltipContent>{t('propertyAllocation.billing.collect.payExtraHint', { amount: formatCurrency(account.monthly, currency) })}</TooltipContent>
+                </Tooltip>
+            )}
+            <CollectHint error={error} toPay={toPay} carriedForward={carriedForward} amount={amount} limit={limit} currency={currency} showsStanding={showsStanding} />
             {recorded}
         </form>
     );
@@ -581,8 +628,9 @@ function AccountRow({ account, currency, propertyId, through, periodLabel, metho
                         </div>
                     )}
                 </div>
-                <div className="md:ps-20">
+                <div className="flex flex-col gap-3 md:ps-20">
                     <BillFigures figures={billFigures(account.statement)} currency={currency} />
+                    {account.months?.length > 0 && <RentMonths months={account.months} currency={currency} />}
                 </div>
             </div>
 

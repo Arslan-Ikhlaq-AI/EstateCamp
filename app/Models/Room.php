@@ -161,7 +161,7 @@ class Room extends Model
             ->whereDate('end_date', '>=', today())
             ->whereHas('contract', fn (Builder $contracts) => $contracts->where('status', 'active'))
             ->exists()
-            || $this->roomRentals()->live()->whereDate('room_rentals.start_date', '<=', today())->exists();
+            || $this->roomRentals()->active()->whereDate('room_rentals.start_date', '<=', today())->exists();
     }
 
     /**

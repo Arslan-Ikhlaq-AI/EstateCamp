@@ -211,7 +211,6 @@ class RentalPaymentController extends Controller
     private function purposeWord(string $purpose): string
     {
         return match ($purpose) {
-            'deposit' => 'deposit',
             'other' => 'other charges',
             default => 'rent',
         };

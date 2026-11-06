@@ -2,7 +2,6 @@ import { ToneBadge } from '@/Components/LeasingBadges';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import {
-    BadgePercentIcon,
     BanknoteIcon,
     BanIcon,
     CircleAlertIcon,
@@ -16,7 +15,6 @@ import {
     LandmarkIcon,
     ReceiptIcon,
     ScrollTextIcon,
-    Undo2Icon,
     UsersRoundIcon,
     WrenchIcon,
 } from 'lucide-react';
@@ -24,18 +22,15 @@ import {
 /**
  * Each kind of money movement in the payments overview: its icon, its
  * colour (fixed per kind, so a filter never repaints the others) and the
- * page that lists it. Short-term rentals share a colour in and out, and
- * extra income and one-off payments are the "other" bucket either way.
+ * page that lists it. One-off payments are the "other" bucket.
  */
 export const CASH_CATEGORIES = {
     client_payment: { icon: FileSignatureIcon, color: 'var(--cash-clients)', routeName: 'payments.index' },
     rental_payment: { icon: KeyRoundIcon, color: 'var(--cash-rentals)', routeName: 'rental-payments.index' },
-    extra_income: { icon: BadgePercentIcon, color: 'var(--cash-other)', routeName: 'extra-incomes.index' },
     landlord_rent: { icon: LandmarkIcon, color: 'var(--cash-landlords)', routeName: 'cheques.index' },
     maintenance: { icon: WrenchIcon, color: 'var(--cash-maintenance)', routeName: 'maintenance-bills.index' },
     maintenance_contract: { icon: FileStackIcon, color: 'var(--cash-contracts)', routeName: 'cheques.index' },
     salary: { icon: UsersRoundIcon, color: 'var(--cash-salaries)', routeName: 'salaries.index' },
-    deposit_refund: { icon: Undo2Icon, color: 'var(--cash-rentals)', routeName: 'rentals.index' },
     other_payment: { icon: ReceiptIcon, color: 'var(--cash-other)', routeName: null },
 };
 
@@ -44,7 +39,7 @@ export const METHOD_ICONS = { cash: BanknoteIcon, bank_transfer: LandmarkIcon, c
 /**
  * Where a transaction in the ledger opens: the payment, receipt, voucher,
  * lease, maintenance contract, staff member or rental behind it, or for
- * extra income or a one-off payment its property's payments.
+ * a one-off payment its property's payments.
  */
 export function transactionHref(row) {
     switch (row.category) {
@@ -52,8 +47,6 @@ export function transactionHref(row) {
             return route('payments.show', row.recordId);
         case 'rental_payment':
             return route('rental-payments.show', row.recordId);
-        case 'extra_income':
-            return route('properties.payments', row.parentId);
         case 'landlord_rent':
             return route('head-leases.show', row.parentId);
         case 'maintenance':
@@ -86,14 +79,10 @@ export function RentStandingBadge({ standing }) {
 }
 
 /**
- * Active or ended; an active rental whose term has run out says so.
+ * Active until the rental is ended.
  */
-export function RentalStatusBadge({ status, termOver = false }) {
+export function RentalStatusBadge({ status }) {
     const { t } = useTranslation();
-
-    if (status === 'active' && termOver) {
-        return <ToneBadge tone="warning">{t('finance.rentals.termOver')}</ToneBadge>;
-    }
 
     return <ToneBadge tone={status === 'active' ? 'success' : 'muted'}>{t(`finance.rentals.status.${status}`)}</ToneBadge>;
 }

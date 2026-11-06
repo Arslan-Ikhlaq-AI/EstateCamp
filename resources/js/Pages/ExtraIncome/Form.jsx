@@ -19,22 +19,19 @@ const initialValues = (income, defaults, properties) => ({
     notes: income?.notes ?? '',
     invoice: null,
     remove_invoice: false,
-    from_payments: defaults.from_payments,
 });
 
 /**
  * Add extra income for a property, or correct it: who paid, what for,
  * how much, the day and how it was received, with the invoice. It is
- * always saved as received. Opened from a property's payments, saving
- * goes back there; otherwise to the extra income list.
+ * always saved as received, and saving goes back to the extra income list.
  */
 export default function Form({ income, defaults, properties, methods, currency }) {
     const { t } = useTranslation();
     const isEditing = income !== null;
     const form = useForm(initialValues(income, defaults, properties));
     const { data, setData, errors, processing } = form;
-    const home = defaults.from_payments ? properties.find((option) => option.id === (income?.property_id ?? defaults.property_id)) : null;
-    const listHref = home ? route('properties.payments', home.id) : route('extra-incomes.index');
+    const listHref = route('extra-incomes.index');
     const title = isEditing ? t('finance.extraIncome.form.editTitle', { number: income.number }) : t('finance.extraIncome.form.addTitle');
 
     const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
@@ -53,16 +50,11 @@ export default function Form({ income, defaults, properties, methods, currency }
             <Head title={title} />
 
             <FormShell
-                breadcrumbs={
-                    home
-                        ? [
-                              { label: t('properties.title'), href: route('properties.index') },
-                              { label: home.name, href: route('properties.show', home.id) },
-                              { label: t('propertyPayments.title'), href: listHref },
-                              { label: isEditing ? income.number : title },
-                          ]
-                        : [{ label: t('nav.payments') }, { label: t('finance.extraIncome.title'), href: listHref }, { label: isEditing ? income.number : title }]
-                }
+                breadcrumbs={[
+                    { label: t('extraPayments.title'), href: route('extra-payments.index') },
+                    { label: t('finance.extraIncome.title'), href: listHref },
+                    { label: isEditing ? income.number : title },
+                ]}
                 title={title}
                 description={t('finance.extraIncome.form.description')}
                 cancelHref={listHref}

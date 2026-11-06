@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\Commission;
 use App\Models\Contract;
+use App\Models\Deposit;
+use App\Models\ExtraIncome;
 use App\Models\HeadLease;
 use App\Models\MaintenanceContract;
 use App\Models\RoomRental;
@@ -32,7 +35,10 @@ class AppServiceProvider extends ServiceProvider
     {
         // Short, stable names for the agreements cheques belong to, so stored rows do not depend on class names.
         Relation::morphMap([
+            'commission' => Commission::class,
             'contract' => Contract::class,
+            'deposit' => Deposit::class,
+            'extra_income' => ExtraIncome::class,
             'head_lease' => HeadLease::class,
             'maintenance_contract' => MaintenanceContract::class,
             'room_rental' => RoomRental::class,

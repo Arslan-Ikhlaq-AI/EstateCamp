@@ -9,25 +9,34 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Every movement of the company's money in one list, for the payments
- * overview and the reports: what came in (client payments that cleared,
- * receipts from individuals renting rooms, and extra income such as a
- * provider's share for serving a property) and what went out (landlord and
+ * overview and the reports: what came in (client payments that cleared and
+ * receipts from individuals renting rooms) and what went out (landlord and
  * maintenance contractor cheques that cleared, maintenance bills paid,
- * one-off payments for a property, salaries paid and deposits handed back). Money still on its way, such as a cheque not yet cleared,
- * is left out until it moves.
+ * one-off payments for a property and salaries paid). Money still on its
+ * way, such as a cheque not yet cleared, is left out until it moves. The
+ * extra payments (commissions, deposits and extra income) and their
+ * settlements are kept out altogether.
  *
  * Each row has the same columns whatever it came from: category,
  * direction (in or out), record_id and parent_id (to link to it), date,
  * party, number, detail, method and amount.
+ *
+ * It can be kept to one property. Most money sits at a property of its own:
+ * a rental's, a lease's, a maintenance contract's or a bill's. A client
+ * payment counts for the part of it that property takes, as in
+ * ReadsPropertyMoney, and a salary where the staff member is based, so head
+ * office salaries and payments for no contract are in no property's ledger.
  */
 trait ReadsCashFlow
 {
+    use SharesContractMoney;
+
     /**
      * The kinds of money movement, by direction.
      */
     public const CASH_CATEGORIES = [
-        'in' => ['client_payment', 'rental_payment', 'extra_income'],
-        'out' => ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'deposit_refund', 'other_payment'],
+        'in' => ['client_payment', 'rental_payment'],
+        'out' => ['landlord_rent', 'maintenance', 'salary', 'maintenance_contract', 'other_payment'],
     ];
 
     /**
@@ -36,15 +45,18 @@ trait ReadsCashFlow
     public const CASH_METHODS = ['cash', 'bank_transfer', 'cheque', 'card'];
 
     /**
-     * The company's ledger as a query to narrow, total or page through.
-     * Salaries are left out for those who may not see the payroll.
+     * The company's ledger as a query to narrow, total or page through,
+     * or the part of it at `$propertyId`. Salaries are left out for those
+     * who may not see the payroll.
      */
-    protected function cashLedger(Company $company, bool $withSalaries): QueryBuilder
+    protected function cashLedger(Company $company, bool $withSalaries, ?int $propertyId = null): QueryBuilder
     {
         $id = $company->id;
+        $atProperty = fn (string $column) => fn (QueryBuilder $query) => $query->when($propertyId !== null, fn (QueryBuilder $query) => $query->where($column, $propertyId));
 
         $ledger = DB::table('payments')
             ->join('clients', 'clients.id', '=', 'payments.client_id')
+            ->when($propertyId !== null, fn (QueryBuilder $query) => $query->joinSub($this->clientPaymentParts($company, $propertyId), 'property_parts', 'property_parts.payment_id', '=', 'payments.id'))
             ->where('payments.company_id', $id)
             ->where('payments.status', 'cleared')
             ->select([
@@ -57,13 +69,14 @@ trait ReadsCashFlow
                 'payments.payment_number as number',
                 'payments.reference as detail',
                 'payments.method as method',
-                'payments.amount',
+                $propertyId === null ? 'payments.amount' : 'property_parts.amount',
             ])
             ->unionAll(DB::table('rental_payments')
                 ->join('room_rentals', 'room_rentals.id', '=', 'rental_payments.room_rental_id')
                 ->join('clients', 'clients.id', '=', 'room_rentals.client_id')
                 ->where('rental_payments.company_id', $id)
                 ->where('rental_payments.status', 'cleared')
+                ->tap($atProperty('room_rentals.property_id'))
                 ->select([
                     DB::raw("'rental_payment'"),
                     DB::raw("'in'"),
@@ -76,27 +89,13 @@ trait ReadsCashFlow
                     'rental_payments.method',
                     'rental_payments.amount',
                 ]))
-            ->unionAll(DB::table('extra_incomes')
-                ->where('extra_incomes.company_id', $id)
-                ->where('extra_incomes.status', 'received')
-                ->select([
-                    DB::raw("'extra_income'"),
-                    DB::raw("'in'"),
-                    'extra_incomes.id',
-                    'extra_incomes.property_id',
-                    'extra_incomes.received_on',
-                    'extra_incomes.received_from',
-                    'extra_incomes.income_number',
-                    'extra_incomes.title',
-                    'extra_incomes.method',
-                    'extra_incomes.amount',
-                ]))
             ->unionAll(DB::table('cheques')
                 ->join('head_leases', fn ($join) => $join->on('head_leases.id', '=', 'cheques.chequeable_id')->where('cheques.chequeable_type', 'head_lease'))
                 ->join('landlords', 'landlords.id', '=', 'head_leases.landlord_id')
                 ->where('cheques.company_id', $id)
                 ->where('cheques.direction', 'issued')
                 ->where('cheques.status', 'cleared')
+                ->tap($atProperty('head_leases.property_id'))
                 ->select([
                     DB::raw("'landlord_rent'"),
                     DB::raw("'out'"),
@@ -114,6 +113,7 @@ trait ReadsCashFlow
                 ->where('cheques.company_id', $id)
                 ->where('cheques.direction', 'issued')
                 ->where('cheques.status', 'cleared')
+                ->tap($atProperty('maintenance_contracts.property_id'))
                 ->select([
                     DB::raw("'maintenance_contract'"),
                     DB::raw("'out'"),
@@ -131,6 +131,7 @@ trait ReadsCashFlow
                 ->whereNull('maintenance_jobs.deleted_at')
                 ->whereNotNull('maintenance_jobs.paid_on')
                 ->where('maintenance_jobs.amount', '>', 0)
+                ->tap($atProperty('maintenance_jobs.property_id'))
                 ->select([
                     DB::raw("'maintenance'"),
                     DB::raw("'out'"),
@@ -143,25 +144,10 @@ trait ReadsCashFlow
                     'maintenance_jobs.payment_method',
                     'maintenance_jobs.amount',
                 ]))
-            ->unionAll(DB::table('room_rentals')
-                ->join('clients', 'clients.id', '=', 'room_rentals.client_id')
-                ->where('room_rentals.company_id', $id)
-                ->where('room_rentals.deposit_refunded', '>', 0)
-                ->select([
-                    DB::raw("'deposit_refund'"),
-                    DB::raw("'out'"),
-                    'room_rentals.id',
-                    'room_rentals.client_id',
-                    'room_rentals.deposit_refunded_on',
-                    'clients.name',
-                    'room_rentals.rental_number',
-                    DB::raw('cast(null as varchar(255))'),
-                    'room_rentals.deposit_refund_method',
-                    'room_rentals.deposit_refunded',
-                ]))
             ->unionAll(DB::table('other_payments')
                 ->where('other_payments.company_id', $id)
                 ->where('other_payments.status', 'paid')
+                ->tap($atProperty('other_payments.property_id'))
                 ->select([
                     DB::raw("'other_payment'"),
                     DB::raw("'out'"),
@@ -180,6 +166,7 @@ trait ReadsCashFlow
                 ->join('staff_members', 'staff_members.id', '=', 'salary_payments.staff_member_id')
                 ->where('salary_payments.company_id', $id)
                 ->where('salary_payments.status', 'paid')
+                ->tap($atProperty('staff_members.property_id'))
                 ->select([
                     DB::raw("'salary'"),
                     DB::raw("'out'"),
@@ -195,6 +182,31 @@ trait ReadsCashFlow
         }
 
         return DB::query()->fromSub($ledger, 'ledger');
+    }
+
+    /**
+     * What of each client payment belongs to `$propertyId`: that property's
+     * share of what the payment settled on each contract's invoices, and of
+     * what it paid beyond them, as credit, to the contract it was collected
+     * for. Payments that touch no contract renting there are left out.
+     */
+    private function clientPaymentParts(Company $company, int $propertyId): QueryBuilder
+    {
+        $shares = $this->contractShares($company, $propertyId);
+
+        $settled = DB::table('payment_allocations')
+            ->join('invoices', 'invoices.id', '=', 'payment_allocations.invoice_id')
+            ->joinSub($shares, 'shares', 'shares.contract_id', '=', 'invoices.contract_id')
+            ->selectRaw('payment_allocations.payment_id, payment_allocations.amount * shares.share as amount');
+
+        $allocated = DB::table('payment_allocations')->groupBy('payment_id')->selectRaw('payment_id, sum(amount) as amount');
+        $credit = DB::table('payments')
+            ->leftJoinSub($allocated, 'allocated', 'allocated.payment_id', '=', 'payments.id')
+            ->joinSub($shares, 'shares', 'shares.contract_id', '=', 'payments.contract_id')
+            ->whereRaw('payments.amount > coalesce(allocated.amount, 0)')
+            ->selectRaw('payments.id as payment_id, (payments.amount - coalesce(allocated.amount, 0)) * shares.share as amount');
+
+        return DB::query()->fromSub($settled->unionAll($credit), 'parts')->groupBy('payment_id')->selectRaw('payment_id, sum(amount) as amount');
     }
 
     /**

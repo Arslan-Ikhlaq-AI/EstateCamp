@@ -118,8 +118,9 @@ function withDeposit(plan, { start_date, security_deposit }) {
 }
 
 /**
- * A client contract's cheques: the deposit, then one per billing period,
- * each for what the period's invoice should come to.
+ * A client contract's cheques: one per billing period, each for what the
+ * period's invoice should come to. Its deposit is kept apart, under Extra
+ * payments.
  */
 export function planContractCheques(data) {
     const { start_date, end_date, billing_cycle, lines } = data;
@@ -129,7 +130,7 @@ export function planContractCheques(data) {
         return [];
     }
 
-    const rent = chequePeriods(start_date, end_date, months, true)
+    return chequePeriods(start_date, end_date, months, true)
         .map((period, index) => {
             let total = 0;
 
@@ -158,8 +159,6 @@ export function planContractCheques(data) {
             };
         })
         .filter((row) => row.amount > 0);
-
-    return withDeposit(rent, data);
 }
 
 /**

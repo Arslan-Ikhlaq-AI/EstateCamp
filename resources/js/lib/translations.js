@@ -1,5 +1,6 @@
 import { amcs } from './translations-amcs';
 import { analyze } from './translations-analyze';
+import { extraPayments } from './translations-extra-payments';
 import { finance } from './translations-finance';
 import { leasing } from './translations-leasing';
 import { maintenance } from './translations-maintenance';
@@ -14,6 +15,7 @@ import { staff } from './translations-staff';
  * leasing pages' strings live in translations-leasing.js, the maintenance
  * pages' in translations-maintenance.js, the staff pages' in
  * translations-staff.js, the payments section's in translations-finance.js,
+ * the extra payments' in translations-extra-payments.js,
  * the reports' in translations-reports.js, the maintenance contracts'
  * in translations-amcs.js, the analyze page's in translations-analyze.js
  * and the users & permissions pages' in translations-permissions.js.
@@ -22,6 +24,7 @@ export const translations = {
     en: {
         leasing: leasing.en,
         finance: finance.en,
+        extraPayments: extraPayments.en,
         reports: reports.en,
         analyze: analyze.en,
         permissions: permissions.en,
@@ -88,6 +91,10 @@ export const translations = {
             paymentsReceived: 'Payments received',
             paymentsOverview: 'Overview',
             rentCollections: 'Rent collections',
+            extraPayments: 'Extra payments',
+            extraPaymentsOverview: 'Overview',
+            commissions: 'Commissions',
+            deposits: 'Deposits',
             extraIncome: 'Extra income',
             maintenanceBills: 'Maintenance bills',
             salaries: 'Salaries',
@@ -768,7 +775,7 @@ export const translations = {
                 bedrooms: { one: '{count} bedroom', other: '{count} bedrooms' },
             },
             reference: { contract: 'Contract', rental: 'Short-term rental' },
-            openEnded: 'Open-ended',
+            openEnded: 'Until ended',
             freeFrom: 'Free from {date}',
             csv: { details: 'Details', unitStatus: 'Unit status', inService: 'In service', start: 'Start', end: 'End', freeFrom: 'Free from' },
             summary: {
@@ -872,8 +879,18 @@ export const translations = {
                     paidSince: 'Paid since',
                     inCredit: 'In credit {amount}',
                     notBilled: 'Billing starts once the contract is active.',
-                    credit: '{amount} more than due goes to the next bill as credit.',
+                    credit: '{amount} extra is kept as credit and comes off the next bills.',
+                    payExtra: 'Pay extra',
+                    payExtraHint: 'Adds a month’s rent of {amount}. The extra comes off the next months.',
                     overLimit: 'At most {amount} can be taken: that pays everything up to the end of the agreement.',
+                },
+                months: {
+                    label: 'Rent month by month',
+                    paid: 'Paid',
+                    credit: 'From credit, no charge',
+                    partial: '{amount} to pay',
+                    unpaid: '{amount} to pay',
+                    upcoming: 'Next: {amount}',
                 },
             },
         },
@@ -956,20 +973,16 @@ export const translations = {
             title: 'Payments',
             addMaintenance: 'Add maintenance',
             addOtherPayment: 'Other payment',
-            addExtraIncome: 'Extra income',
             periodHint: 'Cheques dated in {period} and earlier ones still open are listed, and so is cash still with the camp boss. Unpaid bills carry forward until they are paid.',
             tabs: { label: 'Payments in and out', in: 'Payments in', out: 'Payments out' },
             owners: { admin: 'Admin', campBoss: 'Camp boss', handover: 'Camp boss → admin' },
             sections: {
                 cheques: {
-                    title: 'Contract cheques & extra income',
+                    title: 'Contract cheques',
                     description:
-                        'Cheques from the companies with a contract here, dated in the period and earlier ones still open. Press Cashed once the money is in the bank, or click a status to change it, such as cancelling a cheque. Tick several to update them together. Extra income from providers is listed below, already received.',
+                        'Cheques from the companies with a contract here, dated in the period and earlier ones still open. Press Cashed once the money is in the bank, or click a status to change it, such as cancelling a cheque. Tick several to update them together.',
                     list: 'Cheques',
                     empty: { title: 'No contract cheques for {period}', description: 'Cheques under the contracts renting here show once they are set up.' },
-                    extra: 'Extra income',
-                    extraHint: 'What providers pay for serving this property, such as internet, gas or washing machines. It is always received and counts towards the income.',
-                    extraEmpty: 'No extra income received in {period}.',
                 },
                 bank: {
                     title: 'Short-term · bank',
@@ -985,9 +998,9 @@ export const translations = {
                 unpaid: {
                     title: 'Unpaid amounts & cash',
                     description:
-                        'What each short-term rental still owes. Type what the renter paid and choose how: cash stays here with the camp boss until an admin confirms receiving it; a bank transfer or a cheque moves to section 2.',
-                    collect: 'Unpaid amounts',
-                    collectHint: 'Type the amount, choose cash, bank transfer or cheque, and tick. A cheque also needs its number, bank and date.',
+                        'What each short-term rental owes, charged month after month until it is ended. Type what the renter paid and choose how: cash stays here with the camp boss until an admin confirms receiving it; a bank transfer or a cheque moves to section 2. Anything paid above the bill is kept as credit and comes off the next months.',
+                    collect: 'Rent to collect & extra payments',
+                    collectHint: 'Type the amount, choose cash, bank transfer or cheque, and tick. Pay extra adds a month’s rent. A cheque also needs its number, bank and date.',
                     receipts: 'Cash received',
                     receiptsEmpty: 'No cash received in {period}.',
                     awaitingAdmin: 'An admin confirms this cash once the camp boss hands it over.',
@@ -1023,7 +1036,6 @@ export const translations = {
                 pending: 'Pending',
                 pendingDetail: { one: '{count} cheque · {inHand} in hand', other: '{count} cheques · {inHand} in hand' },
                 failed: 'Bounced or cancelled',
-                extraIncome: 'Extra income',
                 inBank: 'Received in bank',
                 transfers: 'Bank transfers',
                 chequesSubmitted: 'Cheques submitted',
@@ -1055,6 +1067,7 @@ export const translations = {
             collect: {
                 monthly: '{amount} a month',
                 dueInPeriod: '{amount} due in period',
+                fromCredit: '{amount} from credit',
                 leftToPay: '{amount} left to pay',
                 allPaid: 'Every short-term rental has paid what is due by the end of {period}.',
                 showPaidUp: { one: 'Show {count} rental paid up', other: 'Show {count} rentals paid up' },
@@ -1143,8 +1156,6 @@ export const translations = {
                     chequesDetail: 'Contract and short-term cheques',
                     transfers: 'Bank transfers',
                     cash: 'Cash collected',
-                    extra: 'Extra income',
-                    extraDetail: 'Internet, gas, washing machines…',
                     total: 'Total income',
                 },
                 expenses: {
@@ -1894,6 +1905,7 @@ export const translations = {
     ar: {
         leasing: leasing.ar,
         finance: finance.ar,
+        extraPayments: extraPayments.ar,
         reports: reports.ar,
         analyze: analyze.ar,
         permissions: permissions.ar,
@@ -1967,6 +1979,10 @@ export const translations = {
             paymentsReceived: 'المدفوعات المستلمة',
             paymentsOverview: 'نظرة عامة',
             rentCollections: 'تحصيل الإيجارات',
+            extraPayments: 'مدفوعات إضافية',
+            extraPaymentsOverview: 'نظرة عامة',
+            commissions: 'العمولات',
+            deposits: 'التأمينات',
             extraIncome: 'إيرادات إضافية',
             maintenanceBills: 'فواتير الصيانة',
             salaries: 'الرواتب المدفوعة',
@@ -2528,7 +2544,7 @@ export const translations = {
                 bedrooms: { zero: 'بدون غرف نوم', one: 'غرفة نوم واحدة', two: 'غرفتا نوم', few: '{count} غرف نوم', many: '{count} غرفة نوم', other: '{count} غرفة نوم' },
             },
             reference: { contract: 'عقد', rental: 'إيجار قصير الأجل' },
-            openEnded: 'مفتوح المدة',
+            openEnded: 'حتى إنهائه',
             freeFrom: 'متاحة من {date}',
             csv: { details: 'التفاصيل', unitStatus: 'حالة الوحدة', inService: 'في الخدمة', start: 'البداية', end: 'النهاية', freeFrom: 'متاحة من' },
             summary: {
@@ -2639,8 +2655,18 @@ export const translations = {
                     paidSince: 'سُددت لاحقًا',
                     inCredit: 'رصيد دائن {amount}',
                     notBilled: 'تبدأ الفوترة عند تفعيل العقد.',
-                    credit: 'الزيادة {amount} تُرحَّل إلى الفاتورة التالية كرصيد دائن.',
+                    credit: 'الزيادة {amount} تُحفظ رصيدًا دائنًا وتُخصم من الفواتير التالية.',
+                    payExtra: 'دفع مبلغ إضافي',
+                    payExtraHint: 'يضيف إيجار شهر بقيمة {amount}. تُخصم الزيادة من الأشهر التالية.',
                     overLimit: 'الحد الأقصى {amount}: وهو ما يسدد كل المستحق حتى نهاية الاتفاقية.',
+                },
+                months: {
+                    label: 'الإيجار شهرًا بشهر',
+                    paid: 'مدفوع',
+                    credit: 'من الرصيد، بلا رسوم',
+                    partial: '{amount} للدفع',
+                    unpaid: '{amount} للدفع',
+                    upcoming: 'التالي: {amount}',
                 },
             },
         },
@@ -2734,20 +2760,16 @@ export const translations = {
             title: 'المدفوعات',
             addMaintenance: 'إضافة صيانة',
             addOtherPayment: 'دفعة أخرى',
-            addExtraIncome: 'إيراد إضافي',
             periodHint: 'تظهر الشيكات المؤرخة في {period} والشيكات السابقة التي لم تُنجَز بعد، وكذلك النقد الذي ما زال مع رئيس المخيم. الفواتير غير المدفوعة تبقى حتى تُدفع.',
             tabs: { label: 'المدفوعات الواردة والصادرة', in: 'المدفوعات الواردة', out: 'المدفوعات الصادرة' },
             owners: { admin: 'المدير', campBoss: 'رئيس المخيم', handover: 'رئيس المخيم ← المدير' },
             sections: {
                 cheques: {
-                    title: 'شيكات العقود والإيرادات الإضافية',
+                    title: 'شيكات العقود',
                     description:
-                        'شيكات الشركات التي لها عقد هنا، المؤرخة في الفترة والسابقة التي لم تُنجَز بعد. اضغط «تم الصرف» عند وصول المبلغ إلى البنك، أو انقر على الحالة لتغييرها، مثل إلغاء الشيك. حدّد عدة شيكات لتحديثها معًا. تظهر أدناه الإيرادات الإضافية من مزوّدي الخدمات، وهي مستلمة.',
+                        'شيكات الشركات التي لها عقد هنا، المؤرخة في الفترة والسابقة التي لم تُنجَز بعد. اضغط «تم الصرف» عند وصول المبلغ إلى البنك، أو انقر على الحالة لتغييرها، مثل إلغاء الشيك. حدّد عدة شيكات لتحديثها معًا.',
                     list: 'الشيكات',
                     empty: { title: 'لا شيكات عقود في {period}', description: 'تظهر هنا شيكات العقود المستأجرة في هذا العقار بعد تجهيزها.' },
-                    extra: 'الإيرادات الإضافية',
-                    extraHint: 'ما يدفعه مزوّدو الخدمات مقابل خدمة هذا العقار، مثل الإنترنت أو الغاز أو الغسالات. تُسجَّل دائمًا كمستلمة وتُحتسب ضمن الدخل.',
-                    extraEmpty: 'لا إيرادات إضافية مستلمة في {period}.',
                 },
                 bank: {
                     title: 'الإيجار قصير الأجل · البنك',
@@ -2763,9 +2785,9 @@ export const translations = {
                 unpaid: {
                     title: 'المبالغ غير المدفوعة والنقد',
                     description:
-                        'ما يتبقى على كل إيجار قصير الأجل. اكتب ما دفعه المستأجر واختر الطريقة: النقد يبقى هنا مع رئيس المخيم حتى يؤكد المدير استلامه، والتحويل البنكي أو الشيك ينتقل إلى القسم 2.',
-                    collect: 'المبالغ غير المدفوعة',
-                    collectHint: 'اكتب المبلغ، واختر نقدًا أو تحويلًا بنكيًا أو شيكًا، ثم اضغط علامة الصح. يحتاج الشيك أيضًا إلى رقمه وبنكه وتاريخه.',
+                        'ما على كل إيجار قصير الأجل، ويُحتسب شهرًا بعد شهر حتى إنهائه. اكتب ما دفعه المستأجر واختر الطريقة: النقد يبقى هنا مع رئيس المخيم حتى يؤكد المدير استلامه، والتحويل البنكي أو الشيك ينتقل إلى القسم 2. ما يُدفع زيادة على الفاتورة يُحفظ رصيدًا دائنًا ويُخصم من الأشهر التالية.',
+                    collect: 'الإيجار المستحق والدفعات الإضافية',
+                    collectHint: 'اكتب المبلغ، واختر نقدًا أو تحويلًا بنكيًا أو شيكًا، ثم اضغط علامة الصح. زر الدفع الإضافي يضيف إيجار شهر. يحتاج الشيك أيضًا إلى رقمه وبنكه وتاريخه.',
                     receipts: 'النقد المستلم',
                     receiptsEmpty: 'لم يُستلم نقد في {period}.',
                     awaitingAdmin: 'يؤكد المدير هذا النقد بعد أن يسلّمه رئيس المخيم.',
@@ -2808,7 +2830,6 @@ export const translations = {
                     other: '{count} شيك · {inHand} في اليد',
                 },
                 failed: 'مرتجعة أو ملغاة',
-                extraIncome: 'إيرادات إضافية',
                 inBank: 'المستلم في البنك',
                 transfers: 'التحويلات البنكية',
                 chequesSubmitted: 'شيكات مُقدَّمة',
@@ -2854,6 +2875,7 @@ export const translations = {
             collect: {
                 monthly: '{amount} شهريًا',
                 dueInPeriod: '{amount} مستحق في الفترة',
+                fromCredit: '{amount} من الرصيد الدائن',
                 leftToPay: '{amount} متبقٍ للدفع',
                 allPaid: 'سددت كل الإيجارات قصيرة الأجل ما استحق حتى نهاية {period}.',
                 showPaidUp: { zero: 'عرض الإيجارات المسددة', one: 'عرض إيجار مسدد', two: 'عرض إيجارين مسددين', few: 'عرض {count} إيجارات مسددة', many: 'عرض {count} إيجارًا مسددًا', other: 'عرض {count} إيجار مسدد' },
@@ -2948,8 +2970,6 @@ export const translations = {
                     chequesDetail: 'شيكات العقود والإيجارات قصيرة الأجل',
                     transfers: 'التحويلات البنكية',
                     cash: 'النقد المحصَّل',
-                    extra: 'إيرادات إضافية',
-                    extraDetail: 'الإنترنت، الغاز، الغسالات…',
                     total: 'إجمالي الدخل',
                 },
                 expenses: {

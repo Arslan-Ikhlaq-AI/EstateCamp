@@ -11,6 +11,7 @@ import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, useComboboxAnchor } from '@/components/ui/combobox';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -19,6 +20,7 @@ import {
     DropdownMenuLabel,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { InputGroupAddon } from '@/components/ui/input-group';
 import { useCan } from '@/hooks/use-can';
 import { LOCALES, useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
@@ -28,6 +30,7 @@ import {
     ArrowRightIcon,
     ArrowUpRightIcon,
     BanknoteIcon,
+    Building2Icon,
     ChevronDownIcon,
     FileSignatureIcon,
     FileStackIcon,
@@ -44,8 +47,8 @@ import {
 import { useMemo } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
-const IN = ['client_payment', 'rental_payment', 'extra_income'];
-const OUT = ['landlord_rent', 'salary', 'maintenance', 'maintenance_contract', 'deposit_refund', 'other_payment'];
+const IN = ['client_payment', 'rental_payment'];
+const OUT = ['landlord_rent', 'salary', 'maintenance', 'maintenance_contract', 'other_payment'];
 
 const sum = (totals, categories) => categories.reduce((total, category) => total + (totals?.[category]?.amount ?? 0), 0);
 const count = (totals, categories) => categories.reduce((total, category) => total + (totals?.[category]?.count ?? 0), 0);
@@ -165,11 +168,13 @@ function Waiting({ icon: Icon, label, detail, amount, href, tone }) {
 }
 
 /**
- * What is still to collect and to pay today, whatever period is shown.
+ * What is still to collect and to pay today, whatever period is shown. The
+ * lists that filter by property open on `propertyCode` when one is chosen.
  */
-function WaitingPanel({ outstanding, currency }) {
+function WaitingPanel({ outstanding, currency, propertyCode }) {
     const { t, formatCurrency } = useTranslation();
     const money = (value) => formatCurrency(value, currency);
+    const atProperty = propertyCode ? { properties: [propertyCode] } : {};
 
     const collect = [
         {
@@ -186,7 +191,7 @@ function WaitingPanel({ outstanding, currency }) {
             label: t('finance.overview.waiting.rentOwed'),
             detail: t('finance.overview.waiting.tenants', { count: outstanding.rentOwed.count }),
             amount: outstanding.rentOwed.amount,
-            href: route('rentals.index', { standing: ['due', 'overdue'] }),
+            href: route('rentals.index', { standing: ['due', 'overdue'], ...atProperty }),
         },
         {
             key: 'cheques',
@@ -220,7 +225,7 @@ function WaitingPanel({ outstanding, currency }) {
             label: t('finance.overview.waiting.maintenanceBills'),
             detail: t('finance.overview.waiting.bills', { count: outstanding.maintenanceBills.count }),
             amount: outstanding.maintenanceBills.amount,
-            href: route('maintenance-bills.index', { status: ['unpaid'] }),
+            href: route('maintenance-bills.index', { status: ['unpaid'], ...atProperty }),
         },
         ...(outstanding.salaries
             ? [
@@ -355,6 +360,65 @@ function Methods({ methods, currency }) {
     );
 }
 
+// Matches what was typed against a property's name or code, ignoring case.
+const matchesProperty = (option, query) => `${option.label} ${option.code ?? ''}`.toLowerCase().includes(query.trim().toLowerCase());
+
+/**
+ * Which property the page covers: all of them, or one. The field shows the
+ * choice and is typed into to search, over a list that scrolls, so it holds
+ * any number of properties. `onChange` gets the chosen property's id, or
+ * 'all'.
+ */
+function PropertyFilter({ properties, chosen, onChange }) {
+    const { t } = useTranslation();
+    const allProperties = t('finance.overview.property.all');
+    const options = useMemo(
+        () => [{ value: 'all', label: allProperties }, ...properties.map((property) => ({ value: String(property.id), label: property.name, code: property.code }))],
+        [properties, allProperties],
+    );
+    // The list opens under the whole field, not under its chevron button.
+    const anchor = useComboboxAnchor();
+
+    return (
+        <Combobox
+            items={options}
+            value={options.find((option) => option.value === String(chosen?.id ?? 'all'))}
+            onValueChange={(option) => option && onChange(option.value)}
+            itemToStringLabel={(option) => option.label}
+            isItemEqualToValue={(option, current) => option.value === current.value}
+            filter={matchesProperty}
+            autoHighlight
+        >
+            <div ref={anchor} className="w-full sm:w-auto">
+                <ComboboxInput
+                    placeholder={t('finance.overview.property.search')}
+                    aria-label={t('finance.overview.property.label')}
+                    className={cn('w-full sm:w-64', chosen && 'border-brand-cyan/40 bg-brand-cyan/[0.06]')}
+                    inputClassName="font-medium"
+                    onClick={(event) => event.currentTarget.select()}
+                >
+                    <InputGroupAddon>
+                        <Building2Icon className={cn(chosen && 'text-brand-cyan')} />
+                    </InputGroupAddon>
+                </ComboboxInput>
+            </div>
+            <ComboboxContent anchor={anchor} className="w-80">
+                <ComboboxEmpty>{t('finance.overview.property.empty')}</ComboboxEmpty>
+                <ComboboxList>
+                    {(option) => (
+                        <ComboboxItem key={option.value} value={option}>
+                            <span dir="auto" className="min-w-0 flex-1 truncate">
+                                {option.label}
+                            </span>
+                            {option.code && <span className="shrink-0 text-xs text-muted-foreground">{option.code}</span>}
+                        </ComboboxItem>
+                    )}
+                </ComboboxList>
+            </ComboboxContent>
+        </Combobox>
+    );
+}
+
 /**
  * Shortcuts to record money in or out, from the pages that do it.
  */
@@ -398,9 +462,10 @@ function RecordMenu() {
 /**
  * The payments overview: money in and out over a period against the one
  * before it, a year of cash flow, where the money came from and went, what
- * is waiting today, and every transaction of the period in one ledger.
+ * is waiting today, and every transaction of the period in one ledger; for
+ * the whole company or one property.
  */
-export default function Overview({ company, period, previousPeriod, filters, totals, previousTotals, methods, trend, outstanding, facets, transactions, canSeeSalaries }) {
+export default function Overview({ company, period, previousPeriod, filters, properties, totals, previousTotals, methods, trend, outstanding, facets, transactions, canSeeSalaries }) {
     const { t, formatCurrency, formatMoney, formatDate } = useTranslation();
     const { full, range } = usePeriodLabel();
     const title = t('finance.overview.title');
@@ -415,8 +480,9 @@ export default function Overview({ company, period, previousPeriod, filters, tot
         );
     }
 
-    const changePeriod = (value) =>
-        router.get(route('payments.overview'), { ...route().params, period: value || undefined, page: undefined }, { preserveScroll: true, preserveState: true });
+    const visit = (changes) => router.get(route('payments.overview'), { ...route().params, ...changes, page: undefined }, { preserveScroll: true, preserveState: true });
+    const changePeriod = (value) => visit({ period: value || undefined });
+    const changeProperty = (value) => visit({ property: value === 'all' ? undefined : value });
 
     const moneyIn = sum(totals, IN);
     const moneyOut = sum(totals, OUT);
@@ -425,8 +491,10 @@ export default function Overview({ company, period, previousPeriod, filters, tot
     const previousOut = previousTotals ? sum(previousTotals, OUT) : null;
     const outCategories = OUT.filter((category) => canSeeSalaries || category !== 'salary');
     const owed = outstanding.invoices.amount + outstanding.rentOwed.amount;
-    // The period is chosen above the page, so the ledger keeps it in the URL only when it is not the default.
-    const ledgerFilters = filters.period ? filters : Object.fromEntries(Object.entries(filters).filter(([key]) => key !== 'period'));
+    const chosenProperty = properties.find((property) => property.id === filters.property);
+    const shown = [chosenProperty?.name, full(period)].filter(Boolean).join(' · ');
+    // The period and property are chosen above the page, so the ledger keeps them in the URL only when one is set.
+    const ledgerFilters = Object.fromEntries(Object.entries(filters).filter(([key, value]) => !['period', 'property'].includes(key) || value));
 
     const columns = [
         {
@@ -507,15 +575,19 @@ export default function Overview({ company, period, previousPeriod, filters, tot
 
     return (
         <DashboardLayout>
-            <Head title={`${title} · ${full(period)}`} />
+            <Head title={`${title} · ${shown}`} />
 
             <PageHeader breadcrumbs={[{ label: t('nav.payments') }, { label: title }]} title={title} description={t('finance.overview.description')} actions={<RecordMenu />} />
 
             <FlashMessages />
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <PeriodFilter period={period} onChange={changePeriod} />
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <PeriodFilter period={period} onChange={changePeriod} />
+                    {properties.length > 0 && <PropertyFilter properties={properties} chosen={chosenProperty} onChange={changeProperty} />}
+                </div>
                 {previousLabel && <span className="text-sm text-muted-foreground">{t('finance.overview.comparedWith', { period: previousLabel })}</span>}
+                {chosenProperty && <p className="basis-full text-sm text-muted-foreground">{t('finance.overview.property.note')}</p>}
             </div>
 
             <section aria-label={t('finance.overview.stats.label')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
@@ -553,13 +625,13 @@ export default function Overview({ company, period, previousPeriod, filters, tot
 
             <div className="grid gap-4 xl:grid-cols-3">
                 <CashFlowChart trend={trend} currency={company.currency} />
-                <WaitingPanel outstanding={outstanding} currency={company.currency} />
+                <WaitingPanel outstanding={outstanding} currency={company.currency} propertyCode={chosenProperty?.code} />
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                 <Breakdown
                     title={t('finance.overview.breakdown.inTitle')}
-                    description={t('finance.overview.breakdown.inDescription', { period: full(period) })}
+                    description={t('finance.overview.breakdown.inDescription', { period: shown })}
                     categories={IN}
                     totals={totals}
                     currency={company.currency}
@@ -567,7 +639,7 @@ export default function Overview({ company, period, previousPeriod, filters, tot
                 />
                 <Breakdown
                     title={t('finance.overview.breakdown.outTitle')}
-                    description={t('finance.overview.breakdown.outDescription', { period: full(period) })}
+                    description={t('finance.overview.breakdown.outDescription', { period: shown })}
                     categories={outCategories}
                     totals={totals}
                     currency={company.currency}
@@ -579,7 +651,7 @@ export default function Overview({ company, period, previousPeriod, filters, tot
             <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-0.5">
                     <h2 className="font-heading text-lg font-bold">{t('finance.overview.ledger.title')}</h2>
-                    <p className="text-sm text-muted-foreground">{t('finance.overview.ledger.description', { period: full(period) })}</p>
+                    <p className="text-sm text-muted-foreground">{t('finance.overview.ledger.description', { period: shown })}</p>
                 </div>
                 <RecordList
                     routeName="payments.overview"

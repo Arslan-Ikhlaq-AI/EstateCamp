@@ -31,6 +31,7 @@ class LeasingSeeder extends Seeder
             PaymentSeeder::class,
             ChequeSeeder::class,
             RoomRentalSeeder::class,
+            ExtraPaymentSeeder::class,
         ]);
     }
 }

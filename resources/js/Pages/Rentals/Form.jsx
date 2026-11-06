@@ -1,3 +1,4 @@
+import ExtraPaymentFields, { extraPaymentValues } from '@/Components/ExtraPaymentFields';
 import { METHOD_ICONS, useRentalPlace } from '@/Components/FinanceBadges';
 import { ChoiceField, FormSection, MoneyField, SelectField, TextField } from '@/Components/FormFields';
 import FormShell from '@/Components/FormShell';
@@ -5,14 +6,12 @@ import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { addMonths, todayIso } from '@/hooks/use-leasing-format';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { todayIso } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
-import { addDays } from '@/lib/cheques';
 import { cn } from '@/lib/utils';
 import { Head, useForm } from '@inertiajs/react';
-import { Building2Icon, CheckIcon, ClockIcon, DoorOpenIcon, InfoIcon, LayersIcon, ListChecksIcon, LockIcon, MinusIcon, PlusIcon, UserIcon, WalletIcon, XIcon } from 'lucide-react';
+import { Building2Icon, CheckIcon, ClockIcon, DoorOpenIcon, InfoIcon, LayersIcon, ListChecksIcon, LockIcon, PlusIcon, UserIcon, WalletIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 
 const amount = (value) => Number.parseFloat(value) || 0;
@@ -25,24 +24,6 @@ const RENTER_ICONS = { company: Building2Icon, individual: UserIcon };
 const FIRST_ROOMS = [5, 10];
 
 /**
- * Months of the payment schedule listed beside the form; the rest are counted.
- */
-const SCHEDULE_ROWS = 6;
-
-/**
- * How many whole months the stay is, or 0 while the field is not a number.
- */
-const stayMonths = (value) => (Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : 0);
-
-/**
- * The last day of a stay of `months` months from `start` (both ISO dates),
- * the way the server works it out.
- */
-function stayEnd(start, months) {
-    return start && months > 0 ? addDays(addMonths(start, months), -1) : null;
-}
-
-/**
  * The standard rent of the chosen rooms together, or '' when none has one.
  */
 function standardRent(rooms) {
@@ -52,124 +33,46 @@ function standardRent(rooms) {
 }
 
 /**
- * The months of the stay, each with the day its rent falls due.
- */
-function paymentSchedule(start, months) {
-    return start ? Array.from({ length: months }, (_, index) => addMonths(start, index)) : [];
-}
-
-/**
- * What the renter pays now and month by month, and when the stay ends.
+ * What the renter pays now and every month after, until the rental is
+ * ended. Any deposit is shown on its own: it is not part of the rent.
  */
 function AtAGlance({ data, currency, isEdit }) {
-    const { t, formatMoney, formatDate } = useTranslation();
+    const { t, formatMoney } = useTranslation();
     const rent = amount(data.monthly_rent);
     const deposit = amount(data.security_deposit);
-    const months = stayMonths(data.months);
-    const endsOn = stayEnd(data.start_date, months);
     const isPaidNow = !isEdit && data.first_payment === 'now';
-    const schedule = paymentSchedule(data.start_date, months);
 
     return (
         <Card>
             <CardHeader>
                 <CardTitle>{t('finance.rentals.form.summary.title')}</CardTitle>
-                <CardDescription>{endsOn ? t('finance.rentals.form.summary.endsOn', { date: formatDate(endsOn) }) : t('finance.rentals.form.summary.description')}</CardDescription>
+                <CardDescription>{t('finance.rentals.form.summary.description')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
                 <dl className="flex flex-col gap-1.5 rounded-xl bg-brand-cyan/[0.06] p-4 text-sm ring-1 ring-brand-cyan/15">
                     <div className="flex items-center justify-between gap-3">
-                        <dt className="text-muted-foreground">{t('finance.rentals.form.summary.firstMonth')}</dt>
+                        <dt className="font-medium">{isPaidNow ? t('finance.rentals.form.summary.paidNow') : t('finance.rentals.form.summary.toMoveIn')}</dt>
+                        <dd className="font-heading text-lg font-bold tabular-nums">{formatMoney(rent, currency)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">{t('finance.rentals.form.summary.everyMonth')}</dt>
                         <dd className="tabular-nums">{formatMoney(rent, currency)}</dd>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                        <dt className="text-muted-foreground">{t('finance.rentals.form.deposit')}</dt>
-                        <dd className="tabular-nums">{formatMoney(deposit, currency)}</dd>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between gap-3 border-t border-brand-cyan/15 pt-2.5">
-                        <dt className="font-medium">{isPaidNow ? t('finance.rentals.form.summary.paidNow') : t('finance.rentals.form.summary.toMoveIn')}</dt>
-                        <dd className="font-heading text-lg font-bold tabular-nums">{formatMoney(rent + deposit, currency)}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                        <dt className="text-muted-foreground">{t('finance.rentals.form.summary.wholeTerm', { count: months })}</dt>
-                        <dd className="tabular-nums">{formatMoney(rent * months, currency)}</dd>
-                    </div>
+                    {deposit > 0 && (
+                        <div className="mt-1 flex items-center justify-between gap-3 border-t border-brand-cyan/15 pt-2.5">
+                            <dt className="text-muted-foreground">{t('finance.rentals.form.deposit')}</dt>
+                            <dd className="tabular-nums">{formatMoney(deposit, currency)}</dd>
+                        </div>
+                    )}
                 </dl>
 
-                {schedule.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                        <p className="text-sm font-medium">{t('finance.rentals.form.summary.schedule')}</p>
-                        <ol className="flex flex-col divide-y divide-border rounded-xl text-[0.8125rem] ring-1 ring-foreground/10">
-                            {schedule.slice(0, SCHEDULE_ROWS).map((dueOn, index) => (
-                                <li key={dueOn} className="flex items-center justify-between gap-3 px-3 py-2">
-                                    <span className="flex flex-col leading-tight">
-                                        <span className="font-medium">{t('finance.rentals.form.summary.month', { count: index + 1 })}</span>
-                                        <span className="text-xs text-muted-foreground tabular-nums">{t('finance.rentals.form.summary.dueOn', { date: formatDate(dueOn) })}</span>
-                                    </span>
-                                    <span className="flex flex-col items-end leading-tight">
-                                        <span className="tabular-nums">{formatMoney(rent, currency)}</span>
-                                        {index === 0 && isPaidNow && (
-                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                                                <CheckIcon className="size-3" />
-                                                {t('finance.rentals.form.payment.now')}
-                                            </span>
-                                        )}
-                                    </span>
-                                </li>
-                            ))}
-                            {schedule.length > SCHEDULE_ROWS && (
-                                <li className="px-3 py-2 text-xs text-muted-foreground">{t('finance.rentals.form.summary.more', { count: schedule.length - SCHEDULE_ROWS })}</li>
-                            )}
-                        </ol>
-                    </div>
-                )}
-
                 <ul className="flex flex-col gap-2 text-[0.8125rem] text-pretty text-muted-foreground">
+                    <li>{t('finance.rentals.form.summary.untilEnded')}</li>
                     <li>{t('finance.rentals.form.summary.grace')}</li>
                     <li>{t('finance.rentals.form.summary.partial')}</li>
                 </ul>
             </CardContent>
         </Card>
-    );
-}
-
-/**
- * How many months the renter stays, typed or stepped one at a time, with
- * the day the stay ends.
- */
-function MonthsField({ value, onChange, max, startDate, error }) {
-    const { t, formatDate } = useTranslation();
-    const months = stayMonths(value);
-    const endsOn = stayEnd(startDate, months);
-    const step = (by) => onChange(Math.min(max, Math.max(1, (months || 1) + by)));
-
-    return (
-        <Field data-invalid={error ? true : undefined} className="sm:col-span-2">
-            <FieldLabel htmlFor="months">{t('finance.rentals.form.months')}</FieldLabel>
-            <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" size="icon" aria-label={t('finance.rentals.form.monthsLess')} disabled={months <= 1} onClick={() => step(-1)}>
-                    <MinusIcon />
-                </Button>
-                <Input
-                    id="months"
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={max}
-                    step={1}
-                    value={value}
-                    onChange={(event) => onChange(event.target.value)}
-                    aria-invalid={error ? true : undefined}
-                    className="w-20 text-center text-base font-semibold tabular-nums"
-                />
-                <Button type="button" variant="outline" size="icon" aria-label={t('finance.rentals.form.monthsMore')} disabled={months >= max} onClick={() => step(1)}>
-                    <PlusIcon />
-                </Button>
-                <span className="text-sm text-muted-foreground">{t('finance.rentals.form.monthsUnit', { count: months })}</span>
-            </div>
-            {!error && <FieldDescription>{endsOn ? t('finance.rentals.form.monthsHint', { date: formatDate(endsOn) }) : t('finance.rentals.form.monthsEmpty')}</FieldDescription>}
-            <FieldError>{error}</FieldError>
-        </Field>
     );
 }
 
@@ -432,10 +335,10 @@ function RenterSection({ clients, idTypes, data, setData, errors }) {
 /**
  * Rent whole rooms to a company or a person for a stay of some months
  * without a contract, paid month by month with the first month paid now
- * unless left for later; or change a running rental's stay, start, rent and
- * deposit.
+ * unless left for later; or change a running rental's stay, start, rent,
+ * commission and deposit.
  */
-export default function Form({ rental, currency, defaults, clients, idTypes, properties, maxMonths, paymentMethods, banks }) {
+export default function Form({ rental, currency, defaults, clients, idTypes, properties, paymentMethods, banks }) {
     const { t, formatMoney } = useTranslation();
     const place = useRentalPlace();
     const isEdit = rental !== null;
@@ -444,7 +347,7 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
 
     const form = useForm(
         isEdit
-            ? { ...rental.form, security_deposit: rental.form.security_deposit || '' }
+            ? { ...rental.form, security_deposit: rental.form.security_deposit || '', ...extraPaymentValues(rental.commission, rental.deposit) }
             : {
                   client_type: initialType,
                   client_mode: clients.some((client) => client.type === initialType) ? 'existing' : 'new',
@@ -463,15 +366,14 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
                   },
                   property_id: defaults?.property_id ?? properties[0]?.id ?? null,
                   room_ids: defaults?.room_ids ?? [],
-                  months: 1,
                   start_date: todayIso(),
                   monthly_rent: standardRent(properties.flatMap((property) => property.rooms).filter((room) => defaults?.room_ids?.includes(room.id))),
                   security_deposit: '',
+                  ...extraPaymentValues(),
                   first_payment: 'now',
                   payment_method: paymentMethods[0] ?? null,
                   payment_reference: '',
                   cheque_number: '',
-                  deposit_cheque_number: '',
                   bank_name: '',
                   cheque_date: todayIso(),
               },
@@ -482,9 +384,10 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
     const bind = (field) => ({ id: field, value: data[field], onChange: (value) => setData(field, value), error: errors[field] });
     const roomsError = errors.room_ids ?? Object.entries(errors).find(([key]) => key.startsWith('room_ids.'))?.[1];
     const chosenRent = standardRent(rooms.filter((room) => data.room_ids.includes(room.id)));
-    const paidNow = amount(data.monthly_rent) + amount(data.security_deposit);
-    const hasDeposit = amount(data.security_deposit) > 0;
+    const paidNow = amount(data.monthly_rent);
     const isPaidByCheque = data.payment_method === 'cheque';
+    const isPaidByTransfer = data.payment_method === 'bank_transfer';
+    const methodHint = { cash: 'cashHint', cheque: 'chequeHint' }[data.payment_method];
 
     const chooseRooms = (roomIds) =>
         setData((current) => ({
@@ -494,6 +397,8 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
         }));
 
     const chooseProperty = (propertyId) => setData((current) => ({ ...current, property_id: propertyId, room_ids: [], monthly_rent: rentTyped ? current.monthly_rent : '' }));
+
+    const choosePaymentMethod = (method) => setData((current) => ({ ...current, payment_method: method, payment_reference: method === 'bank_transfer' ? current.payment_reference : '' }));
 
     const typeRent = (value) => {
         setRentTyped(true);
@@ -548,7 +453,6 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
                     )}
                     <FieldGroup className="grid gap-4 sm:grid-cols-2">
                         <TextField {...bind('start_date')} type="date" label={t('finance.rentals.form.startDate')} disabled={isEdit && !rental.canChangeRent} />
-                        <MonthsField value={data.months} onChange={(months) => setData('months', months)} max={maxMonths} startDate={data.start_date} error={errors.months} />
                         <MoneyField
                             {...bind('monthly_rent')}
                             onChange={typeRent}
@@ -557,9 +461,20 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
                             suffix={t('finance.rentals.form.perMonth')}
                             description={chosenRent !== '' ? t('finance.rentals.form.rentHint', { amount: formatMoney(chosenRent, currency) }) : undefined}
                         />
-                        <MoneyField {...bind('security_deposit')} label={t('finance.rentals.form.deposit')} currency={currency} optional placeholder="0" />
                     </FieldGroup>
                 </FormSection>
+
+                <ExtraPaymentFields
+                    data={data}
+                    setData={setData}
+                    errors={errors}
+                    currency={currency}
+                    commissionBase={amount(data.monthly_rent)}
+                    baseKey="onRental"
+                    banks={banks}
+                    commission={rental?.commission}
+                    deposit={rental?.deposit}
+                />
 
                 {!isEdit && (
                     <FormSection title={t('finance.rentals.form.payment.title')} description={t('finance.rentals.form.payment.description')}>
@@ -575,7 +490,7 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
                                 ]}
                                 description={
                                     data.first_payment === 'now'
-                                        ? t(`finance.rentals.form.payment.${isPaidByCheque ? 'cheque' : 'paid'}${hasDeposit ? 'WithDeposit' : 'RentOnly'}`, { amount: formatMoney(paidNow, currency) })
+                                        ? t(`finance.rentals.form.payment.${isPaidByCheque ? 'cheque' : 'paid'}RentOnly`, { amount: formatMoney(paidNow, currency) })
                                         : t('finance.rentals.form.payment.laterHint')
                                 }
                                 error={errors.first_payment}
@@ -587,28 +502,15 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
                                         id="payment_method"
                                         label={t('finance.rentals.payment.method')}
                                         value={data.payment_method}
-                                        onChange={(method) => setData('payment_method', method)}
+                                        onChange={choosePaymentMethod}
                                         options={paymentMethods.map((method) => ({ value: method, label: t(`leasing.methods.${method}`), icon: METHOD_ICONS[method] }))}
-                                        description={isPaidByCheque ? t('finance.rentals.form.payment.chequeHint') : undefined}
+                                        description={methodHint && t(`finance.rentals.form.payment.${methodHint}`)}
                                         error={errors.payment_method}
                                         className="sm:col-span-2"
                                     />
-                                    {isPaidByCheque ? (
+                                    {isPaidByCheque && (
                                         <>
-                                            <TextField
-                                                {...bind('cheque_number')}
-                                                label={hasDeposit ? t('finance.rentals.form.payment.rentChequeNumber') : t('leasing.cheques.fields.number')}
-                                                inputClassName="font-mono"
-                                                inputMode="numeric"
-                                            />
-                                            {hasDeposit && (
-                                                <TextField
-                                                    {...bind('deposit_cheque_number')}
-                                                    label={t('finance.rentals.form.payment.depositChequeNumber')}
-                                                    inputClassName="font-mono"
-                                                    inputMode="numeric"
-                                                />
-                                            )}
+                                            <TextField {...bind('cheque_number')} label={t('leasing.cheques.fields.number')} inputClassName="font-mono" inputMode="numeric" />
                                             <TextField {...bind('bank_name')} label={t('leasing.cheques.fields.bank')} list="rental-cheque-banks" />
                                             <TextField {...bind('cheque_date')} type="date" label={t('leasing.cheques.fields.chequeDate')} />
                                             <datalist id="rental-cheque-banks">
@@ -617,7 +519,8 @@ export default function Form({ rental, currency, defaults, clients, idTypes, pro
                                                 ))}
                                             </datalist>
                                         </>
-                                    ) : (
+                                    )}
+                                    {isPaidByTransfer && (
                                         <TextField
                                             {...bind('payment_reference')}
                                             label={t('finance.rentals.payment.reference')}

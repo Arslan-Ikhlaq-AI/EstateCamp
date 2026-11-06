@@ -39,7 +39,6 @@ const SPENDING = {
 const SOURCE_ICONS = {
     contract_rent: CASH_CATEGORIES.client_payment.icon,
     short_term: CASH_CATEGORIES.rental_payment.icon,
-    extra_income: CASH_CATEGORIES.extra_income.icon,
 };
 
 const PRESSED = 'aria-pressed:bg-primary aria-pressed:text-primary-foreground';

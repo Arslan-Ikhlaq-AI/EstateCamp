@@ -145,7 +145,7 @@ test('summarises money collected and owed over the last six months', function ()
             ->where('finance.outstanding', 39800)
             ->where('finance.overdue', ['count' => 4, 'amount' => 38100])
             ->has('finance.trend', 6)
-            ->where('finance.trend.0', ['month' => '2026-05', 'invoiced' => 65700, 'collected' => 65700])
+            ->where('finance.trend.0', ['month' => '2026-05', 'invoiced' => 61900, 'collected' => 61900])
             ->where('finance.trend.3', ['month' => '2026-08', 'invoiced' => 69280, 'collected' => 83980])
             ->where('finance.trend.5', ['month' => '2026-10', 'invoiced' => 52855, 'collected' => 28175])
         );

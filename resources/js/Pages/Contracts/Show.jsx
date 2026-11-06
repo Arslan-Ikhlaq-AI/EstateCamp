@@ -32,6 +32,7 @@ import {
     XCircleIcon,
 } from 'lucide-react';
 import { useState } from 'react';
+import AgreementMoneyCard from '../ExtraPayments/Partials/AgreementMoneyCard';
 import DocumentsOnFile from '../HeadLeases/Partials/DocumentsOnFile';
 import CheckOutDialog from '../Occupants/Partials/CheckOutDialog';
 
@@ -99,7 +100,7 @@ function ChequeFigure({ label, value, tone = 'muted' }) {
     );
 }
 
-export default function Show({ contract, lines, stays, invoices, documents, totals, nextPeriod, cheques, chequeStats, banks, chequeStatuses, can, currency }) {
+export default function Show({ contract, lines, stays, invoices, documents, totals, nextPeriod, cheques, chequeStats, banks, chequeStatuses, can, currency, settlementMethods }) {
     const { t, formatCurrency, formatMoney, formatDate, formatNumber } = useTranslation();
     // `can` holds what this contract allows the user next; this is what they may do anywhere.
     const hasPermission = useCan();
@@ -401,13 +402,21 @@ export default function Show({ contract, lines, stays, invoices, documents, tota
                 </div>
 
                 <div className="flex flex-col gap-6">
+                    <AgreementMoneyCard
+                        commission={contract.commission}
+                        deposit={contract.deposit}
+                        description={[contract.number, contract.client.name].filter(Boolean).join(' · ')}
+                        currency={currency}
+                        methods={settlementMethods}
+                        tenant={contract.client.name}
+                    />
+
                     <SectionCard title={t('leasing.contracts.show.details')}>
                         <DetailList
                             columns={1}
                             rows={[
                                 { label: t('leasing.contracts.form.fields.billingCycle'), value: t(`leasing.billingCycles.${contract.billingCycle}`) },
                                 { label: t('leasing.contracts.form.fields.paymentTerms'), value: t('leasing.common.days', { count: contract.paymentTermsDays }) },
-                                { label: t('leasing.common.securityDeposit'), value: contract.securityDeposit === null ? null : formatMoney(contract.securityDeposit, currency) },
                                 { label: t('leasing.common.ejariNumber'), value: contract.ejariNumber },
                                 { label: t('leasing.contracts.form.fields.signedOn'), value: contract.signedOn && formatDate(contract.signedOn) },
                                 ...(contract.terminatedOn

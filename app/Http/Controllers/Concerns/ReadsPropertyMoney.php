@@ -13,21 +13,22 @@ use Illuminate\Support\Facades\DB;
  * from the money that actually moved (as in ReadsCashFlow).
  *
  * Earned: client payments towards contracts, shared among the properties
- * a contract rents in by each one's part of its monthly rent; what
- * short-term rentals paid, without the security deposits, which are held
- * and not earned; and extra income, such as a provider's share. Spent:
- * the landlord's and the maintenance contractors' cheques that cleared,
- * maintenance bills paid and one-off payments made. A client payment that
- * no contract can be found for has no property. Someone limited to some
- * camps gets only the money of those camps.
+ * a contract rents in by each one's part of its monthly rent; and what
+ * short-term rentals paid. Spent: the landlord's and the maintenance
+ * contractors' cheques that cleared, maintenance bills paid and one-off
+ * payments made. The extra payments are not revenue and stay out. A client
+ * payment that no contract can be found for has no property. Someone limited
+ * to some camps gets only the money of those camps.
  */
 trait ReadsPropertyMoney
 {
+    use SharesContractMoney;
+
     /**
      * Where a property's revenue comes from, and what it spends on.
      */
     public const MONEY_KINDS = [
-        'revenue' => ['contract_rent', 'short_term', 'extra_income'],
+        'revenue' => ['contract_rent', 'short_term'],
         'expense' => ['landlord', 'contracts', 'bills', 'others'],
     ];
 
@@ -54,12 +55,7 @@ trait ReadsPropertyMoney
         $shortTerm = $byProperty($inRange(DB::table('rental_payments'), 'rental_payments.paid_on')
             ->join('room_rentals', 'room_rentals.id', '=', 'rental_payments.room_rental_id')
             ->where('rental_payments.company_id', $company->id)
-            ->where('rental_payments.status', 'cleared')
-            ->where('rental_payments.purpose', '!=', 'deposit'), 'room_rentals.property_id', 'rental_payments.paid_on', 'rental_payments.amount');
-
-        $extraIncome = $byProperty($inRange(DB::table('extra_incomes'), 'received_on')
-            ->where('company_id', $company->id)
-            ->where('status', 'received'), 'property_id', 'received_on', 'amount');
+            ->where('rental_payments.status', 'cleared'), 'room_rentals.property_id', 'rental_payments.paid_on', 'rental_payments.amount');
 
         $issuedCheques = fn (string $type, string $table) => $byProperty($inRange(DB::table('cheques'), 'cheques.cleared_on')
             ->join($table, fn ($join) => $join->on("{$table}.id", '=', 'cheques.chequeable_id')->where('cheques.chequeable_type', $type))
@@ -80,7 +76,6 @@ trait ReadsPropertyMoney
 
         return $this->contractRent($company, $from, $to)
             ->concat($shortTerm->map($row('revenue', 'short_term')))
-            ->concat($extraIncome->map($row('revenue', 'extra_income')))
             ->concat($issuedCheques('head_lease', 'head_leases')->map($row('expense', 'landlord')))
             ->concat($issuedCheques('maintenance_contract', 'maintenance_contracts')->map($row('expense', 'contracts')))
             ->concat($bills->map($row('expense', 'bills')))
@@ -121,7 +116,8 @@ trait ReadsPropertyMoney
             ->selectRaw('payments.contract_id as contract_id, payments.received_on as date, sum(payments.amount - coalesce(allocated.amount, 0)) as total')
             ->get();
 
-        $shares = $this->contractShares($company);
+        $shares = $this->contractShares($company)->get()->groupBy('contract_id')
+            ->map(fn (Collection $properties) => $properties->mapWithKeys(fn (object $property) => [(int) $property->property_id => (float) $property->share])->all());
 
         return $settled->concat($credit)->flatMap(function (object $row) use ($shares) {
             $money = fn (?int $property, float $amount) => [
@@ -139,31 +135,5 @@ trait ReadsPropertyMoney
 
             return array_map(fn (int $property, float $share) => $money($property, (float) $row->total * $share), array_keys($split), $split);
         });
-    }
-
-    /**
-     * Each contract's properties and the part of its money each one takes:
-     * its lines' share of the contract's monthly rent, or of its lines when
-     * no rent is set.
-     *
-     * @return array<int, array<int, float>>
-     */
-    private function contractShares(Company $company): array
-    {
-        return DB::table('contract_lines')
-            ->where('company_id', $company->id)
-            ->groupBy('contract_id', 'property_id')
-            ->selectRaw('contract_id, property_id, sum(monthly_rate) as rent, count(*) as line_count')
-            ->get()
-            ->groupBy('contract_id')
-            ->map(function (Collection $properties) {
-                $rent = (float) $properties->sum('rent');
-                $lines = (int) $properties->sum('line_count');
-
-                return $properties->mapWithKeys(fn (object $property) => [
-                    (int) $property->property_id => $rent > 0 ? (float) $property->rent / $rent : (int) $property->line_count / $lines,
-                ])->all();
-            })
-            ->all();
     }
 }

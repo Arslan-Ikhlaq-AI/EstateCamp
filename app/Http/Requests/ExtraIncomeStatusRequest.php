@@ -39,6 +39,10 @@ class ExtraIncomeStatusRequest extends CompanyScopedRequest
                 if ($income->status === $this->input('status')) {
                     $validator->errors()->add('status', "{$income->income_number} is already {$this->input('status')}.");
                 }
+
+                if ($this->input('status') === 'cancelled' && (float) $income->settled_amount > 0) {
+                    $validator->errors()->add('status', 'Undo its settlements before cancelling this.');
+                }
             },
         ];
     }

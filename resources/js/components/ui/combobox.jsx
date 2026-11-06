@@ -21,13 +21,14 @@ function ComboboxValue({
   return <ComboboxPrimitive.Value data-slot="combobox-value" {...props} />
 }
 
-function ComboboxTrigger({
+const ComboboxTrigger = React.forwardRef(function ComboboxTrigger({
   className,
   children,
   ...props
-}) {
+}, ref) {
   return (
     <ComboboxPrimitive.Trigger
+      ref={ref}
       data-slot="combobox-trigger"
       className={cn("[&_svg:not([class*='size-'])]:size-4", className)}
       {...props}
@@ -36,7 +37,7 @@ function ComboboxTrigger({
       <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />
     </ComboboxPrimitive.Trigger>
   )
-}
+})
 
 function ComboboxClear({
   className,

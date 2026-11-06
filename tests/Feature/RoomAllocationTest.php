@@ -42,7 +42,7 @@ test('shows who holds each room and shop, with the rent of contracts and short-t
     $emptyRoom = ($this->room)('R-3');
     ($this->room)('R-10', ['status' => 'under_maintenance']);
     ($this->line)(($this->contract)('Al Hajar Contracting'), ['unit_type' => 'room', 'room_id' => $contractRoom->id, 'monthly_rate' => 3000]);
-    RoomRental::factory()->forRooms($rentedRoom)->create(['start_date' => '2026-09-01', 'end_date' => '2026-11-30', 'monthly_rent' => 2400]);
+    RoomRental::factory()->forRooms($rentedRoom)->create(['start_date' => '2026-09-01', 'monthly_rent' => 2400]);
     // A terminated contract no longer holds its room.
     ($this->line)(($this->contract)('Titan Construction', attributes: ['status' => 'terminated', 'terminated_on' => '2026-06-10']), ['unit_type' => 'room', 'room_id' => $emptyRoom->id, 'monthly_rate' => 2800]);
 
@@ -64,7 +64,7 @@ test('shows who holds each room and shop, with the rent of contracts and short-t
             ->where('rooms.1.number', 'R-2')
             ->where('rooms.1.allocation', 'short_term')
             ->where('rooms.1.holdings.0.reference.kind', 'rental')
-            ->where('rooms.1.holdings.0.endsOn', '2026-11-30')
+            ->where('rooms.1.holdings.0.endsOn', null)
             ->where('rooms.1.monthly', 2400)
             ->where('rooms.2.number', 'R-3')
             ->where('rooms.2.allocation', 'empty')
@@ -146,9 +146,9 @@ test('a past period shows who held each unit then', function () {
     $leasedRoom = ($this->room)('101');
     $rentedRoom = ($this->room)('102');
     ($this->line)(($this->contract)('Titan Construction', attributes: ['status' => 'terminated', 'terminated_on' => '2026-06-10']), ['unit_type' => 'room', 'room_id' => $leasedRoom->id, 'monthly_rate' => 3000]);
-    RoomRental::factory()->forRooms($rentedRoom)->create(['end_date' => '2026-06-30', 'status' => 'ended', 'moved_out_on' => '2026-05-01']);
+    RoomRental::factory()->forRooms($rentedRoom)->create(['status' => 'ended', 'moved_out_on' => '2026-05-01']);
     // The next tenant moves in as the first moves out.
-    RoomRental::factory()->forRooms($rentedRoom)->create(['start_date' => '2026-05-01', 'end_date' => '2026-10-31', 'monthly_rent' => 1800]);
+    RoomRental::factory()->forRooms($rentedRoom)->create(['start_date' => '2026-05-01', 'monthly_rent' => 1800]);
 
     $this->actingAs($this->user)
         ->get(route('properties.allocation', [$this->property, 'period' => '2026-04']))

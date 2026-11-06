@@ -360,7 +360,7 @@ export const leasing = {
                     cleared_received: "The money is in your account. It is recorded as a payment and applied to the agreement's invoice for its period.",
                     cleared_issued: 'The landlord has cashed the cheque and the money has left your account.',
                     bounced: 'The bank returned it unpaid, so any payment made from it is taken back. Record its replacement once it arrives.',
-                    returned: 'The cheque goes back uncashed, such as a security deposit at the end of the contract.',
+                    returned: 'The cheque goes back uncashed, such as a security deposit at the end of the lease.',
                     cancelled: 'The cheque will no longer be used.',
                 },
                 lastUpdate: 'Last update: {status} on {date}',
@@ -409,7 +409,7 @@ export const leasing = {
             schedule: {
                 title: 'Cheques',
                 description: {
-                    received: 'The client pays by cheque: one for each billing period, plus the security deposit.',
+                    received: 'The client pays by cheque: one for each billing period.',
                     issued: 'You pay the landlord by cheque: one for each instalment, plus the security deposit.',
                 },
                 formDescription: {
@@ -610,7 +610,6 @@ export const leasing = {
             pastRentals: { one: '{count} past rental', other: '{count} past rentals' },
             contracts: { one: '{count} active contract', other: '{count} active contracts' },
             rooms: { one: '{count} room', other: '{count} rooms' },
-            until: 'until {date}',
             stats: {
                 label: 'Individuals summary',
                 individuals: 'Individuals',
@@ -747,7 +746,6 @@ export const leasing = {
                 followsContract: 'Leave empty to follow the contract dates.',
                 hasStays: 'People have stayed under this line, so it cannot be removed. Shorten its end date instead.',
                 paymentTermsHint: 'Days after the invoice date that payment is due.',
-                depositHint: 'Added to the first invoice.',
                 unitHints: {
                     room: 'A whole room for one monthly price, however many people use it.',
                     apartment: 'A whole apartment for one monthly price.',
@@ -1186,7 +1184,7 @@ export const leasing = {
                     cleared_received: 'وصل المبلغ إلى حسابك. يُسجَّل كدفعة ويُطبَّق على فاتورة العقد لفترته.',
                     cleared_issued: 'صرف المالك الشيك وخرج المبلغ من حسابك.',
                     bounced: 'أعاد البنك الشيك دون صرف، فتُلغى أي دفعة سُجّلت منه. سجّل الشيك البديل عند وصوله.',
-                    returned: 'يُعاد الشيك دون صرف، مثل شيك التأمين عند نهاية العقد.',
+                    returned: 'يُعاد الشيك دون صرف، مثل شيك التأمين عند نهاية عقد الإيجار.',
                     cancelled: 'لن يُستخدم هذا الشيك بعد الآن.',
                 },
                 lastUpdate: 'آخر تحديث: {status} في {date}',
@@ -1232,7 +1230,7 @@ export const leasing = {
             schedule: {
                 title: 'الشيكات',
                 description: {
-                    received: 'يدفع العميل بالشيكات: شيك لكل فترة فوترة، بالإضافة إلى التأمين.',
+                    received: 'يدفع العميل بالشيكات: شيك لكل فترة فوترة.',
                     issued: 'تدفع للمالك بالشيكات: شيك لكل قسط، بالإضافة إلى التأمين.',
                 },
                 formDescription: {
@@ -1325,7 +1323,6 @@ export const leasing = {
             pastRentals: { zero: 'لا إيجارات سابقة', one: 'إيجار سابق واحد', two: 'إيجاران سابقان', few: '{count} إيجارات سابقة', many: '{count} إيجارًا سابقًا', other: '{count} إيجار سابق' },
             contracts: { zero: 'لا عقود سارية', one: 'عقد ساري واحد', two: 'عقدان ساريان', few: '{count} عقود سارية', many: '{count} عقدًا ساريًا', other: '{count} عقد ساري' },
             rooms: { zero: 'لا غرف', one: 'غرفة واحدة', two: 'غرفتان', few: '{count} غرف', many: '{count} غرفة', other: '{count} غرفة' },
-            until: 'حتى {date}',
             stats: {
                 label: 'ملخص الأفراد',
                 individuals: 'الأفراد',

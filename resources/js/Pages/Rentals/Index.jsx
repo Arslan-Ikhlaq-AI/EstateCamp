@@ -58,9 +58,7 @@ export default function Index({ company, filters, facets, summary, rentals }) {
                     <span className="text-xs text-muted-foreground tabular-nums">
                         {rental.movedOutOn
                             ? t('finance.rentals.stayed', { from: formatDate(rental.startDate), to: formatDate(rental.movedOutOn) })
-                            : rental.endDate
-                              ? t('finance.rentals.term', { from: formatDate(rental.startDate), to: formatDate(rental.endDate) })
-                              : t('finance.rentals.since', { date: formatDate(rental.startDate) })}
+                            : t('finance.rentals.since', { date: formatDate(rental.startDate) })}
                     </span>
                 </div>
             ),
@@ -109,7 +107,7 @@ export default function Index({ company, filters, facets, summary, rentals }) {
                 </div>
             ),
         },
-        { id: 'status', header: t('leasing.common.status'), cell: (rental) => <RentalStatusBadge status={rental.status} termOver={rental.termOver} /> },
+        { id: 'status', header: t('leasing.common.status'), cell: (rental) => <RentalStatusBadge status={rental.status} /> },
     ];
 
     return (

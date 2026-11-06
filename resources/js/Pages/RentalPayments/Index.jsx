@@ -124,11 +124,11 @@ export default function Index({ company, filters, period, facets, summary, payme
                         />
                         <StatCard icon={BanknoteIcon} label={t('finance.receipts.stats.rent')} value={formatCurrency(summary.byPurpose.rent, company.currency)} detail={range} />
                         <StatCard
-                            icon={ShieldCheckIcon}
+                            icon={TagIcon}
                             tone="gold"
-                            label={t('finance.receipts.stats.deposits')}
-                            value={formatCurrency(summary.byPurpose.deposit, company.currency)}
-                            detail={summary.byPurpose.other > 0 ? t('finance.receipts.stats.other', { amount: formatCurrency(summary.byPurpose.other, company.currency) }) : range}
+                            label={t('finance.receipts.stats.other')}
+                            value={formatCurrency(summary.byPurpose.other, company.currency)}
+                            detail={range}
                         />
                         <StatCard
                             icon={ScrollTextIcon}

@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Company;
-use App\Models\RoomRental;
 use App\Models\StaffMember;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
@@ -45,12 +44,10 @@ describe('the overview', function () {
                 ->where('totals', [
                     'client_payment' => ['count' => 6, 'amount' => 32380],
                     'rental_payment' => ['count' => 1, 'amount' => 1500],
-                    'extra_income' => ['count' => 0, 'amount' => 0],
                     'landlord_rent' => ['count' => 0, 'amount' => 0],
                     'maintenance' => ['count' => 1, 'amount' => 2400],
                     'salary' => ['count' => 0, 'amount' => 0],
                     'maintenance_contract' => ['count' => 0, 'amount' => 0],
-                    'deposit_refund' => ['count' => 0, 'amount' => 0],
                     'other_payment' => ['count' => 0, 'amount' => 0],
                 ])
                 ->where('transactions.total', 8)
@@ -58,17 +55,18 @@ describe('the overview', function () {
     });
 
     test('narrows the ledger by kind, way and search', function () {
-        $pastTenant = RoomRental::whereHas('client', fn ($clients) => $clients->where('name', RoomRentalSeeder::PAST_TENANT))->sole();
-
         $this->actingAs($this->admin)
-            ->get(route('payments.overview', ['period' => 'all', 'direction' => ['out'], 'category' => ['deposit_refund'], 'search' => 'Coastline']))
+            ->get(route('payments.overview', ['period' => 'all', 'direction' => ['in'], 'category' => ['rental_payment'], 'search' => 'Coastline']))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('transactions.total', 1)
+                ->where('transactions.total', 5)
                 ->where('transactions.data.0.party', RoomRentalSeeder::PAST_TENANT)
-                ->where('transactions.data.0.recordId', $pastTenant->id)
-                ->where('transactions.data.0.date', '2026-07-01')
+                ->where('transactions.data.0.direction', 'in')
                 ->where('transactions.data.0.amount', 1500)
             );
+
+        $this->actingAs($this->admin)
+            ->get(route('payments.overview', ['period' => 'all', 'direction' => ['out'], 'category' => ['rental_payment'], 'search' => 'Coastline']))
+            ->assertInertia(fn (Assert $page) => $page->where('transactions.total', 0));
     });
 
     test('shows what is still to collect and to pay today', function () {
@@ -133,7 +131,7 @@ describe('the payment lists', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('RentalPayments/Index')
                 ->where('payments.total', 1)
-                ->where('summary.byPurpose', ['rent' => 1500, 'deposit' => 0, 'other' => 0])
+                ->where('summary.byPurpose', ['rent' => 1500, 'other' => 0])
                 ->where('summary.chequesWaiting', ['count' => 1, 'amount' => 1500])
             );
     });

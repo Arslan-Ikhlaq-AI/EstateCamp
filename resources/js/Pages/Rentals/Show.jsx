@@ -7,7 +7,6 @@ import { ToneBadge } from '@/Components/LeasingBadges';
 import PageHeader from '@/Components/PageHeader';
 import StatCard from '@/Components/StatCard';
 import DashboardLayout from '@/Layouts/DashboardLayout';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -23,11 +22,12 @@ import { useLeasingFormat } from '@/hooks/use-leasing-format';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
-import { BanIcon, CalendarCheckIcon, CalendarClockIcon, CalendarX2Icon, CircleAlertIcon, DoorOpenIcon, MoreHorizontalIcon, PencilIcon, PrinterIcon, ReceiptIcon, ShieldCheckIcon } from 'lucide-react';
+import { BanIcon, CalendarCheckIcon, CalendarClockIcon, CircleAlertIcon, DoorOpenIcon, MoreHorizontalIcon, PencilIcon, PrinterIcon, ReceiptIcon, ShieldCheckIcon } from 'lucide-react';
 import { useState } from 'react';
+import AgreementMoneyCard from '../ExtraPayments/Partials/AgreementMoneyCard';
 import { EndRentalDialog, RecordPaymentDialog, VoidReceiptDialog } from './Partials/RentalDialogs';
 
-const STATEMENT_TONES = { paid: 'success', partial: 'warning', unpaid: 'danger', upcoming: 'muted' };
+const STATEMENT_TONES = { paid: 'success', credit: 'primary', partial: 'warning', unpaid: 'danger', upcoming: 'muted' };
 
 function ReceiptActions({ payment, onVoid }) {
     const { t } = useTranslation();
@@ -74,14 +74,14 @@ function ReceiptActions({ payment, onVoid }) {
  * the term and what was paid towards it, its receipts and cheques, and
  * recording a payment or moving the renter out.
  */
-export default function Show({ rental, statement, payments, cheques, pendingCheques, banks, chequeStatuses, methods, refundMethods, currency }) {
+export default function Show({ rental, statement, payments, cheques, pendingCheques, banks, chequeStatuses, methods, refundMethods, currency, settlementMethods }) {
     const { t, formatMoney, formatDate, formatCurrency } = useTranslation();
     const can = useCan();
     const { period } = useLeasingFormat();
     const place = useRentalPlace();
     const [dialog, setDialog] = useState(null);
     const close = (open) => !open && setDialog(null);
-    const { standing, deposit } = rental;
+    const { standing, depositStanding: deposit } = rental;
     const isActive = rental.status === 'active';
 
     const receiptColumns = [
@@ -157,7 +157,7 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
                 title={rental.number}
                 badge={
                     <>
-                        <RentalStatusBadge status={rental.status} termOver={rental.termOver} />
+                        <RentalStatusBadge status={rental.status} />
                         <RentStandingBadge standing={standing.standing} />
                     </>
                 }
@@ -194,13 +194,6 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
             />
 
             <FlashMessages errorKeys={['moved_out_on', 'deposit_refunded', 'reason', 'monthly_rent']} />
-
-            {rental.termOver && (
-                <Alert>
-                    <CalendarX2Icon />
-                    <AlertDescription>{t('finance.rentals.termOverHint')}</AlertDescription>
-                </Alert>
-            )}
 
             <section aria-label={t('finance.rentals.show.figures')} className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 <StatCard
@@ -315,20 +308,25 @@ export default function Show({ rental, statement, payments, cheques, pendingCheq
                         />
                     </SectionCard>
 
+                    <AgreementMoneyCard
+                        commission={rental.commission}
+                        deposit={rental.deposit}
+                        description={[rental.number, rental.client.name].filter(Boolean).join(' · ')}
+                        currency={currency}
+                        methods={settlementMethods}
+                        tenant={rental.client.name}
+                    />
+
                     <SectionCard title={t('finance.rentals.show.terms')}>
                         <DetailList
                             columns={1}
                             rows={[
                                 { label: t('finance.rentals.columns.place'), value: `${place(rental)} · ${rental.property?.name ?? ''}` },
-                                ...(rental.months ? [{ label: t('finance.rentals.show.term'), value: t('finance.rentals.months', { count: rental.months }) }] : []),
                                 { label: t('finance.rentals.form.monthlyRent'), value: formatMoney(rental.monthlyRent, currency) },
-                                { label: t('finance.rentals.form.deposit'), value: rental.securityDeposit > 0 ? formatMoney(rental.securityDeposit, currency) : null },
                                 { label: t('finance.rentals.form.startDate'), value: formatDate(rental.startDate) },
-                                { label: t('finance.rentals.form.endDate'), value: rental.endDate ? formatDate(rental.endDate) : t('finance.rentals.openEnded') },
-                                ...(rental.movedOutOn ? [{ label: t('finance.rentals.show.movedOut'), value: formatDate(rental.movedOutOn) }] : []),
-                                ...(rental.depositRefund
-                                    ? [{ label: t('finance.rentals.show.refund'), value: `${formatMoney(rental.depositRefund.amount, currency)} · ${t(`leasing.methods.${rental.depositRefund.method}`)}` }]
-                                    : []),
+                                rental.movedOutOn
+                                    ? { label: t('finance.rentals.show.movedOut'), value: formatDate(rental.movedOutOn) }
+                                    : { label: t('finance.rentals.form.endDate'), value: t('finance.rentals.openEnded') },
                                 ...(rental.otherPaid > 0 ? [{ label: t('finance.rentals.show.otherPaid'), value: formatMoney(rental.otherPaid, currency) }] : []),
                                 { label: t('finance.rentals.show.createdBy'), value: [rental.createdBy, rental.createdAt && formatDate(rental.createdAt)].filter(Boolean).join(' · ') },
                             ]}

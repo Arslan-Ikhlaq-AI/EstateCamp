@@ -7,7 +7,6 @@ use App\Http\Controllers\Concerns\ReadsUnitHoldings;
 use App\Http\Requests\BillingPaymentRequest;
 use App\Models\Cheque;
 use App\Models\Contract;
-use App\Models\ExtraIncome;
 use App\Models\HeadLease;
 use App\Models\MaintenanceContract;
 use App\Models\MaintenanceJob;
@@ -31,13 +30,11 @@ use Inertia\Response;
  * A property's payments over a period, both ways.
  *
  * Money in, in three parts, each with its own figures: the cheques of the
- * contracts renting here, which an admin follows until they are cashed,
- * with the extra income the property earned besides rent, such as an
- * internet or washing machine provider's share; what short-term rentals
- * paid into the bank (transfers, and cheques once
+ * contracts renting here, which an admin follows until they are cashed;
+ * what short-term rentals paid into the bank (transfers, and cheques once
  * submitted); and what they still owe, paid in cash, by transfer or by
  * cheque. Cash is collected on site by the camp boss and handed over to
- * the company, confirmed by an admin.
+ * the company, confirmed by an admin. Extra payments are kept out of here.
  *
  * Money out, the same way round: the cheques the company pays under the
  * landlord's head lease and the maintenance contracts (drainage, fire
@@ -78,9 +75,7 @@ class PropertyPaymentController extends Controller
      * camp boss stays listed until an admin confirms receiving it, and so
      * do bills from before it the camp boss paid in cash. Unpaid
      * maintenance bills stay listed until they are paid, and so do one-off
-     * payments still to pay. Extra income received in the period is
-     * listed, and counted unless cancelled. `?tab=out` opens on the
-     * payments out.
+     * payments still to pay. `?tab=out` opens on the payments out.
      */
     public function show(Request $request, Property $property): Response
     {
@@ -99,8 +94,6 @@ class PropertyPaymentController extends Controller
         $rentals = collect($this->billingAccounts($property, $this->unitHoldings($property, $from, $to), $from, $to))->where('kind', 'rental')->values();
         [$contractCheques, $rentalCheques] = $this->clientCheques($property, $from, $to)->partition(fn (Cheque $cheque) => $cheque->chequeable instanceof Contract);
         [$cashReceipts, $bankReceipts] = $this->rentalReceipts($property, $from, $to)->partition(fn (RentalPayment $receipt) => $receipt->method === 'cash');
-        $extraIncome = $this->extraIncome($property, $from, $to);
-        $extraReceived = $extraIncome->where('status', 'received');
         $agreements = collect($this->agreementsToPay($property, $from, $to));
         [$billsPaid, $billsToPay] = $this->maintenanceBills($property, $from, $to)->partition(fn (MaintenanceJob $job) => $job->isPaid());
         [$othersPaid, $othersToPay] = $this->otherPayments($property, $from, $to)->partition(fn (OtherPayment $payment) => $payment->isPaid());
@@ -119,7 +112,6 @@ class PropertyPaymentController extends Controller
             'cheques' => round((float) $contractCheques->where('status', 'cleared')->sum('amount') + (float) $chequesCashed->sum('amount'), 2),
             'transfers' => round((float) $bankReceipts->sum('amount'), 2),
             'cash' => round((float) $cashInPeriod->sum('amount'), 2),
-            'extra' => round((float) $extraReceived->sum('amount'), 2),
         ];
         $expenses = [
             'landlord' => round((float) $agreements->where('kind', 'head_lease')->sum('paidInPeriod'), 2),
@@ -143,7 +135,6 @@ class PropertyPaymentController extends Controller
             'tab' => $request->query('tab') === 'out' ? 'out' : 'in',
             'incoming' => [
                 'contractCheques' => $contractCheques->map(fn (Cheque $cheque) => ChequeController::details($cheque))->values()->all(),
-                'extraIncome' => $extraIncome->map(fn (ExtraIncome $income) => ExtraIncomeController::details($income))->values()->all(),
                 'rentalCheques' => $rentalCheques->map(fn (Cheque $cheque) => ChequeController::details($cheque))->values()->all(),
                 'rentals' => $rentals->all(),
                 'bankReceipts' => $bankReceipts->map(fn (RentalPayment $receipt) => RentalPaymentController::details($receipt))->values()->all(),
@@ -166,7 +157,6 @@ class PropertyPaymentController extends Controller
                     'inHand' => $this->figure($contractCheques->whereIn('status', ['received', 'deposited'])),
                     'failed' => $this->figure($contractCheques->whereIn('status', self::CHEQUES_FAILED)),
                 ],
-                'extraIncome' => $this->figure($extraReceived),
                 'bank' => [
                     'received' => round((float) $bankReceipts->sum('amount') + (float) $chequesCashed->sum('amount'), 2),
                     'transfers' => $this->figure($bankReceipts),
@@ -470,24 +460,6 @@ class PropertyPaymentController extends Controller
             ->with('handedOverTo:id,name')
             ->orderByRaw("case status when 'pending' then 0 when 'paid' then 1 else 2 end")
             ->orderByDesc('payment_date')
-            ->orderByDesc('id')
-            ->get();
-    }
-
-    /**
-     * The extra income the property received in the period, latest first,
-     * cancelled ones last.
-     *
-     * @return Collection<int, ExtraIncome>
-     */
-    private function extraIncome(Property $property, CarbonImmutable $from, CarbonImmutable $to): Collection
-    {
-        return ExtraIncome::query()
-            ->where('property_id', $property->id)
-            ->whereDate('received_on', '>=', $from)
-            ->whereDate('received_on', '<=', $to)
-            ->orderByRaw("case status when 'received' then 0 else 1 end")
-            ->orderByDesc('received_on')
             ->orderByDesc('id')
             ->get();
     }
